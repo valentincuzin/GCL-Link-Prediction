@@ -6,26 +6,17 @@ import torch.nn as nn
 
 from pGRACE.model import LogReg
 
-#function to split idx of nodes in train, val, test
-def get_idx_split(dataset, split, preload_split):
+
+def get_idx_split(data, split, preload_split):
     if split[:4] == 'rand':
         train_ratio = float(split.split(':')[1])
-        num_nodes = dataset[0].x.size(0)
+        num_nodes = data.x.size(0)
         train_size = int(num_nodes * train_ratio)
         indices = torch.randperm(num_nodes)
         return {
             'train': indices[:train_size],
             'val': indices[train_size:2 * train_size],
             'test': indices[2 * train_size:]
-        }
-    elif split == 'ogb':
-        return dataset.get_idx_split()
-    elif split.startswith('wikics'):
-        split_idx = int(split.split(':')[1])
-        return {
-            'train': dataset[0].train_mask[:, split_idx],
-            'test': dataset[0].test_mask,
-            'val': dataset[0].val_mask[:, split_idx]
         }
     elif split == 'preloaded':
         assert preload_split is not None, 'use preloaded split, but preloaded_split is None'
@@ -40,26 +31,25 @@ def get_idx_split(dataset, split, preload_split):
 
 
 def log_regression(z,
-                   dataset,
+                   data,
                    evaluator,
                    num_epochs: int = 5000,
                    test_device: Optional[str] = None,
                    split: str = 'rand:0.1',
                    verbose: bool = False,
                    preload_split=None):
-    test_device = 'cpu' if test_device is None else test_device
+    test_device = z.device if test_device is None else test_device
+    test_device = torch.device(test_device)
+    # test_device = torch.device(test_device) if isinstance(test_device, str) else test_device
     z = z.detach().to(test_device)
     num_hidden = z.size(1)
-    y = dataset[0].y.view(-1).to(test_device)
-    num_classes = dataset[0].y.max().item() + 1
-    print(num_classes)
-    print(num_hidden)
-    print("####################### debuggg ########################")
-    classifier = LogReg(num_hidden, num_classes).to(test_device) # get linear classifier
+    y = data.y.to(test_device)
+    num_classes = int(data.y.max().item() + 1)
+    classifier = LogReg(num_hidden, num_classes).to(test_device)
     optimizer = Adam(classifier.parameters(), lr=0.01, weight_decay=0.0)
 
-    split = get_idx_split(dataset, split, preload_split)
-    split = {k: v.to(test_device) for k, v in split.items()} # get nodes idx in train, val, test
+    split = get_idx_split(data, split, preload_split)
+    split = {k: v.to(test_device) for k, v in split.items()}
     f = nn.LogSoftmax(dim=-1)
     nll_loss = nn.NLLLoss()
 
@@ -67,7 +57,6 @@ def log_regression(z,
     best_val_acc = 0
     best_epoch = 0
 
-    # train the LogReg classifier
     for epoch in range(num_epochs):
         classifier.train()
         optimizer.zero_grad()

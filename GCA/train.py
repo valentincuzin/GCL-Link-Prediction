@@ -19,52 +19,56 @@ from pGRACE.utils import get_base_model, get_activation, \
 from pGRACE.dataset import get_dataset
 
 
-def train(model, optimizer, data, drop_weights, feature_weights, param):
+def train():
     model.train()
     optimizer.zero_grad()
 
     def drop_edge(idx: int):
+        global drop_weights
 
-        if param['drop_scheme'] == 'uniform': # random drop edges
+        if param['drop_scheme'] == 'uniform':
             return dropout_adj(data.edge_index, p=param[f'drop_edge_rate_{idx}'])[0]
-        elif param['drop_scheme'] in ['degree', 'evc', 'pr']: # follow weight for drop edges (less important)
+        elif param['drop_scheme'] in ['degree', 'evc', 'pr']:
             return drop_edge_weighted(data.edge_index, drop_weights, p=param[f'drop_edge_rate_{idx}'], threshold=0.7)
         else:
             raise Exception(f'undefined drop scheme: {param["drop_scheme"]}')
-    # create 2 views augmented from edge dropping of the original data
+
     edge_index_1 = drop_edge(1)
     edge_index_2 = drop_edge(2)
-    # same for drop feature if there isn't drop scheme
     x_1 = drop_feature(data.x, param['drop_feature_rate_1'])
     x_2 = drop_feature(data.x, param['drop_feature_rate_2'])
 
-    if param['drop_scheme'] in ['pr', 'degree', 'evc']: # drop feature according to previous weights.
+    if param['drop_scheme'] in ['pr', 'degree', 'evc']:
         x_1 = drop_feature_weighted_2(data.x, feature_weights, param['drop_feature_rate_1'])
         x_2 = drop_feature_weighted_2(data.x, feature_weights, param['drop_feature_rate_2'])
 
-    #forward on 2 augmented views
     z1 = model(x_1, edge_index_1)
     z2 = model(x_2, edge_index_2)
 
-    # loss backward
-    loss = model.loss(z1, z2, batch_size=None)
+    loss = model.loss(z1, z2, batch_size=1024 if args.dataset == 'Coauthor-Phy' else None)
     loss.backward()
     optimizer.step()
 
     return loss.item()
 
 
-def test(model, data, dataset, final=False):
+def test(final=False):
     model.eval()
-    z = model(data.x, data.edge_index) # embbedding of the graphs
+    z = model(data.x, data.edge_index)
 
     evaluator = MulticlassEvaluator()
-    
-    acc = log_regression(z, dataset, evaluator, split='rand:0.1', num_epochs=3000)['acc']
-
-    if final:
-        nni.report_final_result(acc)
+    if args.dataset == 'WikiCS':
+        accs = []
+        for i in range(20):
+            acc = log_regression(z, dataset, evaluator, split=f'wikics:{i}', num_epochs=800)['acc']
+            accs.append(acc)
+        acc = sum(accs) / len(accs)
     else:
+        acc = log_regression(z, dataset, evaluator, split='rand:0.1', num_epochs=3000, preload_split=split)['acc']
+
+    if final and use_nni:
+        nni.report_final_result(acc)
+    elif use_nni:
         nni.report_intermediate_result(acc)
 
     return acc
@@ -112,7 +116,7 @@ if __name__ == '__main__':
             param[key] = getattr(args, key)
 
     use_nni = args.param == 'nni'
-    if use_nni and args.device != 'cpu': # need to use cuda...
+    if use_nni and args.device != 'cpu':
         args.device = 'cuda'
 
     torch_seed = args.seed
@@ -123,13 +127,13 @@ if __name__ == '__main__':
 
     path = osp.expanduser('~/datasets')
     path = osp.join(path, args.dataset)
-    dataset = get_dataset(path, args.dataset) # want to see what inside
+    dataset = get_dataset(path, args.dataset)
 
     data = dataset[0]
     data = data.to(device)
 
     # generate split
-    split = generate_split(data.num_nodes, train_ratio=0.1, val_ratio=0.1) # generic train test split
+    split = generate_split(data.num_nodes, train_ratio=0.1, val_ratio=0.1)
 
     if args.save_split:
         torch.save(split, args.save_split)
@@ -138,15 +142,13 @@ if __name__ == '__main__':
 
     encoder = Encoder(dataset.num_features, param['num_hidden'], get_activation(param['activation']),
                       base_model=get_base_model(param['base_model']), k=param['num_layers']).to(device)
-    model = GRACE(encoder, param['num_hidden'], param['num_proj_hidden'], param['tau']).to(device) # init the model
+    model = GRACE(encoder, param['num_hidden'], param['num_proj_hidden'], param['tau']).to(device)
     optimizer = torch.optim.Adam(
         model.parameters(),
         lr=param['learning_rate'],
         weight_decay=param['weight_decay']
     )
 
-    # choose between 3 centrality compute (degree, page rank, eigenvector)
-    # then compute weights (importance) for edges
     if param['drop_scheme'] == 'degree':
         drop_weights = degree_drop_weights(data.edge_index).to(device)
     elif param['drop_scheme'] == 'pr':
@@ -156,7 +158,6 @@ if __name__ == '__main__':
     else:
         drop_weights = None
 
-    # compute features weight
     if param['drop_scheme'] == 'degree':
         edge_index_ = to_undirected(data.edge_index)
         node_deg = degree(edge_index_[1])
