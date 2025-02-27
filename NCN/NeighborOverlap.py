@@ -6,6 +6,7 @@ import torch.nn as nn
 from torch_sparse import SparseTensor
 import torch_geometric.transforms as T
 from model import predictor_dict, convdict, GCN, DropEdge
+from model_contrastive import Encoder, GRACE
 from functools import partial
 from sklearn.metrics import roc_auc_score, average_precision_score
 from ogb.linkproppred import PygLinkPropPredDataset, Evaluator
@@ -261,9 +262,11 @@ def main():
         bestscore = None
         
         # build model
-        model = GCN(data.num_features, args.hiddim, args.hiddim, args.mplayers,
-                    args.gnndp, args.ln, args.res, data.max_x,
-                    args.model, args.jk, args.gnnedp,  xdropout=args.xdp, taildropout=args.tdp, noinputlin=args.loadx).to(device)
+        # model = GCN(data.num_features, args.hiddim, args.hiddim, args.mplayers,
+        #             args.gnndp, args.ln, args.res, data.max_x,
+        #             args.model, args.jk, args.gnnedp,  xdropout=args.xdp, taildropout=args.tdp, noinputlin=args.loadx).to(device)
+        basic_encoder = Encoder(data.num_features, args.hiddim, nn.Identity())
+        model = GRACE(basic_encoder, args.hiddim, 32)
         if args.loadx:
             with torch.no_grad():
                 model.xemb[0].weight.copy_(torch.load(f"gemb/{args.dataset}_{args.model}_cn1_{args.hiddim}_{run}.pt", map_location="cpu"))
