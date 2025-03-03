@@ -262,11 +262,11 @@ def main():
         bestscore = None
         
         # build model
-        # model = GCN(data.num_features, args.hiddim, args.hiddim, args.mplayers,
-        #             args.gnndp, args.ln, args.res, data.max_x,
-        #             args.model, args.jk, args.gnnedp,  xdropout=args.xdp, taildropout=args.tdp, noinputlin=args.loadx).to(device)
-        basic_encoder = Encoder(data.num_features, args.hiddim, nn.Identity())
-        model = GRACE(basic_encoder, args.hiddim, 32)
+        model = GCN(data.num_features, args.hiddim, args.hiddim, args.mplayers,
+                     args.gnndp, args.ln, args.res, data.max_x,
+                     args.model, args.jk, args.gnnedp,  xdropout=args.xdp, taildropout=args.tdp, noinputlin=args.loadx).to(device)
+        # basic_encoder = Encoder(data.num_features, args.hiddim, nn.Identity()).to(device)
+        # model = GRACE(basic_encoder, args.hiddim, 32).to(device)
         if args.loadx:
             with torch.no_grad():
                 model.xemb[0].weight.copy_(torch.load(f"gemb/{args.dataset}_{args.model}_cn1_{args.hiddim}_{run}.pt", map_location="cpu"))

@@ -26,8 +26,14 @@ def randomsplit(dataset, val_ratio: float=0.10, test_ratio: float=0.2):
     split_edge['test']['edge_neg'] = removerepeated(data.test_neg_edge_index).t()
     return split_edge
 
-def loaddataset(name: str, use_valedges_as_input: bool, load=None):
-    if name in ["Cora", "Citeseer", "Pubmed"]:
+def loaddataset(name: str|list, use_valedges_as_input: bool, load=None):
+    if isinstance(name,list):
+        split_edge = randomsplit(name)
+        data = name[0]
+        data.edge_index = to_undirected(split_edge["train"]["edge"].t())
+        edge_index = data.edge_index
+        data.num_nodes = data.x.shape[0]
+    elif name in ["Cora", "Citeseer", "Pubmed"]:
         dataset = Planetoid(root="dataset", name=name)
         split_edge = randomsplit(dataset)
         data = dataset[0]
