@@ -76,7 +76,7 @@ def main(argv):
     log.info('Dataset {}, {}.'.format(dataset.__class__.__name__, data))
     data = data.to(device)  # permanently move in gpy memory
 
-    # prepare transforms
+    # prepare transforms by drop edge and features aléatoirements
     transform_1 = get_graph_drop_transform(drop_edge_p=FLAGS.drop_edge_p_1, drop_feat_p=FLAGS.drop_feat_p_1)
     transform_2 = get_graph_drop_transform(drop_edge_p=FLAGS.drop_edge_p_2, drop_feat_p=FLAGS.drop_feat_p_2)
 
@@ -117,7 +117,7 @@ def main(argv):
         q1, y2 = model(x1, x2)
         q2, y1 = model(x2, x1)
 
-        loss = 2 - cosine_similarity(q1, y2.detach(), dim=-1).mean() - cosine_similarity(q2, y1.detach(), dim=-1).mean()
+        loss = 2 - cosine_similarity(q1, y2.detach(), dim=-1).mean() - cosine_similarity(q2, y1.detach(), dim=-1).mean() # loss super simple
         loss.backward()
 
         # update online network

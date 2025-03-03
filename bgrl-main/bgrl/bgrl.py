@@ -43,6 +43,7 @@ class BGRL(torch.nn.Module):
         assert 0.0 <= mm <= 1.0, "Momentum needs to be between 0.0 and 1.0, got %.5f" % mm
         for param_q, param_k in zip(self.online_encoder.parameters(), self.target_encoder.parameters()):
             param_k.data.mul_(mm).add_(param_q.data, alpha=1. - mm)
+            # mm c'est le poids de la target ~= param_k.data[i] = param_k.data[i] * mm + param_q.data[i] * (1 - mm)
 
     def forward(self, online_x, target_x):
         # forward online network

@@ -9,9 +9,9 @@ class CosineDecayScheduler:
 
     def get(self, step):
         if step < self.warmup_steps:
-            return self.max_val * step / self.warmup_steps
+            return self.max_val * step / self.warmup_steps # augmentation de plus en plus grande
         elif self.warmup_steps <= step <= self.total_steps:
             return self.max_val * (1 + np.cos((step - self.warmup_steps) * np.pi /
-                                              (self.total_steps - self.warmup_steps))) / 2
+                                              (self.total_steps - self.warmup_steps))) / 2 # décroit de façon lisse et progressive.
         else:
             raise ValueError('Step ({}) > total number of steps ({}).'.format(step, self.total_steps))
