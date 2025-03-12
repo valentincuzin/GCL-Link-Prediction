@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch_sparse.matmul import spmm_add
-from utils import adjoverlap, DropAdj
+from src.utils import adjoverlap, DropAdj
 
 class MlpProdDecoder(torch.nn.Module):
     """Hadamard-product-based MLP link predictor."""

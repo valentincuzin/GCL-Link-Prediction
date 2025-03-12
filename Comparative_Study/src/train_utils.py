@@ -79,7 +79,7 @@ def train_ncn(encoder: nn.Module,
           maskinput: bool = True):
     encoder.train()
     predictor.train()
-    device = data.x.device()
+    device = data.adj_t.device()
 
     pos_train_edge = split_edge['train']['edge'].to(device)
     pos_train_edge = pos_train_edge.t()
@@ -151,14 +151,10 @@ def test(encoder: nn.Module, predictor: nn.Module, data, split_edge: dict, evalu
         return pos_test_pred, neg_test_pred
 
     pos_valid_pred, neg_valid_pred = test_split('valid')
-    start_time = time.perf_counter()
     if use_valedges_as_input:
         adj_t = data.full_adj_t
         h = encoder(data.x, adj_t)
     pos_test_pred, neg_test_pred = test_split('test')
-    end_time = time.perf_counter()
-    total_time = end_time - start_time
-    print(f'Inference for one epoch Took {total_time:.4f} seconds')
     
     results = {}
     for K in [10, 20, 50, 100]:
@@ -189,7 +185,7 @@ def test_output(
 ):
     # make a test with the evaluator, then print and return results
     t1 = time.time()
-    results, h = test(
+    results = test(
         encoder,
         predictor,
         data,
@@ -203,16 +199,15 @@ def test_output(
     for key, result in results.items():
         writer.add_scalars(
             f"{key}_{run}",
-            {"trn": result[0], "val": result[1], "tst": result[2]},
+            {"val": result[0], "tst": result[1]},
             epoch,
         )
-        train_hits, valid_hits, test_hits = result
+        valid_hits, test_hits = result
         res_dict[key].append(test_hits)
         print(key)
         print(
             f"Run: {run + 1:02d}, "
             f"Epoch: {epoch:02d}, "
-            f"Train: {100 * train_hits:.2f}%, "
             f"Valid: {100 * valid_hits:.2f}%, "
             f"Test: {100 * test_hits:.2f}%"
         )
@@ -230,6 +225,7 @@ def run(
     split_edge: dict,
     evaluator: Evaluator,
     hp: dict,
+    res_dict
 ):
     # train and test the encoder and the predictor
     writer = SummaryWriter(f"./rec/{name}")
@@ -242,7 +238,7 @@ def run(
             {"params": predictor.parameters(), "lr": hp["prelr"]},
         ]
     )
-
+    loss_res = []
     for epoch in tqdm(range(1, 1 + hp["epochs"])):
         loss = train_ncn(
             encoder,
@@ -254,7 +250,8 @@ def run(
             hp["maskinput"]
         )
         if epoch % 10 == 0:
-            print(f"loss {loss:.4f}", flush=True)
+            loss_res.append(round(float(loss), 2))
+    print('train loss: ', loss_res)
     return test_output(
-        r, epoch, encoder, predictor, data, split_edge, evaluator, writer, hp
+        r, epoch, encoder, predictor, data, split_edge, evaluator, writer, hp, res_dict
     )

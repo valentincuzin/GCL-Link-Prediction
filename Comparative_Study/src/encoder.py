@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from utils import DropAdj
+from src.utils import DropAdj
 from torch_geometric.nn import GCNConv, BatchNorm, LayerNorm, Sequential
 from torch_sparse.matmul import spmm_max, spmm_mean, spmm_add
 

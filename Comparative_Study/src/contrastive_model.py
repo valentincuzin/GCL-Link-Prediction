@@ -3,7 +3,7 @@ import copy
 import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
-from encoder import ENCODER_GRACE, ENCODER_CSGCL
+from src.encoder import ENCODER_GRACE, ENCODER_CSGCL
 
 class GRACE(nn.Module):
     def __init__(self, encoder: ENCODER_GRACE, num_hidden: int, num_proj_hidden: int, tau: float = 0.5):

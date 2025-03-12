@@ -46,7 +46,7 @@ def loaddataset(name: str|list, use_valedges_as_input: bool, load=None):
         data = dataset[0]
         edge_index = data.edge_index
     data.edge_weight = None 
-    print(data.num_nodes, edge_index.max())
+    #print(data.num_nodes, edge_index.max())
     data.adj_t = SparseTensor.from_edge_index(edge_index, sparse_sizes=(data.num_nodes, data.num_nodes))
     data.adj_t = data.adj_t.to_symmetric().coalesce()
     data.max_x = -1
@@ -60,10 +60,10 @@ def loaddataset(name: str|list, use_valedges_as_input: bool, load=None):
         data.x = torch.load(load, map_location="cpu")
         data.max_x = -1
 
-    print("dataset split ")
-    for key1 in split_edge:
-        for key2  in split_edge[key1]:
-            print(key1, key2, split_edge[key1][key2].shape[0])
+    # print("dataset split ")
+    # for key1 in split_edge:
+    #     for key2  in split_edge[key1]:
+    #         print(key1, key2, split_edge[key1][key2].shape[0])
 
 
     # Use training + validation edges for inference on test set.

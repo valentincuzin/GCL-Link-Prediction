@@ -14,6 +14,7 @@ hp = {
     'preedp': 0.4,
     'predp': 0.05,
     'gnndp': 0.05,
+    'res': False,
     'probscale': 4.3,
     'proboffset': 2.8,
     'alpha': 1.0,
@@ -23,6 +24,7 @@ hp = {
     'ln': True,
     'lnnn': True,
     'epochs': 100,
+    'model': 'puregcn',
     'runs': 10,
     'hiddim': 256,
     'mplayers': 1,
@@ -31,6 +33,7 @@ hp = {
     'jk': True,
     'use_xlin': True,
     'tailact': True,
+    'use_valedges_as_input': False,
 }
 param = {
 	'learning_rate': 0.01,
@@ -49,7 +52,7 @@ param = {
 	'drop_scheme': 'degree',
 }
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-res_dict = {"Hits@20": [], "Hits@20_std": 0, "Hits@50": [], "Hits@50_std": 0, "Hits@100": [], "Hits@100_std": 0}
+res_dict = {"Hits@10": [], "Hits@20": [], "Hits@50": [], "Hits@100": []}
 evaluator = ut.get_evaluator(DATASET)
 data_split = ut.DataSplit(DATASET, device, hp['runs'], False)
 
@@ -57,12 +60,12 @@ print("### GCN+NCN ###")
 for r in range(hp['runs']):
 	seed_everything(r)
 	data, split_edge = data_split.get(r)
-	encoder = enc.GCN(data.num_features, hp['hiddim'], hp['hiddim'], hp['mplayers'],
+	encoder = enc.ENCODER_NCN(data.num_features, hp['hiddim'], hp['hiddim'], hp['mplayers'],
 					hp['gnndp'], hp['ln'], hp['res'], data.max_x,
 					hp['model'], edrop=hp['gnnedp'],  xdropout=hp['xdp'], taildropout=hp['tdp']).to(device)
 	predictor = dec.CNLinkPredictor(hp['hiddim'], hp['hiddim'], 1, hp['mplayers'],
 						hp['predp'], hp['preedp'], hp['lnnn']).to(device)
-	res_dict = tr.run(r, "GCN+NCN", encoder, None, predictor, data, split_edge, evaluator)
+	res_dict = tr.run(r, "GCN+NCN", encoder, None, predictor, data, split_edge, evaluator, hp, res_dict)
 res_dict, res_latex = ut.compute_table(res_dict)
 print("\n\n### GCN+NCN ###")
 print(res_dict)

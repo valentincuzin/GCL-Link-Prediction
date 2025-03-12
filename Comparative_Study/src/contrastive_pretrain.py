@@ -2,9 +2,9 @@ import time
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from utils import CosineDecayScheduler
+from src.utils import CosineDecayScheduler
 from torch_geometric.utils import degree, to_undirected, to_networkx, dropout_adj
-from contrastive_augmentation import drop_feature, drop_feature_weighted, drop_edge_weighted, feature_drop_weights, degree_drop_weights, pr_drop_weights, compute_pr, eigenvector_centrality, evc_drop_weights, cav, ced, community_detection, community_strength, transition, get_edge_weight
+from src.contrastive_augmentation import drop_feature, drop_feature_weighted, drop_edge_weighted, feature_drop_weights, degree_drop_weights, pr_drop_weights, compute_pr, eigenvector_centrality, evc_drop_weights, cav, ced, community_detection, community_strength, transition, get_edge_weight
 
 def pretrain_grace(model, data, param):
     optimizer = torch.optim.Adam(
