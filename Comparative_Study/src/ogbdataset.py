@@ -26,16 +26,41 @@ def randomsplit(dataset, val_ratio: float=0.10, test_ratio: float=0.2):
     split_edge['test']['edge_neg'] = removerepeated(data.test_neg_edge_index).t()
     return split_edge
 
+def randomsplit2(dataset, val_ratio: float = 0.10, test_ratio: float = 0.2):
+    def removerepeated(ei):
+        ei = to_undirected(ei)
+
+        ei = ei[:, ei[0] < ei[1]]
+        return ei
+    data = dataset[0]
+    data.num_nodes = data.x.shape[0]
+    transform = RandomLinkSplit(
+        num_val=val_ratio,
+        num_test=test_ratio,
+        is_undirected=True,
+        add_negative_train_samples=False
+    )
+    train_data, val_data, test_data = transform(data)
+    split_edge = {'train': {}, 'valid': {}, 'test': {}}
+
+    split_edge['train']['edge'] = removerepeated(train_data.edge_index).t()
+    split_edge['valid']['edge'] = removerepeated(val_data.edge_index).t()
+    split_edge['valid']['edge_neg'] = removerepeated(val_data.edge_neg_index).t()    
+    split_edge['test']['edge'] = removerepeated(test_data.edge_index).t()
+    split_edge['test']['edge_neg'] = removerepeated(test_data.edge_neg_index).t()
+    
+    return split_edge
+
 def loaddataset(name: str|list, use_valedges_as_input: bool, load=None):
     if isinstance(name,list):
-        split_edge = randomsplit(name)
+        split_edge = randomsplit2(name)
         data = name[0]
         data.edge_index = to_undirected(split_edge["train"]["edge"].t())
         edge_index = data.edge_index
         data.num_nodes = data.x.shape[0]
     elif name in ["Cora", "Citeseer", "Pubmed"]:
         dataset = Planetoid(root="dataset", name=name)
-        split_edge = randomsplit(dataset)
+        split_edge = randomsplit2(dataset)
         data = dataset[0]
         data.edge_index = to_undirected(split_edge["train"]["edge"].t())
         edge_index = data.edge_index
