@@ -1,3 +1,4 @@
+import time
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -226,7 +227,7 @@ def compute_table(res_dict: dict[str, list | float]):
             result = np.array(result)
             mean = round(100 * np.mean(result), 2)
             std = round(100 * np.std(result), 2)
-            new_tab.append({"metric": key, "value": f"{mean}$\pm${std}"})
+            new_tab.append({"metric": key, "value": fr"{mean}$\pm${std}"})
     df = pd.DataFrame(data=new_tab)
     res_latex = df.to_latex(
         index=False, formatters={"name": str.upper}, float_format="{:.1f}".format
@@ -244,11 +245,23 @@ class DataSplit:
     def __init__(self, dataset: str, device: str, runs: int, use_valedges_as_input: bool = False):
         print(f"{runs} split from the dataset {dataset}")
         self.device = device
+        self.runs = runs
         self.data_runs: dict[int, tuple[any, dict]] = {}
+        t1 = time.time()
         for r in tqdm(range(runs)):
             seed_everything(r)
             self.data_runs[r] = loaddataset(dataset, use_valedges_as_input)
-    
+        self.info_time = time.time()-t1
+        self.info()
+
     def get(self, r):
         data, split_edge = self.data_runs[r]
         return data.to(self.device), split_edge
+
+    def info(self):
+        print("split time: ", self.info_time)
+        data, split_edge = self.data_runs[0]
+        print("dataset split ")
+        for key1 in split_edge:
+            for key2  in split_edge[key1]:
+                print(key1, key2, split_edge[key1][key2].shape[0])

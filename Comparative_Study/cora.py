@@ -1,4 +1,3 @@
-from torch_geometric import seed_everything
 import torch
 import src.utils as ut
 import src.train_utils as tr
@@ -34,6 +33,7 @@ hp = {
     'use_xlin': True,
     'tailact': True,
     'use_valedges_as_input': False,
+    'freeze': True,
 }
 param = {
 	'learning_rate': 0.01,
@@ -52,24 +52,26 @@ param = {
 	'drop_scheme': 'degree',
 }
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-res_dict = {"Hits@10": [], "Hits@20": [], "Hits@50": [], "Hits@100": []}
 evaluator = ut.get_evaluator(DATASET)
 data_split = ut.DataSplit(DATASET, device, hp['runs'], False)
-
-print("### GCN+NCN ###")
-for r in range(hp['runs']):
-	seed_everything(r)
-	data, split_edge = data_split.get(r)
-	encoder = enc.ENCODER_NCN(data.num_features, hp['hiddim'], hp['hiddim'], hp['mplayers'],
+def init_model(data, hp):
+    encoder = enc.ENCODER_NCN(data.num_features, hp['hiddim'], hp['hiddim'], hp['mplayers'],
 					hp['gnndp'], hp['ln'], hp['res'], data.max_x,
 					hp['model'], edrop=hp['gnnedp'],  xdropout=hp['xdp'], taildropout=hp['tdp']).to(device)
-	predictor = dec.CNLinkPredictor(hp['hiddim'], hp['hiddim'], 1, hp['mplayers'],
-						hp['predp'], hp['preedp'], hp['lnnn']).to(device)
-	res_dict = tr.run(r, "GCN+NCN", encoder, None, predictor, data, split_edge, evaluator, hp, res_dict)
-res_dict, res_latex = ut.compute_table(res_dict)
-print("\n\n### GCN+NCN ###")
-print(res_dict)
-print(f'\n{res_latex}\n\n')
+    predictor = dec.CNLinkPredictor(hp['hiddim'], hp['hiddim'], 1, hp['mplayers'],
+    						hp['predp'], hp['preedp'], hp['lnnn']).to(device)
+    return encoder, predictor
+tr.runs('Cora GCN+NCN', init_model, None, data_split, evaluator, hp)
+
+
+def init_model(data, hp):
+    encoder = enc.ENCODER_NCN(data.num_features, hp['hiddim'], hp['hiddim'], hp['mplayers'],
+					hp['gnndp'], hp['ln'], hp['res'], data.max_x,
+					hp['model'], edrop=hp['gnnedp'],  xdropout=hp['xdp'], taildropout=hp['tdp']).to(device)
+    predictor = dec.MlpProdDecoder(hp['hiddim'], hp['hiddim']).to(device)
+    return encoder, predictor
+
+tr.runs('Cora GCN+MLP', init_model, None, data_split, evaluator, hp)
 # for dataset in  ["collab", "ppa", "citation2"]:
 #     hp = hps[dataset]
 #     hp['runs'] = 5

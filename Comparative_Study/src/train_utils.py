@@ -5,10 +5,12 @@ import torch.nn.functional as F
 import numpy as np
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader
+from torch_geometric import seed_everything
 from torch_geometric.utils import negative_sampling
 from torch_sparse import SparseTensor
 from tqdm import tqdm
 from ogb.linkproppred import Evaluator
+from src.utils import compute_table
 
 
 def train_mplp(encoder: nn.Module,
@@ -227,17 +229,20 @@ def run(
     hp: dict,
     res_dict
 ):
-    # train and test the encoder and the predictor
-    writer = SummaryWriter(f"./rec/{name}")
+    writer = SummaryWriter(f"./rec/{name}_{r}")
     writer.add_text("hyperparams", str(hp))
+    # train and test the encoder and the predictor
     if pretrain_function is not None:
         pretrain_function(encoder, data)
-    optimizer = torch.optim.Adam(
-        [
-            {"params": encoder.parameters(), "lr": hp["gnnlr"]},
-            {"params": predictor.parameters(), "lr": hp["prelr"]},
-        ]
-    )
+    if not hp['freeze'] or pretrain_function is None:
+        optimizer = torch.optim.Adam(
+            [
+                {"params": encoder.parameters(), "lr": hp["gnnlr"]},
+                {"params": predictor.parameters(), "lr": hp["prelr"]},
+            ]
+        )
+    elif hp['freeze']:
+        optimizer = torch.optim.Adam(params=predictor.parameters(), lr=hp["prelr"])
     loss_res = []
     for epoch in tqdm(range(1, 1 + hp["epochs"])):
         loss = train_ncn(
@@ -255,3 +260,21 @@ def run(
     return test_output(
         r, epoch, encoder, predictor, data, split_edge, evaluator, writer, hp, res_dict
     )
+
+def runs(name: str,
+         model_init_function: callable,
+         pretrain_function: callable,
+         data_split,
+         evaluator,
+         hp: dict):
+    res_dict = {"Hits@10": [], "Hits@20": [], "Hits@50": [], "Hits@100": []}
+    print(f"### {name} ###")
+    for r in range(hp['runs']):
+        seed_everything(r)
+        data, split_edge = data_split.get(r)
+        encoder, predictor = model_init_function(data, hp)
+        res_dict = run(r, name, encoder, pretrain_function, predictor, data, split_edge, evaluator, hp, res_dict)
+    res_dict, res_latex = compute_table(res_dict)
+    print(f"\n\n### {name} ###")
+    print(f'\n{res_latex}\n\n')
+    return res_dict

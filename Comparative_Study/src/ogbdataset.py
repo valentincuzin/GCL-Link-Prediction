@@ -8,7 +8,7 @@ from torch_geometric.utils import train_test_split_edges, negative_sampling, to_
 from torch_geometric.transforms import RandomLinkSplit
 
 # random split dataset
-def randomsplit(dataset, val_ratio: float=0.10, test_ratio: float=0.2):
+def _randomsplit_old(dataset, val_ratio: float=0.10, test_ratio: float=0.2):
     def removerepeated(ei):
         ei = to_undirected(ei)
         ei = ei[:, ei[0]<ei[1]]
@@ -26,41 +26,48 @@ def randomsplit(dataset, val_ratio: float=0.10, test_ratio: float=0.2):
     split_edge['test']['edge_neg'] = removerepeated(data.test_neg_edge_index).t()
     return split_edge
 
-def randomsplit2(dataset, val_ratio: float = 0.10, test_ratio: float = 0.2):
+def randomsplit(dataset, val_ratio: float = 0.10, test_ratio: float = 0.2):
     def removerepeated(ei):
         ei = to_undirected(ei)
 
         ei = ei[:, ei[0] < ei[1]]
         return ei
+    def split_pos_neg(data):
+        pos_mask = (data.edge_label == 1).bool()
+        neg_mask = (data.edge_label == 0).bool()
+        pos_edge_index = data.edge_label_index[:, pos_mask]
+        neg_edge_index = data.edge_label_index[:, neg_mask]
+        return pos_edge_index, neg_edge_index
+
     data = dataset[0]
     data.num_nodes = data.x.shape[0]
     transform = RandomLinkSplit(
         num_val=val_ratio,
         num_test=test_ratio,
         is_undirected=True,
-        add_negative_train_samples=False
+        add_negative_train_samples=True
     )
     train_data, val_data, test_data = transform(data)
-    split_edge = {'train': {}, 'valid': {}, 'test': {}}
-
-    split_edge['train']['edge'] = removerepeated(train_data.edge_index).t()
-    split_edge['valid']['edge'] = removerepeated(val_data.edge_index).t()
-    split_edge['valid']['edge_neg'] = removerepeated(val_data.edge_neg_index).t()    
-    split_edge['test']['edge'] = removerepeated(test_data.edge_index).t()
-    split_edge['test']['edge_neg'] = removerepeated(test_data.edge_neg_index).t()
+    val_data_pos, val_data_neg = split_pos_neg(val_data)
+    test_data_pos, test_data_neg = split_pos_neg(test_data)
     
+    split_edge = {'train': {'edge': removerepeated(train_data.edge_index).t()},
+                  'valid': {'edge': removerepeated(val_data_pos).t(),
+                            'edge_neg': removerepeated(val_data_neg).t()}, 
+                  'test': {'edge': removerepeated(test_data_pos).t(),
+                           'edge_neg': removerepeated(test_data_neg).t()}}    
     return split_edge
 
 def loaddataset(name: str|list, use_valedges_as_input: bool, load=None):
     if isinstance(name,list):
-        split_edge = randomsplit2(name)
+        split_edge = randomsplit(name)
         data = name[0]
         data.edge_index = to_undirected(split_edge["train"]["edge"].t())
         edge_index = data.edge_index
         data.num_nodes = data.x.shape[0]
     elif name in ["Cora", "Citeseer", "Pubmed"]:
         dataset = Planetoid(root="dataset", name=name)
-        split_edge = randomsplit2(dataset)
+        split_edge = randomsplit(dataset)
         data = dataset[0]
         data.edge_index = to_undirected(split_edge["train"]["edge"].t())
         edge_index = data.edge_index
