@@ -5,6 +5,7 @@ import src.train_utils as tr
 import src.encoder as enc
 import src.decoder as dec
 DATASET = 'Cora'
+print(DATASET)
 hp = {
     'xdp': 0.7,
     'tdp': 0.3,
