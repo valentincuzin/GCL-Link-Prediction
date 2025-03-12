@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import pandas as pd
 import numpy as np
 from torch import Tensor
+from tqdm import tqdm
 from torch_sparse import SparseTensor, masked_select_nnz
 from ogb.linkproppred import Evaluator
 from datasets import loaddataset
@@ -241,8 +242,9 @@ def get_evaluator(dataset: str):
 
 class DataSplit:
     def __init__(self, dataset: str, device: str, runs: int, use_valedges_as_input: bool = False):
+        print(f"{runs} split from the dataset {dataset}")
         self.data_runs: dict[int, tuple[any, dict]] = {}
-        for r in range(runs):
+        for r in tqdm(range(runs)):
             seed_everything(r)
             self.data_runs[r] = loaddataset(dataset, use_valedges_as_input)
     
