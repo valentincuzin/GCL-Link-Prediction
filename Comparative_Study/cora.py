@@ -1,6 +1,10 @@
 import torch
+import torch.nn as nn
+import pandas as pd
 import src.utils as ut
 import src.train_utils as tr
+import src.contrastive_pretrain as pretr
+import src.contrastive_model as ctmod
 import src.encoder as enc
 import src.decoder as dec
 DATASET = 'Cora'
@@ -34,73 +38,231 @@ hp = {
     'tailact': True,
     'use_valedges_as_input': False,
     'freeze': True,
+    'ct_param': {
+    	'learning_rate': 0.01,
+    	'num_hidden': 256,
+    	'num_proj_hidden': 32,
+    	'activation': 'prelu',
+    	'base_model': 'GCNConv',
+    	'num_layers': 2,
+    	'drop_edge_rate_1': 0.3,
+    	'drop_edge_rate_2': 0.4,
+    	'drop_feature_rate_1': 0.1,
+    	'drop_feature_rate_2': 0.0,
+    	'tau': 0.4,
+    	'num_epochs': 1500,
+    	'weight_decay': 1e-5,
+    	'drop_scheme': 'degree',
+    }
 }
-param = {
-	'learning_rate': 0.01,
-	'num_hidden': 256,
-	'num_proj_hidden': 32,
-	'activation': 'prelu',
-	'base_model': 'GCNConv',
-	'num_layers': 2,
-	'drop_edge_rate_1': 0.3,
-	'drop_edge_rate_2': 0.4,
-	'drop_feature_rate_1': 0.1,
-	'drop_feature_rate_2': 0.0,
-	'tau': 0.4,
-	'num_epochs': 1500,
-	'weight_decay': 1e-5,
-	'drop_scheme': 'degree',
-}
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-evaluator = ut.get_evaluator(DATASET)
-data_split = ut.DataSplit(DATASET, device, hp['runs'], False)
-def init_model(data, hp):
-    encoder = enc.ENCODER_NCN(data.num_features, hp['hiddim'], hp['hiddim'], hp['mplayers'],
-					hp['gnndp'], hp['ln'], hp['res'], data.max_x,
-					hp['model'], edrop=hp['gnnedp'],  xdropout=hp['xdp'], taildropout=hp['tdp']).to(device)
-    predictor = dec.CNLinkPredictor(hp['hiddim'], hp['hiddim'], 1, hp['mplayers'],
-    						hp['predp'], hp['preedp'], hp['lnnn']).to(device)
-    return encoder, predictor
-tr.runs('Cora GCN+NCN', init_model, None, data_split, evaluator, hp)
 
-
-def init_model(data, hp):
-    encoder = enc.ENCODER_NCN(data.num_features, hp['hiddim'], hp['hiddim'], hp['mplayers'],
-					hp['gnndp'], hp['ln'], hp['res'], data.max_x,
-					hp['model'], edrop=hp['gnnedp'],  xdropout=hp['xdp'], taildropout=hp['tdp']).to(device)
-    predictor = dec.MlpProdDecoder(hp['hiddim'], hp['hiddim']).to(device)
-    return encoder, predictor
-
-tr.runs('Cora GCN+MLP', init_model, None, data_split, evaluator, hp)
-# for dataset in  ["collab", "ppa", "citation2"]:
-#     hp = hps[dataset]
-#     hp['runs'] = 5
-#     evaluator = Evaluator(name=f'ogbl-{dataset}')
-#     data, split_edge = loaddataset(dataset, hp['use_valedges_as_input']) # get a new split of dataset
-#     data = data.to(device)
+def run_all(dataset: str, hp: dict):
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    evaluator = ut.get_evaluator(DATASET)
+    data_split = ut.DataSplit(DATASET, device, hp['runs'], hp['use_valedges_as_input'])
     
-#     res_dict = {"Hits@20": [], "Hits@20_std": 0, "Hits@50": [], "Hits@50_std": 0, "Hits@100": [], "Hits@100_std": 0}
-#     for r in range(hp['runs']):
-#         set_seed(r)
-#         model = GCN(data.num_features, hp['hiddim'], hp['hiddim'], hp['mplayers'],
-#                      hp['gnndp'], hp['ln'], hp['res'], data.max_x,
-#                      hp['model'], edrop=hp['gnnedp'],  xdropout=hp['xdp'], taildropout=hp['tdp']).to(device)
-#         predictor = CNLinkPredictor(hp['hiddim'], hp['hiddim'], 1, hp['mplayers'],
-#                            hp['predp'], hp['preedp'], hp['lnnn']).to(device)
-#         res_dict = run(r, model, None, predictor, data, evaluator, hp, res_dict)
-#     res_dict, res_latex = compute_table(res_dict)
-#     print(f'######\t{dataset}\t NCN\t######')
-#     print('\n\n', res_latex, '\n\n')
+    full_res = []
+    
+    def init_model(data, hp):
+        encoder = enc.ENCODER_NCN(data.num_features, hp['hiddim'], hp['hiddim'], hp['mplayers'],
+    					hp['gnndp'], hp['ln'], hp['res'], data.max_x,
+    					hp['model'], edrop=hp['gnnedp'],  xdropout=hp['xdp'], taildropout=hp['tdp']).to(device)
+        predictor = dec.CNLinkPredictor(hp['hiddim'], hp['hiddim'], 1, hp['mplayers'],
+        						hp['predp'], hp['preedp'], hp['lnnn']).to(device)
+        return encoder, predictor
+    full_res.append(tr.runs('Cora GCN+NCN', init_model, None, data_split, evaluator, hp))
+    
+    def init_model(data, hp):
+        encoder = enc.ENCODER_NCN(data.num_features, hp['hiddim'], hp['hiddim'], hp['mplayers'],
+    					hp['gnndp'], hp['ln'], hp['res'], data.max_x,
+    					hp['model'], edrop=hp['gnnedp'],  xdropout=hp['xdp'], taildropout=hp['tdp']).to(device)
+        predictor = dec.MlpProdDecoder(hp['hiddim'], hp['hiddim']).to(device)
+        return encoder, predictor
+    full_res.append(tr.runs('Cora GCN+MLP', init_model, None, data_split, evaluator, hp))
+    
+    
+    def init_model(data, hp):
+        _encoder = enc.ENCODER_GRACE(data.num_features, hp['ct_param']['num_hidden'], nn.Identity()).to(device)
+        encoder = ctmod.GRACE(_encoder, hp['ct_param']['num_hidden'], hp['ct_param']['num_proj_hidden']).to(device)
+        predictor = dec.CNLinkPredictor(hp['hiddim'], hp['hiddim'], 1, hp['mplayers'],
+        						hp['predp'], hp['preedp'], hp['lnnn']).to(device)
+        return encoder, predictor
+    full_res.append(tr.runs('Cora GRACE+NCN', init_model, pretr.pretrain_grace, data_split, evaluator, hp))
+    
+    def init_model(data, hp):
+        _encoder = enc.ENCODER_GRACE(data.num_features, hp['ct_param']['num_hidden'], nn.Identity()).to(device)
+        encoder = ctmod.GRACE(_encoder, hp['ct_param']['num_hidden'], hp['ct_param']['num_proj_hidden']).to(device)
+        predictor = dec.MlpProdDecoder(hp['hiddim'], hp['hiddim']).to(device)
+        return encoder, predictor
+    full_res.append(tr.runs('Cora GRACE+MLP', init_model, pretr.pretrain_grace, data_split, evaluator, hp))
+    
+    
+    hp['ct_param']['drop_scheme'] = 'degree'
+    def init_model(data, hp):
+        _encoder = enc.ENCODER_GRACE(data.num_features, hp['ct_param']['num_hidden'], nn.Identity()).to(device)
+        encoder = ctmod.GRACE(_encoder, hp['ct_param']['num_hidden'], hp['ct_param']['num_proj_hidden']).to(device)
+        predictor = dec.CNLinkPredictor(hp['hiddim'], hp['hiddim'], 1, hp['mplayers'],
+        						hp['predp'], hp['preedp'], hp['lnnn']).to(device)
+        return encoder, predictor
+    full_res.append(tr.runs('Cora GCA_deg+NCN', init_model, pretr.pretrain_gca, data_split, evaluator, hp))
+    
+    def init_model(data, hp):
+        _encoder = enc.ENCODER_GRACE(data.num_features, hp['ct_param']['num_hidden'], nn.Identity()).to(device)
+        encoder = ctmod.GRACE(_encoder, hp['ct_param']['num_hidden'], hp['ct_param']['num_proj_hidden']).to(device)
+        predictor = dec.MlpProdDecoder(hp['hiddim'], hp['hiddim']).to(device)
+        return encoder, predictor
+    full_res.append(tr.runs('Cora GCA_deg+MLP', init_model, pretr.pretrain_gca, data_split, evaluator, hp))
+    
+    
+    hp['ct_param']['drop_scheme'] = 'pr'
+    def init_model(data, hp):
+        _encoder = enc.ENCODER_GRACE(data.num_features, hp['ct_param']['num_hidden'], nn.Identity()).to(device)
+        encoder = ctmod.GRACE(_encoder, hp['ct_param']['num_hidden'], hp['ct_param']['num_proj_hidden']).to(device)
+        predictor = dec.CNLinkPredictor(hp['hiddim'], hp['hiddim'], 1, hp['mplayers'],
+        						hp['predp'], hp['preedp'], hp['lnnn']).to(device)
+        return encoder, predictor
+    full_res.append(tr.runs('Cora GCA_pr+NCN', init_model, pretr.pretrain_gca, data_split, evaluator, hp))
+    
+    def init_model(data, hp):
+        _encoder = enc.ENCODER_GRACE(data.num_features, hp['ct_param']['num_hidden'], nn.Identity()).to(device)
+        encoder = ctmod.GRACE(_encoder, hp['ct_param']['num_hidden'], hp['ct_param']['num_proj_hidden']).to(device)
+        predictor = dec.MlpProdDecoder(hp['hiddim'], hp['hiddim']).to(device)
+        return encoder, predictor
+    full_res.append(tr.runs('Cora GCA_pr+MLP', init_model, pretr.pretrain_gca, data_split, evaluator, hp))
+    
+    
+    hp['ct_param']['drop_scheme'] = 'evc'
+    def init_model(data, hp):
+        _encoder = enc.ENCODER_GRACE(data.num_features, hp['ct_param']['num_hidden'], nn.Identity()).to(device)
+        encoder = ctmod.GRACE(_encoder, hp['ct_param']['num_hidden'], hp['ct_param']['num_proj_hidden']).to(device)
+        predictor = dec.CNLinkPredictor(hp['hiddim'], hp['hiddim'], 1, hp['mplayers'],
+        						hp['predp'], hp['preedp'], hp['lnnn']).to(device)
+        return encoder, predictor
+    full_res.append(tr.runs('Cora GCA_evc+NCN', init_model, pretr.pretrain_gca, data_split, evaluator, hp))
+    
+    def init_model(data, hp):
+        _encoder = enc.ENCODER_GRACE(data.num_features, hp['ct_param']['num_hidden'], nn.Identity()).to(device)
+        encoder = ctmod.GRACE(_encoder, hp['ct_param']['num_hidden'], hp['ct_param']['num_proj_hidden']).to(device)
+        predictor = dec.MlpProdDecoder(hp['hiddim'], hp['hiddim']).to(device)
+        return encoder, predictor
+    full_res.append(tr.runs('Cora GCA_evc+MLP', init_model, pretr.pretrain_gca, data_split, evaluator, hp))
+    
+    
+    def init_model(data, hp):
+        _encoder = enc.ENCODER_BGRL([data.num_features, hp['ct_param']['num_hidden']], batchnorm=True).to(device)
+        _predictor = ut.MLP_Head_BGRL(hp['ct_param']['num_hidden'], hp['ct_param']['num_hidden']).to(device)
+        encoder = ctmod.BGRL(_encoder, _predictor).to(device)
+        predictor = dec.CNLinkPredictor(hp['hiddim'], hp['hiddim'], 1, hp['mplayers'],
+        						hp['predp'], hp['preedp'], hp['lnnn']).to(device)
+        return encoder, predictor
+    full_res.append(tr.runs('Cora BGRL+NCN', init_model, pretr.pretrain_bgrl, data_split, evaluator, hp))
+    
+    def init_model(data, hp):
+        _encoder = enc.ENCODER_BGRL([data.num_features, hp['ct_param']['num_hidden']], batchnorm=True).to(device)
+        _predictor = ut.MLP_Head_BGRL(hp['ct_param']['num_hidden'], hp['ct_param']['num_hidden']).to(device)
+        encoder = ctmod.BGRL(_encoder, _predictor).to(device)
+        predictor = dec.MlpProdDecoder(hp['hiddim'], hp['hiddim']).to(device)
+        return encoder, predictor
+    full_res.append(tr.runs('Cora BGRL+MLP', init_model, pretr.pretrain_bgrl, data_split, evaluator, hp))
+    
+    
+    hp['ct_param']['drop_scheme'] = 'degree'
+    def init_model(data, hp):
+        _encoder = enc.ENCODER_BGRL([data.num_features, hp['ct_param']['num_hidden']], batchnorm=True).to(device)
+        _predictor = ut.MLP_Head_BGRL(hp['ct_param']['num_hidden'], hp['ct_param']['num_hidden']).to(device)
+        encoder = ctmod.BGRL(_encoder, _predictor).to(device)
+        predictor = dec.CNLinkPredictor(hp['hiddim'], hp['hiddim'], 1, hp['mplayers'],
+        						hp['predp'], hp['preedp'], hp['lnnn']).to(device)
+        return encoder, predictor
+    full_res.append(tr.runs('Cora BGRL_deg+NCN', init_model, pretr.pretrain_bgrl_adaptative, data_split, evaluator, hp))
+    
+    def init_model(data, hp):
+        _encoder = enc.ENCODER_BGRL([data.num_features, hp['ct_param']['num_hidden']], batchnorm=True).to(device)
+        _predictor = ut.MLP_Head_BGRL(hp['ct_param']['num_hidden'], hp['ct_param']['num_hidden']).to(device)
+        encoder = ctmod.BGRL(_encoder, _predictor).to(device)
+        predictor = dec.MlpProdDecoder(hp['hiddim'], hp['hiddim']).to(device)
+        return encoder, predictor
+    full_res.append(tr.runs('Cora BGRL_deg+MLP', init_model, pretr.pretrain_bgrl_adaptative, data_split, evaluator, hp))
+    
+    
+    hp['ct_param']['drop_scheme'] = 'pr'
+    def init_model(data, hp):
+        _encoder = enc.ENCODER_BGRL([data.num_features, hp['ct_param']['num_hidden']], batchnorm=True).to(device)
+        _predictor = ut.MLP_Head_BGRL(hp['ct_param']['num_hidden'], hp['ct_param']['num_hidden']).to(device)
+        encoder = ctmod.BGRL(_encoder, _predictor).to(device)
+        predictor = dec.CNLinkPredictor(hp['hiddim'], hp['hiddim'], 1, hp['mplayers'],
+        						hp['predp'], hp['preedp'], hp['lnnn']).to(device)
+        return encoder, predictor
+    full_res.append(tr.runs('Cora BGRL_pr+NCN', init_model, pretr.pretrain_bgrl_adaptative, data_split, evaluator, hp))
+    
+    def init_model(data, hp):
+        _encoder = enc.ENCODER_BGRL([data.num_features, hp['ct_param']['num_hidden']], batchnorm=True).to(device)
+        _predictor = ut.MLP_Head_BGRL(hp['ct_param']['num_hidden'], hp['ct_param']['num_hidden']).to(device)
+        encoder = ctmod.BGRL(_encoder, _predictor).to(device)
+        predictor = dec.MlpProdDecoder(hp['hiddim'], hp['hiddim']).to(device)
+        return encoder, predictor
+    full_res.append(tr.runs('Cora BGRL_pr+MLP', init_model, pretr.pretrain_bgrl_adaptative, data_split, evaluator, hp))
+    
+    
+    hp['ct_param']['drop_scheme'] = 'evc'
+    def init_model(data, hp):
+        _encoder = enc.ENCODER_BGRL([data.num_features, hp['ct_param']['num_hidden']], batchnorm=True).to(device)
+        _predictor = ut.MLP_Head_BGRL(hp['ct_param']['num_hidden'], hp['ct_param']['num_hidden']).to(device)
+        encoder = ctmod.BGRL(_encoder, _predictor).to(device)
+        predictor = dec.CNLinkPredictor(hp['hiddim'], hp['hiddim'], 1, hp['mplayers'],
+        						hp['predp'], hp['preedp'], hp['lnnn']).to(device)
+        return encoder, predictor
+    full_res.append(tr.runs('Cora BGRL_evc+NCN', init_model, pretr.pretrain_bgrl_adaptative, data_split, evaluator, hp))
+    
+    def init_model(data, hp):
+        _encoder = enc.ENCODER_BGRL([data.num_features, hp['ct_param']['num_hidden']], batchnorm=True).to(device)
+        _predictor = ut.MLP_Head_BGRL(hp['ct_param']['num_hidden'], hp['ct_param']['num_hidden']).to(device)
+        encoder = ctmod.BGRL(_encoder, _predictor).to(device)
+        predictor = dec.MlpProdDecoder(hp['hiddim'], hp['hiddim']).to(device)
+        return encoder, predictor
+    full_res.append(tr.runs('Cora BGRL_evc+MLP', init_model, pretr.pretrain_bgrl_adaptative, data_split, evaluator, hp))
+    
+    
+    def init_model(data, hp):
+        _encoder = enc.ENCODER_GRACE(data.num_features, hp['ct_param']['num_hidden'], nn.Identity()).to(device)
+        encoder = ctmod.CSGCL(_encoder,
+                          hp['ct_param']['num_hidden'],
+                          hp['ct_param']['num_proj_hidden'],
+                          hp['ct_param']['tau']).to(device)
+        predictor = dec.CNLinkPredictor(hp['hiddim'], hp['hiddim'], 1, hp['mplayers'],
+        						hp['predp'], hp['preedp'], hp['lnnn']).to(device)
+        return encoder, predictor
+    full_res.append(tr.runs('Cora CSGCL+NCN', init_model, pretr.pretrain_csgcl, data_split, evaluator, hp))
+    
+    def init_model(data, hp):
+        _encoder = enc.ENCODER_GRACE(data.num_features, hp['ct_param']['num_hidden'], nn.Identity()).to(device)
+        encoder = ctmod.CSGCL(_encoder,
+                          hp['ct_param']['num_hidden'],
+                          hp['ct_param']['num_proj_hidden'],
+                          hp['ct_param']['tau']).to(device)
+        predictor = dec.MlpProdDecoder(hp['hiddim'], hp['hiddim']).to(device)
+        return encoder, predictor
+    full_res.append(tr.runs('Cora CSGCL+MLP', init_model, pretr.pretrain_csgcl, data_split, evaluator, hp))
+    
+    
+    def init_model(data, hp):
+        _encoder = enc.ENCODER_BGRL([data.num_features, hp['ct_param']['num_hidden']], batchnorm=True).to(device)
+        _predictor = ut.MLP_Head_BGRL(hp['ct_param']['num_hidden'], hp['ct_param']['num_hidden']).to(device)
+        encoder = ctmod.BGRL(_encoder, _predictor).to(device)
+        predictor = dec.CNLinkPredictor(hp['hiddim'], hp['hiddim'], 1, hp['mplayers'],
+        						hp['predp'], hp['preedp'], hp['lnnn']).to(device)
+        return encoder, predictor
+    full_res.append(tr.runs('Cora BGRL_cs+NCN', init_model, pretr.pretrain_bgrl_cs, data_split, evaluator, hp))
+    
+    def init_model(data, hp):
+        _encoder = enc.ENCODER_BGRL([data.num_features, hp['ct_param']['num_hidden']], batchnorm=True).to(device)
+        _predictor = ut.MLP_Head_BGRL(hp['ct_param']['num_hidden'], hp['ct_param']['num_hidden']).to(device)
+        encoder = ctmod.BGRL(_encoder, _predictor).to(device)
+        predictor = dec.MlpProdDecoder(hp['hiddim'], hp['hiddim']).to(device)
+        return encoder, predictor
+    full_res.append(tr.runs('Cora BGRL_cs+MLP', init_model, pretr.pretrain_bgrl_cs, data_split, evaluator, hp))
+    
+    return ut.full_output(full_res)
 
-#     res_dict = {"Hits@20": [], "Hits@20_std": 0, "Hits@50": [], "Hits@50_std": 0, "Hits@100": [], "Hits@100_std": 0}
-#     for r in range(hp['runs']):
-#         set_seed(r)
-#         model = GCN(data.num_features, hp['hiddim'], hp['hiddim'], hp['mplayers'],
-#                      hp['gnndp'], hp['ln'], hp['res'], data.max_x,
-#                      hp['model'], edrop=hp['gnnedp'],  xdropout=hp['xdp'], taildropout=hp['tdp']).to(device)
-#         predictor = CNLinkPredictor(hp['hiddim'], hp['hiddim'], 1, hp['mplayers'],
-#                            hp['predp'], hp['preedp'], hp['lnnn']).to(device)
-#         res_dict = run(r, model, None, predictor, data, evaluator, hp, res_dict)
-#     res_dict, res_latex = compute_table(res_dict)
-#     print(f'######\t{dataset}\t MLP\t######')
-#     print('\n\n', res_latex, '\n\n')
+if __name__ == '__main__':
+    run_all(DATASET, hp)

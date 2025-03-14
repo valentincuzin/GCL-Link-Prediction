@@ -3,6 +3,7 @@ from sklearn.metrics import roc_auc_score, average_precision_score
 from ogb.linkproppred import PygLinkPropPredDataset
 import torch_geometric.transforms as T
 from torch_sparse import SparseTensor
+from sklearn.decomposition import PCA
 from torch_geometric.datasets import Planetoid
 from torch_geometric.utils import train_test_split_edges, negative_sampling, to_undirected
 from torch_geometric.transforms import RandomLinkSplit
@@ -58,10 +59,12 @@ def randomsplit(dataset, val_ratio: float = 0.10, test_ratio: float = 0.2):
                            'edge_neg': removerepeated(test_data_neg).t()}}    
     return split_edge
 
-def loaddataset(name: str|list, use_valedges_as_input: bool, load=None):
+def loaddataset(name: str|list, use_valedges_as_input: bool, reduce_feature: int|None = None, load=None):
     if isinstance(name,list):
         split_edge = randomsplit(name)
         data = name[0]
+        if reduce_feature is not None:
+            reduce_node_features(data, reduce_feature)
         data.edge_index = to_undirected(split_edge["train"]["edge"].t())
         edge_index = data.edge_index
         data.num_nodes = data.x.shape[0]
@@ -69,6 +72,8 @@ def loaddataset(name: str|list, use_valedges_as_input: bool, load=None):
         dataset = Planetoid(root="dataset", name=name)
         split_edge = randomsplit(dataset)
         data = dataset[0]
+        if reduce_feature is not None:
+            reduce_node_features(data, reduce_feature)
         data.edge_index = to_undirected(split_edge["train"]["edge"].t())
         edge_index = data.edge_index
         data.num_nodes = data.x.shape[0]
@@ -76,6 +81,8 @@ def loaddataset(name: str|list, use_valedges_as_input: bool, load=None):
         dataset = PygLinkPropPredDataset(name=f'ogbl-{name}')
         split_edge = dataset.get_edge_split()
         data = dataset[0]
+        if reduce_feature is not None:
+            reduce_node_features(data, reduce_feature)
         edge_index = data.edge_index
     data.edge_weight = None 
     #print(data.num_nodes, edge_index.max())
@@ -107,6 +114,15 @@ def loaddataset(name: str|list, use_valedges_as_input: bool, load=None):
     else:
         data.full_adj_t = data.adj_t
     return data, split_edge
+
+def reduce_node_features(data, nb_features):
+    # reduce features size per nodes
+    data_np = data.x.numpy()
+    pca = PCA(n_components=nb_features)
+    data_reduced = pca.fit_transform(data_np)
+    data.x = torch.tensor(data_reduced, dtype=torch.float)
+    print('reduce node features: ',data.x.shape)
+    return data
 
 if __name__ == "__main__":
     loaddataset("Cora", False)

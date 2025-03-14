@@ -2,6 +2,7 @@ import time
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from tqdm import tqdm
 from src.utils import CosineDecayScheduler
 from torch_geometric.utils import degree, to_undirected, to_networkx, dropout_adj
 from src.contrastive_augmentation import drop_feature, drop_feature_weighted, drop_edge_weighted, feature_drop_weights, degree_drop_weights, pr_drop_weights, compute_pr, eigenvector_centrality, evc_drop_weights, cav, ced, community_detection, community_strength, transition, get_edge_weight
@@ -13,7 +14,8 @@ def pretrain_grace(model, data, param):
         weight_decay=param['weight_decay']
     )
     t1 = time.time()
-    for epoch in range(1, param['num_epochs'] + 1):
+    loss_res = []
+    for epoch in tqdm(range(1, param['num_epochs'] + 1)):
         model.train()
         optimizer.zero_grad()
         edge_index_1 = dropout_adj(data.edge_index, p=param[f'drop_edge_rate_{1}'])[0]
@@ -27,9 +29,10 @@ def pretrain_grace(model, data, param):
         loss.backward()
         optimizer.step()
         if epoch % 100 == 0:
-            print(f'(T) | Epoch={epoch:03d}, loss={loss:.4f}')
-    print(f"pretrain time {time.time()-t1:.2f} s, loss {loss:.4f}", flush=True)
-    
+            loss_res.append(round(float(loss), 2))
+    print('pretrain loss: ', loss_res)
+    print(f"pretrain time: {time.time()-t1:.2f} s")
+
 def pretrain_gca(model, data, param):
     optimizer = torch.optim.Adam(
         model.parameters(),
@@ -63,7 +66,8 @@ def pretrain_gca(model, data, param):
         feature_weights = torch.ones((data.x.size(1),)).to(device)
     
     t1 = time.time()
-    for epoch in range(1, param['num_epochs'] + 1):
+    loss_res = []
+    for epoch in tqdm(range(1, param['num_epochs'] + 1)):
         model.train()
         optimizer.zero_grad()
         edge_index_1 = drop_edge_weighted(data.edge_index, drop_weights, p=param[f'drop_edge_rate_{1}'], threshold=0.7)
@@ -78,8 +82,9 @@ def pretrain_gca(model, data, param):
         loss.backward()
         optimizer.step()
         if epoch % 100 == 0:
-            print(f'(T) | Epoch={epoch:03d}, loss={loss:.4f}')
-    print(f"pretrain time {time.time()-t1:.2f} s, loss {loss:.4f}", flush=True)
+            loss_res.append(round(float(loss), 2))
+    print('pretrain loss: ', loss_res, ' s')
+    print(f"pretrain time: {time.time()-t1:.2f} s")
     
 def pretrain_bgrl(model, data, param):
       # optimizer
@@ -90,7 +95,8 @@ def pretrain_bgrl(model, data, param):
     mm_scheduler = CosineDecayScheduler(1 - 0.99, 0, param['num_epochs'])
 
     t1 = time.time()
-    for epoch in range(1, param['num_epochs'] + 1):
+    loss_res = []
+    for epoch in tqdm(range(1, param['num_epochs'] + 1)):
         model.train()
 
         lr = lr_scheduler.get(epoch)
@@ -114,9 +120,10 @@ def pretrain_bgrl(model, data, param):
         optimizer.step()
         model.update_target_network(mm)
         if epoch % 100 == 0:
-            print(f'(T) | Epoch={epoch:03d}, loss={loss:.4f}')
-    print(f"pretrain time {time.time()-t1:.2f} s, loss {loss:.4f}", flush=True)
-    
+            loss_res.append(round(float(loss), 2))
+    print('pretrain loss: ', loss_res, ' s')
+    print(f"pretrain time: {time.time()-t1:.2f} s")
+
 def pretrain_bgrl_adaptative(model, data, param):
       # optimizer
     optimizer = torch.optim.AdamW(model.trainable_parameters(), lr=param['learning_rate'], weight_decay=param['weight_decay'])
@@ -152,7 +159,8 @@ def pretrain_bgrl_adaptative(model, data, param):
         feature_weights = torch.ones((data.x.size(1),)).to(device)
     
     t1 = time.time()
-    for epoch in range(1, param['num_epochs'] + 1):
+    loss_res = []
+    for epoch in tqdm(range(1, param['num_epochs'] + 1)):
         model.train()
 
         lr = lr_scheduler.get(epoch)
@@ -181,9 +189,10 @@ def pretrain_bgrl_adaptative(model, data, param):
         optimizer.step()
         model.update_target_network(mm)
         if epoch % 100 == 0:
-            print(f'(T) | Epoch={epoch:03d}, loss={loss:.4f}')
-    print(f"pretrain time {time.time()-t1:.2f} s, loss {loss:.4f}", flush=True)
-    
+            loss_res.append(round(float(loss), 2))
+    print('pretrain loss: ', loss_res, ' s')
+    print(f"pretrain time: {time.time()-t1:.2f} s")
+
 def pretrain_csgcl(model, data, param):
     g = to_networkx(data, to_undirected=True)
     communities = community_detection('leiden')(g).communities
@@ -195,7 +204,8 @@ def pretrain_csgcl(model, data, param):
                                  lr=param['learning_rate'],
                                  weight_decay=param['weight_decay'])
     t1 = time.time()
-    for epoch in range(1, param['num_epochs'] + 1):
+    loss_res = []
+    for epoch in tqdm(range(1, param['num_epochs'] + 1)):
         model.train()
         optimizer.zero_grad()
     
@@ -211,10 +221,12 @@ def pretrain_csgcl(model, data, param):
         loss.backward()
         optimizer.step()
         if epoch % 100 == 0:
-            print(f'(T) | Epoch={epoch:03d}, loss={loss:.4f}')
-    print(f"pretrain time {time.time()-t1:.2f} s, loss {loss:.4f}", flush=True)
-    
-def pretrain_bgrl_adaptative_cs(model, data, param):
+            loss_res.append(round(float(loss), 2))
+    print('pretrain loss: ', loss_res, ' s')
+    print(f"pretrain time: {time.time()-t1:.2f} s")
+
+def pretrain_bgrl_cs(model, data, param):
+
       # optimizer
     optimizer = torch.optim.AdamW(model.trainable_parameters(), lr=param['learning_rate'], weight_decay=param['weight_decay'])
 
@@ -230,7 +242,8 @@ def pretrain_bgrl_adaptative_cs(model, data, param):
     com_size = [len(c) for c in communities]
     
     t1 = time.time()
-    for epoch in range(1, param['num_epochs'] + 1):
+    loss_res = []
+    for epoch in tqdm(range(1, param['num_epochs'] + 1)):
         model.train()
 
         lr = lr_scheduler.get(epoch)
@@ -259,5 +272,6 @@ def pretrain_bgrl_adaptative_cs(model, data, param):
         optimizer.step()
         model.update_target_network(mm)
         if epoch % 100 == 0:
-            print(f'(T) | Epoch={epoch:03d}, loss={loss:.4f}')
-    print(f"pretrain time {time.time()-t1:.2f} s, loss {loss:.4f}", flush=True)
+            loss_res.append(round(float(loss), 2))
+    print('pretrain loss: ', loss_res, ' s')
+    print(f"pretrain time: {time.time()-t1:.2f} s, loss :{loss:.4f}")

@@ -159,6 +159,7 @@ def test(encoder: nn.Module, predictor: nn.Module, data, split_edge: dict, evalu
     pos_test_pred, neg_test_pred = test_split('test')
     
     results = {}
+    evaluator.eval_metric = 'hits@k'
     for K in [10, 20, 50, 100]:
         evaluator.K = K
         valid_hits = evaluator.eval({
@@ -170,7 +171,18 @@ def test(encoder: nn.Module, predictor: nn.Module, data, split_edge: dict, evalu
             'y_pred_neg': neg_test_pred,
         })[f'hits@{K}']
         results[f'Hits@{K}'] = (valid_hits, test_hits)
-
+    pos_valid_pred = pos_valid_pred[:neg_valid_pred.shape[0]]
+    pos_test_pred = pos_test_pred[:neg_test_pred.shape[0]]
+    evaluator.eval_metric = 'rocauc'
+    valid_auc = evaluator.eval({
+        'y_pred_pos': pos_valid_pred,
+        'y_pred_neg': neg_valid_pred,
+    })['rocauc']
+    test_auc = evaluator.eval({
+        'y_pred_pos': pos_test_pred,
+        'y_pred_neg': neg_test_pred,
+    })['rocauc']
+    results['ROCAUC'] = (valid_auc, test_auc)
     return results
 
 def test_output(
@@ -198,6 +210,8 @@ def test_output(
         res_dict
     )
     print(f"test time {time.time() - t1:.2f} s")
+    print(f"Run: {run + 1:02d}, "
+            f"Epoch: {epoch:02d}, ")
     for key, result in results.items():
         writer.add_scalars(
             f"{key}_{run}",
@@ -206,10 +220,8 @@ def test_output(
         )
         valid_hits, test_hits = result
         res_dict[key].append(test_hits)
-        print(key)
         print(
-            f"Run: {run + 1:02d}, "
-            f"Epoch: {epoch:02d}, "
+            f"{key}: "
             f"Valid: {100 * valid_hits:.2f}%, "
             f"Test: {100 * test_hits:.2f}%"
         )
@@ -233,7 +245,7 @@ def run(
     writer.add_text("hyperparams", str(hp))
     # train and test the encoder and the predictor
     if pretrain_function is not None:
-        pretrain_function(encoder, data)
+        pretrain_function(encoder, data, hp['ct_param'])
     if not hp['freeze'] or pretrain_function is None:
         optimizer = torch.optim.Adam(
             [
@@ -244,6 +256,7 @@ def run(
     elif hp['freeze']:
         optimizer = torch.optim.Adam(params=predictor.parameters(), lr=hp["prelr"])
     loss_res = []
+    t1 = time.time()
     for epoch in tqdm(range(1, 1 + hp["epochs"])):
         loss = train_ncn(
             encoder,
@@ -257,6 +270,7 @@ def run(
         if epoch % 10 == 0:
             loss_res.append(round(float(loss), 2))
     print('train loss: ', loss_res)
+    print(f"train time: {time.time()-t1:.2f} s")
     return test_output(
         r, epoch, encoder, predictor, data, split_edge, evaluator, writer, hp, res_dict
     )
@@ -267,14 +281,14 @@ def runs(name: str,
          data_split,
          evaluator,
          hp: dict):
-    res_dict = {"Hits@10": [], "Hits@20": [], "Hits@50": [], "Hits@100": []}
+    res_dict = {"Hits@10": [], "Hits@20": [], "Hits@50": [], "Hits@100": [], 'ROCAUC': []}
     print(f"### {name} ###")
     for r in range(hp['runs']):
         seed_everything(r)
         data, split_edge = data_split.get(r)
         encoder, predictor = model_init_function(data, hp)
         res_dict = run(r, name, encoder, pretrain_function, predictor, data, split_edge, evaluator, hp, res_dict)
-    res_dict, res_latex = compute_table(res_dict)
+    res_dict, res_latex = compute_table(res_dict, name)
     print(f"\n\n### {name} ###")
     print(f'\n{res_latex}\n\n')
     return res_dict

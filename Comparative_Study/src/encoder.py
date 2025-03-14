@@ -245,7 +245,7 @@ class ENCODER_BGRL(nn.Module):
 # Code from CSGCL
 
 
-class Encoder_CSGCL(nn.Module):
+class ENCODER_CSGCL(nn.Module):
     def __init__(self,
                  in_channels: int,
                  out_channels: int,

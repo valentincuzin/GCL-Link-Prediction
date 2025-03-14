@@ -219,7 +219,7 @@ class CosineDecayScheduler:
 ###############################################
 # code from me
 
-def compute_table(res_dict: dict[str, list | float]):
+def compute_table(res_dict: dict[str, list | float], name: str):
     # Compute the mean and std from a dict return tab and latex table
     new_tab = []
     for key, result in res_dict.items():
@@ -227,12 +227,25 @@ def compute_table(res_dict: dict[str, list | float]):
             result = np.array(result)
             mean = round(100 * np.mean(result), 2)
             std = round(100 * np.std(result), 2)
-            new_tab.append({"metric": key, "value": fr"{mean}$\pm${std}"})
+            new_tab.append({"metrics": key, name: fr"{mean}$\pm${std}"})
     df = pd.DataFrame(data=new_tab)
+    df.set_index('metrics')
     res_latex = df.to_latex(
         index=False, formatters={"name": str.upper}, float_format="{:.1f}".format
     )
-    return new_tab, res_latex
+    return df, res_latex
+
+def full_output(full_res: list):
+    # concat full result to one dataframe, then print with latex
+    full_res = pd.concat(full_res, axis=1)
+    full_res = full_res.loc[:, ~full_res.columns.duplicated()]
+    full_res.set_index('metrics', inplace=True)
+    print(full_res)
+    full_latex = full_res.to_latex(
+        index=True, formatters={"name": str.upper}, float_format="{:.1f}".format
+    )
+    print(full_latex)
+    return full_res, full_latex
 
 def get_evaluator(dataset: str):
     if dataset in ["Cora", "Citeseer", "Pubmed"]:
@@ -242,7 +255,7 @@ def get_evaluator(dataset: str):
     return evaluator
 
 class DataSplit:
-    def __init__(self, dataset: str, device: str, runs: int, use_valedges_as_input: bool = False):
+    def __init__(self, dataset: str, device: str, runs: int, use_valedges_as_input: bool = False, reduce_feature: int|None = None):
         print(f"{runs} split from the dataset {dataset}")
         self.device = device
         self.runs = runs
@@ -250,8 +263,8 @@ class DataSplit:
         t1 = time.time()
         for r in tqdm(range(runs)):
             seed_everything(r)
-            self.data_runs[r] = loaddataset(dataset, use_valedges_as_input)
-        self.info_time = time.time()-t1
+            self.data_runs[r] = loaddataset(dataset, use_valedges_as_input, reduce_feature)
+        self.info_time = round(time.time()-t1, 2)
         self.info()
 
     def get(self, r):
@@ -259,7 +272,7 @@ class DataSplit:
         return data.to(self.device), split_edge
 
     def info(self):
-        print("split time: ", self.info_time)
+        print("split time: ", self.info_time, " s")
         data, split_edge = self.data_runs[0]
         print("dataset split ")
         for key1 in split_edge:
