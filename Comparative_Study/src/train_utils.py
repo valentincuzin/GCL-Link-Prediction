@@ -245,7 +245,8 @@ def run(
     writer.add_text("hyperparams", str(hp))
     # train and test the encoder and the predictor
     if pretrain_function is not None:
-        pretrain_function(encoder, data, hp['ct_param'])
+        pre_time = pretrain_function(encoder, data, hp['ct_param'])
+        res_dict['pretrain_time'].append(pre_time)
     if not hp['freeze'] or pretrain_function is None:
         optimizer = torch.optim.Adam(
             [
@@ -281,7 +282,7 @@ def runs(name: str,
          data_split,
          evaluator,
          hp: dict):
-    res_dict = {"Hits@10": [], "Hits@20": [], "Hits@50": [], "Hits@100": [], 'ROCAUC': []}
+    res_dict = {"Hits@10": [], "Hits@20": [], "Hits@50": [], "Hits@100": [], 'ROCAUC': [], 'pretrain_time': []}
     print(f"### {name} ###")
     for r in range(hp['runs']):
         seed_everything(r)

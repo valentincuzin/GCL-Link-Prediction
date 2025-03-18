@@ -31,7 +31,9 @@ def pretrain_grace(model, data, param):
         if epoch % 100 == 0:
             loss_res.append(round(float(loss), 2))
     print('pretrain loss: ', loss_res)
-    print(f"pretrain time: {time.time()-t1:.2f} s")
+    pre_time = time.time()-t1
+    print(f"pretrain time: {pre_time:.2f} s")
+    return pre_time
 
 def pretrain_gca(model, data, param):
     optimizer = torch.optim.Adam(
@@ -44,7 +46,7 @@ def pretrain_gca(model, data, param):
     if param['drop_scheme'] == 'degree':
         drop_weights = degree_drop_weights(data.edge_index).to(device)
     elif param['drop_scheme'] == 'pr':
-        drop_weights = pr_drop_weights(data.edge_index, aggr='sink', k=200).to(device)
+        drop_weights = pr_drop_weights(data, aggr='sink', k=200).to(device)
     elif param['drop_scheme'] == 'evc':
         drop_weights = evc_drop_weights(data).to(device)
     else:
@@ -53,11 +55,10 @@ def pretrain_gca(model, data, param):
     # # compute feature_weights per centrality metrics
     if param['drop_scheme'] == 'degree':
         edge_index_ = to_undirected(data.edge_index)
-        node_deg = degree(edge_index_[1])
+        node_deg = degree(edge_index_[1], num_nodes=data.x.size(0))
         feature_weights = feature_drop_weights(data.x, node_c=node_deg).to(device)
     elif param['drop_scheme'] == 'pr':
-        node_pr = compute_pr(data.edge_index)
-        print(node_pr.shape, data.x.shape)
+        node_pr = compute_pr(data)
         feature_weights = feature_drop_weights(data.x, node_c=node_pr).to(device)
     elif param['drop_scheme'] == 'evc':
         node_evc = eigenvector_centrality(data)
@@ -84,7 +85,9 @@ def pretrain_gca(model, data, param):
         if epoch % 100 == 0:
             loss_res.append(round(float(loss), 2))
     print('pretrain loss: ', loss_res, ' s')
-    print(f"pretrain time: {time.time()-t1:.2f} s")
+    pre_time = time.time()-t1
+    print(f"pretrain time: {pre_time:.2f} s")
+    return pre_time
     
 def pretrain_bgrl(model, data, param):
       # optimizer
@@ -122,7 +125,9 @@ def pretrain_bgrl(model, data, param):
         if epoch % 100 == 0:
             loss_res.append(round(float(loss), 2))
     print('pretrain loss: ', loss_res, ' s')
-    print(f"pretrain time: {time.time()-t1:.2f} s")
+    pre_time = time.time()-t1
+    print(f"pretrain time: {pre_time:.2f} s")
+    return pre_time
 
 def pretrain_bgrl_adaptative(model, data, param):
       # optimizer
@@ -137,7 +142,7 @@ def pretrain_bgrl_adaptative(model, data, param):
     if param['drop_scheme'] == 'degree':
         drop_weights = degree_drop_weights(data.edge_index).to(device)
     elif param['drop_scheme'] == 'pr':
-        drop_weights = pr_drop_weights(data.edge_index, aggr='sink', k=200).to(device)
+        drop_weights = pr_drop_weights(data, aggr='sink', k=200).to(device)
     elif param['drop_scheme'] == 'evc':
         drop_weights = evc_drop_weights(data).to(device)
     else:
@@ -146,10 +151,10 @@ def pretrain_bgrl_adaptative(model, data, param):
     # # compute feature_weights per centrality metrics
     if param['drop_scheme'] == 'degree':
         edge_index_ = to_undirected(data.edge_index)
-        node_deg = degree(edge_index_[1])
+        node_deg = degree(edge_index_[1], num_nodes=data.x.size(0))
         feature_weights = feature_drop_weights(data.x, node_c=node_deg).to(device)
     elif param['drop_scheme'] == 'pr':
-        node_pr = compute_pr(data.edge_index)
+        node_pr = compute_pr(data)
         print(node_pr.shape, data.x.shape)
         feature_weights = feature_drop_weights(data.x, node_c=node_pr).to(device)
     elif param['drop_scheme'] == 'evc':
@@ -191,7 +196,9 @@ def pretrain_bgrl_adaptative(model, data, param):
         if epoch % 100 == 0:
             loss_res.append(round(float(loss), 2))
     print('pretrain loss: ', loss_res, ' s')
-    print(f"pretrain time: {time.time()-t1:.2f} s")
+    pre_time = time.time()-t1
+    print(f"pretrain time: {pre_time:.2f} s")
+    return pre_time
 
 def pretrain_csgcl(model, data, param):
     g = to_networkx(data, to_undirected=True)
@@ -223,7 +230,9 @@ def pretrain_csgcl(model, data, param):
         if epoch % 100 == 0:
             loss_res.append(round(float(loss), 2))
     print('pretrain loss: ', loss_res, ' s')
-    print(f"pretrain time: {time.time()-t1:.2f} s")
+    pre_time = time.time()-t1
+    print(f"pretrain time: {pre_time:.2f} s")
+    return pre_time
 
 def pretrain_bgrl_cs(model, data, param):
 
@@ -274,4 +283,6 @@ def pretrain_bgrl_cs(model, data, param):
         if epoch % 100 == 0:
             loss_res.append(round(float(loss), 2))
     print('pretrain loss: ', loss_res, ' s')
-    print(f"pretrain time: {time.time()-t1:.2f} s, loss :{loss:.4f}")
+    pre_time = time.time()-t1
+    print(f"pretrain time: {pre_time:.2f} s, loss :{loss:.4f}")
+    return pre_time

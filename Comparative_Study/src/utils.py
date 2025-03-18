@@ -10,6 +10,7 @@ from torch_sparse import SparseTensor, masked_select_nnz
 from ogb.linkproppred import Evaluator
 from src.ogbdataset import loaddataset
 from torch_geometric import seed_everything
+from torch_geometric.utils import degree
 
 
 ###############################################
@@ -225,8 +226,9 @@ def compute_table(res_dict: dict[str, list | float], name: str):
     for key, result in res_dict.items():
         if isinstance(result, list):
             result = np.array(result)
-            mean = round(100 * np.mean(result), 2)
-            std = round(100 * np.std(result), 2)
+            unit = 100 if key != 'pretrain_time' else 1
+            mean = round(unit * np.mean(result), 2)
+            std = round(unit * np.std(result), 2)
             new_tab.append({"metrics": key, name: fr"{mean}$\pm${std}"})
     df = pd.DataFrame(data=new_tab)
     df.set_index('metrics')
@@ -255,7 +257,7 @@ def get_evaluator(dataset: str):
     return evaluator
 
 class DataSplit:
-    def __init__(self, dataset: str, device: str, runs: int, use_valedges_as_input: bool = False, reduce_feature: int|None = None):
+    def __init__(self, dataset: str, device: str, runs: int, use_valedges_as_input: bool = False, reduce_feature: int|None = None, only_feature: bool = False):
         print(f"{runs} split from the dataset {dataset}")
         self.device = device
         self.runs = runs
@@ -263,7 +265,7 @@ class DataSplit:
         t1 = time.time()
         for r in tqdm(range(runs)):
             seed_everything(r)
-            self.data_runs[r] = loaddataset(dataset, use_valedges_as_input, reduce_feature)
+            self.data_runs[r] = loaddataset(dataset, use_valedges_as_input, reduce_feature, only_feature)
         self.info_time = round(time.time()-t1, 2)
         self.info()
 

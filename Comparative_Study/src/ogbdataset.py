@@ -5,7 +5,7 @@ import torch_geometric.transforms as T
 from torch_sparse import SparseTensor
 from sklearn.decomposition import PCA
 from torch_geometric.datasets import Planetoid
-from torch_geometric.utils import train_test_split_edges, negative_sampling, to_undirected
+from torch_geometric.utils import train_test_split_edges, negative_sampling, to_undirected, add_self_loops
 from torch_geometric.transforms import RandomLinkSplit
 
 # random split dataset
@@ -59,31 +59,60 @@ def randomsplit(dataset, val_ratio: float = 0.10, test_ratio: float = 0.2):
                            'edge_neg': removerepeated(test_data_neg).t()}}    
     return split_edge
 
-def loaddataset(name: str|list, use_valedges_as_input: bool, reduce_feature: int|None = None, load=None):
+def loaddataset(name: str|list, use_valedges_as_input: bool, reduce_feature: int|None = None, only_feature: bool = False, load=None):
     if isinstance(name,list):
         split_edge = randomsplit(name)
         data = name[0]
         if reduce_feature is not None:
-            reduce_node_features(data, reduce_feature)
+            if reduce_feature == 0:
+                data.x = torch.zeros_like(data.x)
+            else:
+                reduce_node_features(data, reduce_feature)
         data.edge_index = to_undirected(split_edge["train"]["edge"].t())
+        if only_feature:
+            data.edge_index = torch.tensor([[], []], dtype=torch.long)
+            data.edge_index = add_self_loops(data.edge_index, num_nodes=data.num_nodes)[0]
         edge_index = data.edge_index
         data.num_nodes = data.x.shape[0]
+
+        if data.edge_index.max().item() + 1 < data.num_nodes:
+            data.edge_index = add_self_loops(data.edge_index, num_nodes=data.num_nodes)[0]
     elif name in ["Cora", "Citeseer", "Pubmed"]:
         dataset = Planetoid(root="dataset", name=name)
         split_edge = randomsplit(dataset)
         data = dataset[0]
         if reduce_feature is not None:
-            reduce_node_features(data, reduce_feature)
+            if reduce_feature == 0:
+                data.x = torch.zeros_like(data.x)
+            else:
+                reduce_node_features(data, reduce_feature)
         data.edge_index = to_undirected(split_edge["train"]["edge"].t())
+        if only_feature:
+            data.edge_index = torch.tensor([[], []], dtype=torch.long)
+            data.edge_index = add_self_loops(data.edge_index, num_nodes=data.num_nodes)[0]
         edge_index = data.edge_index
         data.num_nodes = data.x.shape[0]
+
+        if data.edge_index.max().item() + 1 < data.num_nodes:
+            data.edge_index = add_self_loops(data.edge_index, num_nodes=data.num_nodes)[0]
+
     else:
         dataset = PygLinkPropPredDataset(name=f'ogbl-{name}')
         split_edge = dataset.get_edge_split()
         data = dataset[0]
         if reduce_feature is not None:
-            reduce_node_features(data, reduce_feature)
+            if reduce_feature == 0:
+                data.x = torch.zeros_like(data.x)
+            else:
+                reduce_node_features(data, reduce_feature)
         edge_index = data.edge_index
+        if only_feature:
+            data.edge_index = torch.tensor([[], []], dtype=torch.long)
+            data.edge_index = add_self_loops(data.edge_index, num_nodes=data.num_nodes)[0]
+
+        if data.edge_index.max().item() + 1 < data.num_nodes:
+            data.edge_index = add_self_loops(data.edge_index, num_nodes=data.num_nodes)[0]
+
     data.edge_weight = None 
     #print(data.num_nodes, edge_index.max())
     data.adj_t = SparseTensor.from_edge_index(edge_index, sparse_sizes=(data.num_nodes, data.num_nodes))

@@ -7,14 +7,15 @@ from cdlib import algorithms
 from cdlib.utils import convert_graph_formats
 
 
-def compute_pr(edge_index, damp: float = 0.85, k: int = 10):
-    num_nodes = edge_index.max().item() + 1
-    deg_out = degree(edge_index[0])
-    x = torch.ones((num_nodes, )).to(edge_index.device).to(torch.float32)
+def compute_pr(data, damp: float = 0.85, k: int = 10):
+    num_nodes = data.edge_index.max().item() + 1
+    print(num_nodes, data.x.size(0))
+    deg_out = degree(data.edge_index[0], num_nodes=num_nodes)
+    x = torch.ones((num_nodes, )).to(data.edge_index.device).to(torch.float32)
 
     for i in range(k):
-        edge_msg = x[edge_index[0]] / deg_out[edge_index[0]]
-        agg_msg = scatter(edge_msg, edge_index[1], reduce='sum')
+        edge_msg = x[data.edge_index[0]] / deg_out[data.edge_index[0]]
+        agg_msg = scatter(edge_msg, data.edge_index[1], reduce='sum')
 
         x = (1 - damp) * x + damp * agg_msg
 
@@ -70,10 +71,10 @@ def degree_drop_weights(edge_index):
 
     return weights
 
-def pr_drop_weights(edge_index, aggr: str = 'sink', k: int = 10):
-    pv = compute_pr(edge_index, k=k)
-    pv_row = pv[edge_index[0]].to(torch.float32)
-    pv_col = pv[edge_index[1]].to(torch.float32)
+def pr_drop_weights(data, aggr: str = 'sink', k: int = 10):
+    pv = compute_pr(data, k=k)
+    pv_row = pv[data.edge_index[0]].to(torch.float32)
+    pv_col = pv[data.edge_index[1]].to(torch.float32)
     s_row = torch.log(pv_row)
     s_col = torch.log(pv_col)
     if aggr == 'sink':
