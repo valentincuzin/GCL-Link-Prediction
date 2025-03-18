@@ -70,7 +70,16 @@ def run_all(dataset: str, hp: dict):
         predictor = dec.CNLinkPredictor(hp['hiddim'], hp['hiddim'], 1, hp['mplayers'],
         						hp['predp'], hp['preedp'], hp['lnnn']).to(device)
         return encoder, predictor
-    full_res.append(tr.runs(f'{DATASET} GCN+NCN', init_model, None, data_split, evaluator, hp))
+    # full_res.append(tr.runs(f'{DATASET} GCN+NCN', init_model, None, data_split, evaluator, hp))
+
+    def init_model(data, hp):
+        encoder = enc.ENCODER_NCN(data.num_features, hp['hiddim'], hp['hiddim'], hp['mplayers'],
+    					hp['gnndp'], hp['ln'], hp['res'], data.max_x,
+    					hp['model'], edrop=hp['gnnedp'],  xdropout=hp['xdp'], taildropout=hp['tdp']).to(device)
+        predictor = dec.MPLP(hp['hiddim'], hp['hiddim'], hp['mplayers'],
+        						hp['predp'], hp['preedp']).to(device)
+        return encoder, predictor
+    full_res.append(tr.runs(f'{DATASET} GCN+MPLP', init_model, None, data_split, evaluator, hp))
     
     def init_model(data, hp):
         encoder = enc.ENCODER_NCN(data.num_features, hp['hiddim'], hp['hiddim'], hp['mplayers'],
@@ -78,7 +87,7 @@ def run_all(dataset: str, hp: dict):
     					hp['model'], edrop=hp['gnnedp'],  xdropout=hp['xdp'], taildropout=hp['tdp']).to(device)
         predictor = dec.MlpProdDecoder(hp['hiddim'], hp['hiddim']).to(device)
         return encoder, predictor
-    full_res.append(tr.runs(f'{DATASET} GCN+MLP', init_model, None, data_split, evaluator, hp))
+    # full_res.append(tr.runs(f'{DATASET} GCN+MLP', init_model, None, data_split, evaluator, hp))
     
     
     def init_model(data, hp):
@@ -87,14 +96,14 @@ def run_all(dataset: str, hp: dict):
         predictor = dec.CNLinkPredictor(hp['hiddim'], hp['hiddim'], 1, hp['mplayers'],
         						hp['predp'], hp['preedp'], hp['lnnn']).to(device)
         return encoder, predictor
-    full_res.append(tr.runs(f'{DATASET} GRACE+NCN', init_model, pretr.pretrain_grace, data_split, evaluator, hp))
+    # full_res.append(tr.runs(f'{DATASET} GRACE+NCN', init_model, pretr.pretrain_grace, data_split, evaluator, hp))
     
     def init_model(data, hp):
         _encoder = enc.ENCODER_GRACE(data.num_features, hp['ct_param']['num_hidden'], nn.Identity()).to(device)
         encoder = ctmod.GRACE(_encoder, hp['ct_param']['num_hidden'], hp['ct_param']['num_proj_hidden']).to(device)
         predictor = dec.MlpProdDecoder(hp['hiddim'], hp['hiddim']).to(device)
         return encoder, predictor
-    full_res.append(tr.runs(f'{DATASET} GRACE+MLP', init_model, pretr.pretrain_grace, data_split, evaluator, hp))
+    # full_res.append(tr.runs(f'{DATASET} GRACE+MLP', init_model, pretr.pretrain_grace, data_split, evaluator, hp))
     
     
     hp['ct_param']['drop_scheme'] = 'degree'
@@ -104,14 +113,14 @@ def run_all(dataset: str, hp: dict):
         predictor = dec.CNLinkPredictor(hp['hiddim'], hp['hiddim'], 1, hp['mplayers'],
         						hp['predp'], hp['preedp'], hp['lnnn']).to(device)
         return encoder, predictor
-    full_res.append(tr.runs(f'{DATASET} GCA_deg+NCN', init_model, pretr.pretrain_gca, data_split, evaluator, hp))
+    # full_res.append(tr.runs(f'{DATASET} GCA_deg+NCN', init_model, pretr.pretrain_gca, data_split, evaluator, hp))
     
     def init_model(data, hp):
         _encoder = enc.ENCODER_GRACE(data.num_features, hp['ct_param']['num_hidden'], nn.Identity()).to(device)
         encoder = ctmod.GRACE(_encoder, hp['ct_param']['num_hidden'], hp['ct_param']['num_proj_hidden']).to(device)
         predictor = dec.MlpProdDecoder(hp['hiddim'], hp['hiddim']).to(device)
         return encoder, predictor
-    full_res.append(tr.runs(f'{DATASET} GCA_deg+MLP', init_model, pretr.pretrain_gca, data_split, evaluator, hp))
+    # full_res.append(tr.runs(f'{DATASET} GCA_deg+MLP', init_model, pretr.pretrain_gca, data_split, evaluator, hp))
     
     
     hp['ct_param']['drop_scheme'] = 'pr'
@@ -121,14 +130,14 @@ def run_all(dataset: str, hp: dict):
         predictor = dec.CNLinkPredictor(hp['hiddim'], hp['hiddim'], 1, hp['mplayers'],
         						hp['predp'], hp['preedp'], hp['lnnn']).to(device)
         return encoder, predictor
-    full_res.append(tr.runs(f'{DATASET} GCA_pr+NCN', init_model, pretr.pretrain_gca, data_split, evaluator, hp))
+    # full_res.append(tr.runs(f'{DATASET} GCA_pr+NCN', init_model, pretr.pretrain_gca, data_split, evaluator, hp))
     
     def init_model(data, hp):
         _encoder = enc.ENCODER_GRACE(data.num_features, hp['ct_param']['num_hidden'], nn.Identity()).to(device)
         encoder = ctmod.GRACE(_encoder, hp['ct_param']['num_hidden'], hp['ct_param']['num_proj_hidden']).to(device)
         predictor = dec.MlpProdDecoder(hp['hiddim'], hp['hiddim']).to(device)
         return encoder, predictor
-    full_res.append(tr.runs(f'{DATASET} GCA_pr+MLP', init_model, pretr.pretrain_gca, data_split, evaluator, hp))
+    # full_res.append(tr.runs(f'{DATASET} GCA_pr+MLP', init_model, pretr.pretrain_gca, data_split, evaluator, hp))
     
     
     hp['ct_param']['drop_scheme'] = 'evc'
@@ -138,14 +147,14 @@ def run_all(dataset: str, hp: dict):
         predictor = dec.CNLinkPredictor(hp['hiddim'], hp['hiddim'], 1, hp['mplayers'],
         						hp['predp'], hp['preedp'], hp['lnnn']).to(device)
         return encoder, predictor
-    full_res.append(tr.runs(f'{DATASET} GCA_evc+NCN', init_model, pretr.pretrain_gca, data_split, evaluator, hp))
+    # full_res.append(tr.runs(f'{DATASET} GCA_evc+NCN', init_model, pretr.pretrain_gca, data_split, evaluator, hp))
     
     def init_model(data, hp):
         _encoder = enc.ENCODER_GRACE(data.num_features, hp['ct_param']['num_hidden'], nn.Identity()).to(device)
         encoder = ctmod.GRACE(_encoder, hp['ct_param']['num_hidden'], hp['ct_param']['num_proj_hidden']).to(device)
         predictor = dec.MlpProdDecoder(hp['hiddim'], hp['hiddim']).to(device)
         return encoder, predictor
-    full_res.append(tr.runs(f'{DATASET} GCA_evc+MLP', init_model, pretr.pretrain_gca, data_split, evaluator, hp))
+    # full_res.append(tr.runs(f'{DATASET} GCA_evc+MLP', init_model, pretr.pretrain_gca, data_split, evaluator, hp))
     
     
     def init_model(data, hp):
@@ -155,7 +164,7 @@ def run_all(dataset: str, hp: dict):
         predictor = dec.CNLinkPredictor(hp['hiddim'], hp['hiddim'], 1, hp['mplayers'],
         						hp['predp'], hp['preedp'], hp['lnnn']).to(device)
         return encoder, predictor
-    full_res.append(tr.runs(f'{DATASET} BGRL+NCN', init_model, pretr.pretrain_bgrl, data_split, evaluator, hp))
+    # full_res.append(tr.runs(f'{DATASET} BGRL+NCN', init_model, pretr.pretrain_bgrl, data_split, evaluator, hp))
     
     def init_model(data, hp):
         _encoder = enc.ENCODER_BGRL([data.num_features, hp['ct_param']['num_hidden']], batchnorm=True).to(device)
@@ -163,7 +172,7 @@ def run_all(dataset: str, hp: dict):
         encoder = ctmod.BGRL(_encoder, _predictor).to(device)
         predictor = dec.MlpProdDecoder(hp['hiddim'], hp['hiddim']).to(device)
         return encoder, predictor
-    full_res.append(tr.runs(f'{DATASET} BGRL+MLP', init_model, pretr.pretrain_bgrl, data_split, evaluator, hp))
+    # full_res.append(tr.runs(f'{DATASET} BGRL+MLP', init_model, pretr.pretrain_bgrl, data_split, evaluator, hp))
     
     
     hp['ct_param']['drop_scheme'] = 'degree'
@@ -174,7 +183,7 @@ def run_all(dataset: str, hp: dict):
         predictor = dec.CNLinkPredictor(hp['hiddim'], hp['hiddim'], 1, hp['mplayers'],
         						hp['predp'], hp['preedp'], hp['lnnn']).to(device)
         return encoder, predictor
-    full_res.append(tr.runs(f'{DATASET} BGRL_deg+NCN', init_model, pretr.pretrain_bgrl_adaptative, data_split, evaluator, hp))
+    # full_res.append(tr.runs(f'{DATASET} BGRL_deg+NCN', init_model, pretr.pretrain_bgrl_adaptative, data_split, evaluator, hp))
     
     def init_model(data, hp):
         _encoder = enc.ENCODER_BGRL([data.num_features, hp['ct_param']['num_hidden']], batchnorm=True).to(device)
@@ -182,7 +191,7 @@ def run_all(dataset: str, hp: dict):
         encoder = ctmod.BGRL(_encoder, _predictor).to(device)
         predictor = dec.MlpProdDecoder(hp['hiddim'], hp['hiddim']).to(device)
         return encoder, predictor
-    full_res.append(tr.runs(f'{DATASET} BGRL_deg+MLP', init_model, pretr.pretrain_bgrl_adaptative, data_split, evaluator, hp))
+    # full_res.append(tr.runs(f'{DATASET} BGRL_deg+MLP', init_model, pretr.pretrain_bgrl_adaptative, data_split, evaluator, hp))
     
     
     hp['ct_param']['drop_scheme'] = 'pr'
@@ -193,7 +202,7 @@ def run_all(dataset: str, hp: dict):
         predictor = dec.CNLinkPredictor(hp['hiddim'], hp['hiddim'], 1, hp['mplayers'],
         						hp['predp'], hp['preedp'], hp['lnnn']).to(device)
         return encoder, predictor
-    full_res.append(tr.runs(f'{DATASET} BGRL_pr+NCN', init_model, pretr.pretrain_bgrl_adaptative, data_split, evaluator, hp))
+    # full_res.append(tr.runs(f'{DATASET} BGRL_pr+NCN', init_model, pretr.pretrain_bgrl_adaptative, data_split, evaluator, hp))
     
     def init_model(data, hp):
         _encoder = enc.ENCODER_BGRL([data.num_features, hp['ct_param']['num_hidden']], batchnorm=True).to(device)
@@ -201,7 +210,7 @@ def run_all(dataset: str, hp: dict):
         encoder = ctmod.BGRL(_encoder, _predictor).to(device)
         predictor = dec.MlpProdDecoder(hp['hiddim'], hp['hiddim']).to(device)
         return encoder, predictor
-    full_res.append(tr.runs(f'{DATASET} BGRL_pr+MLP', init_model, pretr.pretrain_bgrl_adaptative, data_split, evaluator, hp))
+    # full_res.append(tr.runs(f'{DATASET} BGRL_pr+MLP', init_model, pretr.pretrain_bgrl_adaptative, data_split, evaluator, hp))
     
     
     hp['ct_param']['drop_scheme'] = 'evc'
@@ -212,7 +221,7 @@ def run_all(dataset: str, hp: dict):
         predictor = dec.CNLinkPredictor(hp['hiddim'], hp['hiddim'], 1, hp['mplayers'],
         						hp['predp'], hp['preedp'], hp['lnnn']).to(device)
         return encoder, predictor
-    full_res.append(tr.runs(f'{DATASET} BGRL_evc+NCN', init_model, pretr.pretrain_bgrl_adaptative, data_split, evaluator, hp))
+    # full_res.append(tr.runs(f'{DATASET} BGRL_evc+NCN', init_model, pretr.pretrain_bgrl_adaptative, data_split, evaluator, hp))
     
     def init_model(data, hp):
         _encoder = enc.ENCODER_BGRL([data.num_features, hp['ct_param']['num_hidden']], batchnorm=True).to(device)
@@ -220,7 +229,7 @@ def run_all(dataset: str, hp: dict):
         encoder = ctmod.BGRL(_encoder, _predictor).to(device)
         predictor = dec.MlpProdDecoder(hp['hiddim'], hp['hiddim']).to(device)
         return encoder, predictor
-    full_res.append(tr.runs(f'{DATASET} BGRL_evc+MLP', init_model, pretr.pretrain_bgrl_adaptative, data_split, evaluator, hp))
+    # full_res.append(tr.runs(f'{DATASET} BGRL_evc+MLP', init_model, pretr.pretrain_bgrl_adaptative, data_split, evaluator, hp))
     
     
     def init_model(data, hp):
@@ -232,7 +241,7 @@ def run_all(dataset: str, hp: dict):
         predictor = dec.CNLinkPredictor(hp['hiddim'], hp['hiddim'], 1, hp['mplayers'],
         						hp['predp'], hp['preedp'], hp['lnnn']).to(device)
         return encoder, predictor
-    full_res.append(tr.runs(f'{DATASET} CSGCL+NCN', init_model, pretr.pretrain_csgcl, data_split, evaluator, hp))
+    # full_res.append(tr.runs(f'{DATASET} CSGCL+NCN', init_model, pretr.pretrain_csgcl, data_split, evaluator, hp))
     
     def init_model(data, hp):
         _encoder = enc.ENCODER_GRACE(data.num_features, hp['ct_param']['num_hidden'], nn.Identity()).to(device)
@@ -242,7 +251,7 @@ def run_all(dataset: str, hp: dict):
                           hp['ct_param']['tau']).to(device)
         predictor = dec.MlpProdDecoder(hp['hiddim'], hp['hiddim']).to(device)
         return encoder, predictor
-    full_res.append(tr.runs(f'{DATASET} CSGCL+MLP', init_model, pretr.pretrain_csgcl, data_split, evaluator, hp))
+    # full_res.append(tr.runs(f'{DATASET} CSGCL+MLP', init_model, pretr.pretrain_csgcl, data_split, evaluator, hp))
     
     
     def init_model(data, hp):
@@ -252,7 +261,7 @@ def run_all(dataset: str, hp: dict):
         predictor = dec.CNLinkPredictor(hp['hiddim'], hp['hiddim'], 1, hp['mplayers'],
         						hp['predp'], hp['preedp'], hp['lnnn']).to(device)
         return encoder, predictor
-    full_res.append(tr.runs(f'{DATASET} BGRL_cs+NCN', init_model, pretr.pretrain_bgrl_cs, data_split, evaluator, hp))
+    # full_res.append(tr.runs(f'{DATASET} BGRL_cs+NCN', init_model, pretr.pretrain_bgrl_cs, data_split, evaluator, hp))
     
     def init_model(data, hp):
         _encoder = enc.ENCODER_BGRL([data.num_features, hp['ct_param']['num_hidden']], batchnorm=True).to(device)
@@ -260,7 +269,7 @@ def run_all(dataset: str, hp: dict):
         encoder = ctmod.BGRL(_encoder, _predictor).to(device)
         predictor = dec.MlpProdDecoder(hp['hiddim'], hp['hiddim']).to(device)
         return encoder, predictor
-    full_res.append(tr.runs(f'{DATASET} BGRL_cs+MLP', init_model, pretr.pretrain_bgrl_cs, data_split, evaluator, hp))
+    # full_res.append(tr.runs(f'{DATASET} BGRL_cs+MLP', init_model, pretr.pretrain_bgrl_cs, data_split, evaluator, hp))
     
     df, tex = ut.full_output(full_res)
     df.to_csv(f'{DATASET}_res.csv', sep=';')
