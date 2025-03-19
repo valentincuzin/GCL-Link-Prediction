@@ -12,7 +12,7 @@ from torch_sparse import SparseTensor, masked_select_nnz, matmul
 from ogb.linkproppred import Evaluator
 from src.ogbdataset import loaddataset
 from torch_geometric import seed_everything
-from torch_geometric.utils import degree, k_hop_subgraph, to_edge_index
+from torch_geometric.utils import k_hop_subgraph, to_edge_index
 
 
 ###############################################
@@ -687,7 +687,7 @@ def get_evaluator(dataset: str):
     return evaluator
 
 class DataSplit:
-    def __init__(self, dataset: str, device: str, runs: int, use_valedges_as_input: bool = False, reduce_feature: int|None = None, only_feature: bool = False):
+    def __init__(self, dataset: str|list, device: str, runs: int, use_valedges_as_input: bool = False, reduce_feature: int|None = None, only_feature: bool = False):
         print(f"{runs} split from the dataset {dataset}")
         self.device = device
         self.runs = runs
