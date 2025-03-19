@@ -1,4 +1,5 @@
 import torch
+import torch.nn.functional as F
 from sklearn.metrics import roc_auc_score, average_precision_score
 from ogb.linkproppred import PygLinkPropPredDataset
 import torch_geometric.transforms as T
@@ -65,7 +66,7 @@ def loaddataset(name: str|list, use_valedges_as_input: bool, reduce_feature: int
         data = name[0]
         if reduce_feature is not None:
             if reduce_feature == 0:
-                data.x = torch.zeros_like(data.x)
+                data.x = F.one_hot(torch.arange(0, len(data.x))).float()
             else:
                 reduce_node_features(data, reduce_feature)
         data.edge_index = to_undirected(split_edge["train"]["edge"].t())
@@ -83,7 +84,7 @@ def loaddataset(name: str|list, use_valedges_as_input: bool, reduce_feature: int
         data = dataset[0]
         if reduce_feature is not None:
             if reduce_feature == 0:
-                data.x = torch.zeros_like(data.x)
+                data.x = F.one_hot(torch.arange(0, len(data.x))).float()
             else:
                 reduce_node_features(data, reduce_feature)
         data.edge_index = to_undirected(split_edge["train"]["edge"].t())
@@ -102,7 +103,7 @@ def loaddataset(name: str|list, use_valedges_as_input: bool, reduce_feature: int
         data = dataset[0]
         if reduce_feature is not None:
             if reduce_feature == 0:
-                data.x = torch.zeros_like(data.x)
+                data.x = F.one_hot(torch.arange(0, len(data.x))).float()
             else:
                 reduce_node_features(data, reduce_feature)
         edge_index = data.edge_index

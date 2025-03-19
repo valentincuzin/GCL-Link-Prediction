@@ -228,8 +228,8 @@ def spmdiff_(adj1: SparseTensor,
     '''
     # assert adj1.sizes() == adj2.sizes()
     
-    element1, val1 = spm2elem(adj1)
-    element2, val2 = spm2elem(adj2)
+    element1 = spm2elem(adj1)
+    element2 = spm2elem(adj2)
 
     if element1.shape[0] == 0:
         retelem1 = element1
@@ -242,11 +242,7 @@ def spmdiff_(adj1: SparseTensor,
         maskelem1[idx[matchedmask]] = 0
         retelem1 = element1[maskelem1]
     
-    if keep_val and val1 is not None:
-        retval1 = val1[maskelem1]
-        return elem2spm(retelem1, adj1.sizes(), retval1)
-    else:
-        return elem2spm(retelem1, adj1.sizes())
+    return elem2spm(retelem1, adj1.sizes())
 
 def dot_product(tensor1, tensor2):
     return (tensor1 * tensor2).sum(dim=-1)

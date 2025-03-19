@@ -257,4 +257,4 @@ class MPLP(torch.nn.Module):
         return logit
     
     def forward(self, x, adj, edges, filled1: bool = False):
-        return self.multidomainforward(self, x, adj, edges, filled1, [])
+        return self.multidomainforward(x, adj, edges, filled1, [])
