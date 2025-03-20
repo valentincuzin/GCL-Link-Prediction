@@ -4,6 +4,21 @@ import torch.nn.functional as F
 from torch_sparse.matmul import spmm_add
 from src.utils import adjoverlap, DropAdj, NodeLabel
 
+class inner_prod(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    def multidomainforward(self, x, adj, tar_ei, filled=False, cndroppprobs = []):
+        x_i = x[edges[0]]
+        x_j = x[edges[1]]
+        x = x_i * x_j
+        out = torch.sum(x, dim=-1)
+        return out
+
+    def forward(self, x, adj, tar_ei, filled1=False):
+        return self.multidomainforward(x, adj, tar_ei)
+
 class MlpProdDecoder(torch.nn.Module):
     """Hadamard-product-based MLP link predictor."""
 

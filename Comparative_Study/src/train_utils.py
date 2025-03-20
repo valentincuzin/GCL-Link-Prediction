@@ -93,6 +93,7 @@ def train_ncn(encoder: nn.Module,
     # for perm in PermIterator(
     #         adjmask.device, adjmask.shape[0], batch_size
     # ):
+    # print("perm:", perm)
     for perm in DataLoader(range(adjmask.size(0)), batch_size, shuffle=True):
         optimizer.zero_grad()
         if maskinput:

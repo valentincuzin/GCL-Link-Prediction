@@ -8,6 +8,7 @@ import pandas as pd
 import numpy as np
 from torch import Tensor
 from tqdm import tqdm
+from copy import deepcopy
 from torch_sparse import SparseTensor, masked_select_nnz, matmul
 from ogb.linkproppred import Evaluator
 from src.ogbdataset import loaddataset
@@ -695,7 +696,11 @@ class DataSplit:
         t1 = time.time()
         for r in tqdm(range(runs)):
             seed_everything(r)
-            self.data_runs[r] = loaddataset(dataset, use_valedges_as_input, reduce_feature, only_feature)
+            if isinstance(dataset, list):
+                dataset_tmp = deepcopy(dataset)
+            data, split_edge = loaddataset(dataset_tmp, use_valedges_as_input, reduce_feature, only_feature)
+            data = data.to(device)
+            self.data_runs[r] = data, split_edge
         self.info_time = round(time.time()-t1, 2)
         self.info()
 
