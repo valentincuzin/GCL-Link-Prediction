@@ -1,0 +1,7 @@
+metrics;SBM_GRACE+Inner;SBM_BGRL+Inner;SBM_CSGCL+inner;SBM_CSGCL2+inner;GCN+inner;GRACE+inner;GCA_deg+inner;GCA_pr+inner;GCA_evc+inner;BGRL+inner;BGRL_deg+inner;BGRL_pr+inner;BGRL_evc+inner;CSGCL+inner;BGRL_cs+inner
+Hits@10;87.67$\pm$11.11;20.81$\pm$9.45;87.67$\pm$11.11;87.67$\pm$11.11;10.12$\pm$4.03;87.67$\pm$11.11;87.67$\pm$11.11;87.67$\pm$11.11;87.67$\pm$11.11;20.81$\pm$9.45;20.81$\pm$9.45;20.81$\pm$9.45;20.81$\pm$9.45;87.67$\pm$11.11;20.81$\pm$9.45
+Hits@20;95.81$\pm$1.89;55.35$\pm$9.33;95.81$\pm$1.89;95.81$\pm$1.89;25.12$\pm$6.35;95.81$\pm$1.89;95.81$\pm$1.89;95.81$\pm$1.89;95.81$\pm$1.89;55.35$\pm$9.33;55.35$\pm$9.33;55.35$\pm$9.33;55.35$\pm$9.33;95.81$\pm$1.89;55.35$\pm$9.33
+Hits@50;97.44$\pm$1.45;93.72$\pm$3.3;97.44$\pm$1.45;97.44$\pm$1.45;63.6$\pm$7.17;97.44$\pm$1.45;97.44$\pm$1.45;97.44$\pm$1.45;97.44$\pm$1.45;93.72$\pm$3.3;93.72$\pm$3.3;93.72$\pm$3.3;93.72$\pm$3.3;97.44$\pm$1.45;93.72$\pm$3.3
+Hits@100;100.0$\pm$0.0;100.0$\pm$0.0;100.0$\pm$0.0;100.0$\pm$0.0;100.0$\pm$0.0;100.0$\pm$0.0;100.0$\pm$0.0;100.0$\pm$0.0;100.0$\pm$0.0;100.0$\pm$0.0;100.0$\pm$0.0;100.0$\pm$0.0;100.0$\pm$0.0;100.0$\pm$0.0;100.0$\pm$0.0
+ROCAUC;92.41$\pm$2.31;74.78$\pm$3.19;92.41$\pm$2.31;92.41$\pm$2.31;53.11$\pm$4.77;92.41$\pm$2.31;92.41$\pm$2.31;92.41$\pm$2.31;92.41$\pm$2.31;74.78$\pm$3.19;74.78$\pm$3.19;74.78$\pm$3.19;74.78$\pm$3.19;92.41$\pm$2.31;74.78$\pm$3.19
+pretrain_time;nan$\pm$nan;nan$\pm$nan;nan$\pm$nan;nan$\pm$nan;nan$\pm$nan;nan$\pm$nan;nan$\pm$nan;nan$\pm$nan;nan$\pm$nan;nan$\pm$nan;nan$\pm$nan;nan$\pm$nan;nan$\pm$nan;nan$\pm$nan;nan$\pm$nan

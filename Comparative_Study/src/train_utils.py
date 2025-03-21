@@ -245,7 +245,7 @@ def run(
     writer = SummaryWriter(f"./rec/{name}_{r}")
     writer.add_text("hyperparams", str(hp))
     # train and test the encoder and the predictor
-    if pretrain_function is not None:
+    if pretrain_function is not None and hp['ct_param']['num_epochs'] != 0:
         pre_time = pretrain_function(encoder, data, hp['ct_param'])
         res_dict['pretrain_time'].append(pre_time)
     if not hp['inner']:
@@ -277,7 +277,30 @@ def run(
         return test_output(
             r, encoder, predictor, data, split_edge, evaluator, writer, hp, res_dict, epoch
         )
-    return test_output(
+    elif pretrain_function is None and hp['ct_param']['num_epochs'] != 0:
+        optimizer = torch.optim.Adam(params=encoder.parameters(), lr=hp["prelr"])
+        
+        t1 = time.time()
+        loss_res = []
+        for epoch in tqdm(range(1, 1 + hp["epochs"])):
+            loss = train_ncn(
+                encoder,
+                predictor,
+                data,
+                split_edge,
+                optimizer,
+                hp["batch_size"],
+                hp["maskinput"]
+            )
+            if epoch % 10 == 0:
+                loss_res.append(round(float(loss), 2))
+        print('train loss: ', loss_res)
+        print(f"train time: {time.time()-t1:.2f} s")
+        return test_output(
+            r, encoder, predictor, data, split_edge, evaluator, writer, hp, res_dict, epoch
+        )
+    else:
+        return test_output(
             r, encoder, predictor, data, split_edge, evaluator, writer, hp, res_dict
         )
 
