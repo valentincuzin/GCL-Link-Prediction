@@ -188,7 +188,6 @@ def test(encoder: nn.Module, predictor: nn.Module, data, split_edge: dict, evalu
 
 def test_output(
     run: int,
-    epoch: int,
     encoder: nn.Module,
     predictor: nn.Module,
     data,
@@ -197,6 +196,7 @@ def test_output(
     writer: SummaryWriter,
     hp: dict,
     res_dict: dict,
+    epoch: int = 0,
 ):
     # make a test with the evaluator, then print and return results
     t1 = time.time()
@@ -248,34 +248,38 @@ def run(
     if pretrain_function is not None:
         pre_time = pretrain_function(encoder, data, hp['ct_param'])
         res_dict['pretrain_time'].append(pre_time)
-    if not hp['freeze'] or pretrain_function is None:
-        optimizer = torch.optim.Adam(
-            [
-                {"params": encoder.parameters(), "lr": hp["gnnlr"]},
-                {"params": predictor.parameters(), "lr": hp["prelr"]},
-            ]
+    if not hp['inner']:
+        if not hp['freeze'] or pretrain_function is None:
+            optimizer = torch.optim.Adam(
+                [
+                    {"params": encoder.parameters(), "lr": hp["gnnlr"]},
+                    {"params": predictor.parameters(), "lr": hp["prelr"]},
+                ]
+            )
+        elif hp['freeze']:
+            optimizer = torch.optim.Adam(params=predictor.parameters(), lr=hp["prelr"])
+        loss_res = []
+        t1 = time.time()
+        for epoch in tqdm(range(1, 1 + hp["epochs"])):
+            loss = train_ncn(
+                encoder,
+                predictor,
+                data,
+                split_edge,
+                optimizer,
+                hp["batch_size"],
+                hp["maskinput"]
+            )
+            if epoch % 10 == 0:
+                loss_res.append(round(float(loss), 2))
+        print('train loss: ', loss_res)
+        print(f"train time: {time.time()-t1:.2f} s")
+        return test_output(
+            r, encoder, predictor, data, split_edge, evaluator, writer, hp, res_dict, epoch
         )
-    elif hp['freeze']:
-        optimizer = torch.optim.Adam(params=predictor.parameters(), lr=hp["prelr"])
-    loss_res = []
-    t1 = time.time()
-    for epoch in tqdm(range(1, 1 + hp["epochs"])):
-        loss = train_ncn(
-            encoder,
-            predictor,
-            data,
-            split_edge,
-            optimizer,
-            hp["batch_size"],
-            hp["maskinput"]
-        )
-        if epoch % 10 == 0:
-            loss_res.append(round(float(loss), 2))
-    print('train loss: ', loss_res)
-    print(f"train time: {time.time()-t1:.2f} s")
     return test_output(
-        r, epoch, encoder, predictor, data, split_edge, evaluator, writer, hp, res_dict
-    )
+            r, encoder, predictor, data, split_edge, evaluator, writer, hp, res_dict
+        )
 
 def runs(name: str,
          model_init_function: callable,

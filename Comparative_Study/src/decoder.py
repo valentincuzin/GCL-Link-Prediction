@@ -10,8 +10,8 @@ class inner_prod(torch.nn.Module):
         super().__init__()
 
     def multidomainforward(self, x, adj, tar_ei, filled=False, cndroppprobs = []):
-        x_i = x[edges[0]]
-        x_j = x[edges[1]]
+        x_i = x[tar_ei[0]]
+        x_j = x[tar_ei[1]]
         x = x_i * x_j
         out = torch.sum(x, dim=-1)
         return out
