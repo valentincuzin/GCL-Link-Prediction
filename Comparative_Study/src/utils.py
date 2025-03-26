@@ -655,7 +655,9 @@ def compute_table(res_dict: dict[str, list | float], name: str):
     # Compute the mean and std from a dict return tab and latex table
     new_tab = []
     for key, result in res_dict.items():
-        if isinstance(result, list):
+        if key == "test_pred":
+            new_tab.append({"metrics": key, name: result})
+        elif isinstance(result, list):
             result = np.array(result)
             unit = 100 if key != 'pretrain_time' else 1
             mean = round(unit * np.mean(result), 2)
@@ -696,8 +698,7 @@ class DataSplit:
         t1 = time.time()
         for r in tqdm(range(runs)):
             seed_everything(r)
-            if isinstance(dataset, list):
-                dataset_tmp = deepcopy(dataset)
+            dataset_tmp = deepcopy(dataset)
             data, split_edge = loaddataset(dataset_tmp, use_valedges_as_input, reduce_feature, only_feature)
             data = data.to(device)
             self.data_runs[r] = data, split_edge

@@ -28,7 +28,7 @@ hp = {
     'lnnn': True,
     'epochs': 100,
     'model': 'puregcn',
-    'runs': 10,
+    'runs': 1,
     'hiddim': 256,
     'mplayers': 1,
     'testbs': 8192,
@@ -38,6 +38,7 @@ hp = {
     'tailact': True,
     'use_valedges_as_input': False,
     'freeze': True,
+    'inner': False,
     'ct_param': {
     	'learning_rate': 0.01,
     	'num_hidden': 256,
@@ -262,7 +263,8 @@ def run_all(dataset: str, hp: dict):
         return encoder, predictor
     full_res.append(tr.runs('Cora BGRL_cs+MLP', init_model, pretr.pretrain_bgrl_cs, data_split, evaluator, hp))
     
-    return ut.full_output(full_res)
+    df, tex = ut.full_output(full_res)
+    df.to_csv(f'{DATASET}_res.csv', sep=';')
 
 if __name__ == '__main__':
     run_all(DATASET, hp)

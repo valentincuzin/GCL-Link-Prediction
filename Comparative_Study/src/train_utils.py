@@ -184,7 +184,7 @@ def test(encoder: nn.Module, predictor: nn.Module, data, split_edge: dict, evalu
         'y_pred_neg': neg_test_pred,
     })['rocauc']
     results['ROCAUC'] = (valid_auc, test_auc)
-    return results
+    return results, pos_test_pred, neg_test_pred
 
 def test_output(
     run: int,
@@ -200,7 +200,7 @@ def test_output(
 ):
     # make a test with the evaluator, then print and return results
     t1 = time.time()
-    results = test(
+    results, pos_test_pred, neg_test_pred = test(
         encoder,
         predictor,
         data,
@@ -226,6 +226,8 @@ def test_output(
             f"Valid: {100 * valid_hits:.2f}%, "
             f"Test: {100 * test_hits:.2f}%"
         )
+    if run == 0:
+        res_dict['test_pred'] = torch.cat((pos_test_pred, neg_test_pred)).tolist()
     print("---", flush=True)
     return res_dict
 
