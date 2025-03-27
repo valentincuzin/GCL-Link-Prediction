@@ -1,0 +1,14 @@
+{
+    "batch_size": 50,
+    "epochs": 100,
+    "runs": 10,
+    "hiddim": 64,
+    "maskinput": true,
+    "use_valedges_as_input": false,
+    "freeze": true,
+    "pre_param": {
+    	"learning_rate": 0.01,
+    	"epochs": 500,
+    	"weight_decay": 1e-5
+    }
+}

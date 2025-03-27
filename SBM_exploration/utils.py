@@ -5,6 +5,7 @@ def compute_table(res_dict: dict[str, list | float], name: str):
     # Compute the mean and std from a dict return tab and latex table
     new_tab = []
     for key, result in res_dict.items():
+        print(key)
         if key == "test_pred":
             new_tab.append({"metrics": key, name: result})
         elif isinstance(result, list):

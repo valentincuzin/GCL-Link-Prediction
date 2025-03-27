@@ -60,7 +60,7 @@ hp = {
     	'drop_feature_rate_1': 0.1,
     	'drop_feature_rate_2': 0.0,
     	'tau': 0.4,
-    	'num_epochs': 500,
+    	'num_epochs': 0,
     	'weight_decay': 1e-5,
     	'drop_scheme': 'degree',
     }
@@ -198,137 +198,156 @@ def pretrain_csgcl_commu(model, data, param):
     print(f"pretrain time: {pre_time:.2f} s")
     return pre_time
 
+class perfect_pred(torch.nn.Module):
+    def __init__(self, probs, block):
+        super().__init__()
+        self.probs = probs
+        self.block = block
+
+    def multidomainforward(self, x, adj, tar_ei, filled=False, cndroppprobs = []):
+        b1 = self.block[tar_ei[0]]
+        b2 = self.block[tar_ei[1]]
+        return torch.tensor(self.probs[b1][b2])
+
+    def __call__(self, x, adj, tar_ei, filled1=False):
+        return self.multidomainforward
+
 ########## RUNS ##########
 full_res = []
-
 def init_model(data, hp):
     _encoder = enc.ENCODER_GRACE(data.num_features, hp['ct_param']['num_hidden'], nn.Identity()).to(device)
     encoder = ctmod.GRACE(_encoder, hp['ct_param']['num_hidden'], hp['ct_param']['num_proj_hidden']).to(device)
-    predictor = dec.inner_prod().to(device)
-    return encoder, predictor
-full_res.append(tr.runs('SBM_GRACE+Inner', init_model, pretrain_grace_commu, data_split, evaluator, hp))
+    return encoder, perfect_pred(probs, data.block)
+full_res.append(tr.runs('SBM_best', init_model, None, data_split, evaluator, hp))
+
+# def init_model(data, hp):
+#     _encoder = enc.ENCODER_GRACE(data.num_features, hp['ct_param']['num_hidden'], nn.Identity()).to(device)
+#     encoder = ctmod.GRACE(_encoder, hp['ct_param']['num_hidden'], hp['ct_param']['num_proj_hidden']).to(device)
+#     predictor = dec.inner_prod().to(device)
+#     return encoder, predictor
+# full_res.append(tr.runs('SBM_GRACE+Inner', init_model, pretrain_grace_commu, data_split, evaluator, hp))
 
 
-def init_model(data, hp):
-    _encoder = enc.ENCODER_BGRL([data.num_features, hp['ct_param']['num_hidden']], batchnorm=True).to(device)
-    _predictor = ut.MLP_Head_BGRL(hp['ct_param']['num_hidden'], hp['ct_param']['num_hidden']).to(device)
-    encoder = ctmod.BGRL(_encoder, _predictor).to(device)
-    predictor = dec.inner_prod().to(device)
-    return encoder, predictor
-full_res.append(tr.runs('SBM_BGRL+Inner', init_model, pretrain_bgrl_commu, data_split, evaluator, hp))
+# def init_model(data, hp):
+#     _encoder = enc.ENCODER_BGRL([data.num_features, hp['ct_param']['num_hidden']], batchnorm=True).to(device)
+#     _predictor = ut.MLP_Head_BGRL(hp['ct_param']['num_hidden'], hp['ct_param']['num_hidden']).to(device)
+#     encoder = ctmod.BGRL(_encoder, _predictor).to(device)
+#     predictor = dec.inner_prod().to(device)
+#     return encoder, predictor
+# full_res.append(tr.runs('SBM_BGRL+Inner', init_model, pretrain_bgrl_commu, data_split, evaluator, hp))
 
 
-def init_model(data, hp):
-    _encoder = enc.ENCODER_GRACE(data.num_features, hp['ct_param']['num_hidden'], nn.Identity()).to(device)
-    encoder = ctmod.CSGCL(_encoder,
-                      hp['ct_param']['num_hidden'],
-                      hp['ct_param']['num_proj_hidden'],
-                      hp['ct_param']['tau']).to(device)
-    predictor = dec.inner_prod().to(device)
-    return encoder, predictor
-full_res.append(tr.runs('SBM_CSGCL+inner', init_model, pretrain_csgcl_commu, data_split, evaluator, hp))
+# def init_model(data, hp):
+#     _encoder = enc.ENCODER_GRACE(data.num_features, hp['ct_param']['num_hidden'], nn.Identity()).to(device)
+#     encoder = ctmod.CSGCL(_encoder,
+#                       hp['ct_param']['num_hidden'],
+#                       hp['ct_param']['num_proj_hidden'],
+#                       hp['ct_param']['tau']).to(device)
+#     predictor = dec.inner_prod().to(device)
+#     return encoder, predictor
+# full_res.append(tr.runs('SBM_CSGCL+inner', init_model, pretrain_csgcl_commu, data_split, evaluator, hp))
 
-def init_model(data, hp):
-    encoder = enc.ENCODER_NCN(data.num_features, hp['hiddim'], hp['hiddim'], hp['mplayers'],
-                    hp['gnndp'], hp['ln'], hp['res'], data.max_x,
-                    hp['model'], edrop=hp['gnnedp'],  xdropout=hp['xdp'], taildropout=hp['tdp']).to(device)
-    predictor = dec.inner_prod().to(device)
-    return encoder, predictor
-full_res.append(tr.runs('GCN+inner', init_model, None, data_split, evaluator, hp))
-
-
-def init_model(data, hp):
-    _encoder = enc.ENCODER_GRACE(data.num_features, hp['ct_param']['num_hidden'], nn.Identity()).to(device)
-    encoder = ctmod.GRACE(_encoder, hp['ct_param']['num_hidden'], hp['ct_param']['num_proj_hidden']).to(device)
-    predictor = dec.inner_prod().to(device)
-    return encoder, predictor
-full_res.append(tr.runs('GRACE+inner', init_model, pretr.pretrain_grace, data_split, evaluator, hp))
+# def init_model(data, hp):
+#     encoder = enc.ENCODER_NCN(data.num_features, hp['hiddim'], hp['hiddim'], hp['mplayers'],
+#                     hp['gnndp'], hp['ln'], hp['res'], data.max_x,
+#                     hp['model'], edrop=hp['gnnedp'],  xdropout=hp['xdp'], taildropout=hp['tdp']).to(device)
+#     predictor = dec.inner_prod().to(device)
+#     return encoder, predictor
+# full_res.append(tr.runs('GCN+inner', init_model, None, data_split, evaluator, hp))
 
 
-hp['ct_param']['drop_scheme'] = 'degree'
-def init_model(data, hp):
-    _encoder = enc.ENCODER_GRACE(data.num_features, hp['ct_param']['num_hidden'], nn.Identity()).to(device)
-    encoder = ctmod.GRACE(_encoder, hp['ct_param']['num_hidden'], hp['ct_param']['num_proj_hidden']).to(device)
-    predictor = dec.inner_prod().to(device)
-    return encoder, predictor
-full_res.append(tr.runs('GCA_deg+inner', init_model, pretr.pretrain_gca, data_split, evaluator, hp))
+# def init_model(data, hp):
+#     _encoder = enc.ENCODER_GRACE(data.num_features, hp['ct_param']['num_hidden'], nn.Identity()).to(device)
+#     encoder = ctmod.GRACE(_encoder, hp['ct_param']['num_hidden'], hp['ct_param']['num_proj_hidden']).to(device)
+#     predictor = dec.inner_prod().to(device)
+#     return encoder, predictor
+# full_res.append(tr.runs('GRACE+inner', init_model, pretr.pretrain_grace, data_split, evaluator, hp))
 
 
-hp['ct_param']['drop_scheme'] = 'pr'
-def init_model(data, hp):
-    _encoder = enc.ENCODER_GRACE(data.num_features, hp['ct_param']['num_hidden'], nn.Identity()).to(device)
-    encoder = ctmod.GRACE(_encoder, hp['ct_param']['num_hidden'], hp['ct_param']['num_proj_hidden']).to(device)
-    predictor = dec.inner_prod().to(device)
-    return encoder, predictor
-full_res.append(tr.runs('GCA_pr+inner', init_model, pretr.pretrain_gca, data_split, evaluator, hp))
+# hp['ct_param']['drop_scheme'] = 'degree'
+# def init_model(data, hp):
+#     _encoder = enc.ENCODER_GRACE(data.num_features, hp['ct_param']['num_hidden'], nn.Identity()).to(device)
+#     encoder = ctmod.GRACE(_encoder, hp['ct_param']['num_hidden'], hp['ct_param']['num_proj_hidden']).to(device)
+#     predictor = dec.inner_prod().to(device)
+#     return encoder, predictor
+# full_res.append(tr.runs('GCA_deg+inner', init_model, pretr.pretrain_gca, data_split, evaluator, hp))
 
 
-hp['ct_param']['drop_scheme'] = 'evc'
-def init_model(data, hp):
-    _encoder = enc.ENCODER_GRACE(data.num_features, hp['ct_param']['num_hidden'], nn.Identity()).to(device)
-    encoder = ctmod.GRACE(_encoder, hp['ct_param']['num_hidden'], hp['ct_param']['num_proj_hidden']).to(device)
-    predictor = dec.inner_prod().to(device)
-    return encoder, predictor
-full_res.append(tr.runs('GCA_evc+inner', init_model, pretr.pretrain_gca, data_split, evaluator, hp))
+# hp['ct_param']['drop_scheme'] = 'pr'
+# def init_model(data, hp):
+#     _encoder = enc.ENCODER_GRACE(data.num_features, hp['ct_param']['num_hidden'], nn.Identity()).to(device)
+#     encoder = ctmod.GRACE(_encoder, hp['ct_param']['num_hidden'], hp['ct_param']['num_proj_hidden']).to(device)
+#     predictor = dec.inner_prod().to(device)
+#     return encoder, predictor
+# full_res.append(tr.runs('GCA_pr+inner', init_model, pretr.pretrain_gca, data_split, evaluator, hp))
 
 
-def init_model(data, hp):
-    _encoder = enc.ENCODER_BGRL([data.num_features, hp['ct_param']['num_hidden']], batchnorm=True).to(device)
-    _predictor = ut.MLP_Head_BGRL(hp['ct_param']['num_hidden'], hp['ct_param']['num_hidden']).to(device)
-    encoder = ctmod.BGRL(_encoder, _predictor).to(device)
-    predictor = dec.inner_prod().to(device)
-    return encoder, predictor
-full_res.append(tr.runs('BGRL+inner', init_model, pretr.pretrain_bgrl, data_split, evaluator, hp))
+# hp['ct_param']['drop_scheme'] = 'evc'
+# def init_model(data, hp):
+#     _encoder = enc.ENCODER_GRACE(data.num_features, hp['ct_param']['num_hidden'], nn.Identity()).to(device)
+#     encoder = ctmod.GRACE(_encoder, hp['ct_param']['num_hidden'], hp['ct_param']['num_proj_hidden']).to(device)
+#     predictor = dec.inner_prod().to(device)
+#     return encoder, predictor
+# full_res.append(tr.runs('GCA_evc+inner', init_model, pretr.pretrain_gca, data_split, evaluator, hp))
 
 
-hp['ct_param']['drop_scheme'] = 'degree'
-def init_model(data, hp):
-    _encoder = enc.ENCODER_BGRL([data.num_features, hp['ct_param']['num_hidden']], batchnorm=True).to(device)
-    _predictor = ut.MLP_Head_BGRL(hp['ct_param']['num_hidden'], hp['ct_param']['num_hidden']).to(device)
-    encoder = ctmod.BGRL(_encoder, _predictor).to(device)
-    predictor = dec.inner_prod().to(device)
-    return encoder, predictor
-full_res.append(tr.runs('BGRL_deg+inner', init_model, pretr.pretrain_bgrl_adaptative, data_split, evaluator, hp))
+# def init_model(data, hp):
+#     _encoder = enc.ENCODER_BGRL([data.num_features, hp['ct_param']['num_hidden']], batchnorm=True).to(device)
+#     _predictor = ut.MLP_Head_BGRL(hp['ct_param']['num_hidden'], hp['ct_param']['num_hidden']).to(device)
+#     encoder = ctmod.BGRL(_encoder, _predictor).to(device)
+#     predictor = dec.inner_prod().to(device)
+#     return encoder, predictor
+# full_res.append(tr.runs('BGRL+inner', init_model, pretr.pretrain_bgrl, data_split, evaluator, hp))
 
 
-hp['ct_param']['drop_scheme'] = 'pr'
-def init_model(data, hp):
-    _encoder = enc.ENCODER_BGRL([data.num_features, hp['ct_param']['num_hidden']], batchnorm=True).to(device)
-    _predictor = ut.MLP_Head_BGRL(hp['ct_param']['num_hidden'], hp['ct_param']['num_hidden']).to(device)
-    encoder = ctmod.BGRL(_encoder, _predictor).to(device)
-    predictor = dec.inner_prod().to(device)
-    return encoder, predictor
-full_res.append(tr.runs('BGRL_pr+inner', init_model, pretr.pretrain_bgrl_adaptative, data_split, evaluator, hp))
+# hp['ct_param']['drop_scheme'] = 'degree'
+# def init_model(data, hp):
+#     _encoder = enc.ENCODER_BGRL([data.num_features, hp['ct_param']['num_hidden']], batchnorm=True).to(device)
+#     _predictor = ut.MLP_Head_BGRL(hp['ct_param']['num_hidden'], hp['ct_param']['num_hidden']).to(device)
+#     encoder = ctmod.BGRL(_encoder, _predictor).to(device)
+#     predictor = dec.inner_prod().to(device)
+#     return encoder, predictor
+# full_res.append(tr.runs('BGRL_deg+inner', init_model, pretr.pretrain_bgrl_adaptative, data_split, evaluator, hp))
 
 
-hp['ct_param']['drop_scheme'] = 'evc'
-def init_model(data, hp):
-    _encoder = enc.ENCODER_BGRL([data.num_features, hp['ct_param']['num_hidden']], batchnorm=True).to(device)
-    _predictor = ut.MLP_Head_BGRL(hp['ct_param']['num_hidden'], hp['ct_param']['num_hidden']).to(device)
-    encoder = ctmod.BGRL(_encoder, _predictor).to(device)
-    predictor = dec.inner_prod().to(device)
-    return encoder, predictor
-full_res.append(tr.runs('BGRL_evc+inner', init_model, pretr.pretrain_bgrl_adaptative, data_split, evaluator, hp))
+# hp['ct_param']['drop_scheme'] = 'pr'
+# def init_model(data, hp):
+#     _encoder = enc.ENCODER_BGRL([data.num_features, hp['ct_param']['num_hidden']], batchnorm=True).to(device)
+#     _predictor = ut.MLP_Head_BGRL(hp['ct_param']['num_hidden'], hp['ct_param']['num_hidden']).to(device)
+#     encoder = ctmod.BGRL(_encoder, _predictor).to(device)
+#     predictor = dec.inner_prod().to(device)
+#     return encoder, predictor
+# full_res.append(tr.runs('BGRL_pr+inner', init_model, pretr.pretrain_bgrl_adaptative, data_split, evaluator, hp))
 
 
-def init_model(data, hp):
-    _encoder = enc.ENCODER_GRACE(data.num_features, hp['ct_param']['num_hidden'], nn.Identity()).to(device)
-    encoder = ctmod.CSGCL(_encoder,
-                      hp['ct_param']['num_hidden'],
-                      hp['ct_param']['num_proj_hidden'],
-                      hp['ct_param']['tau']).to(device)
-    predictor = dec.inner_prod().to(device)
-    return encoder, predictor
-full_res.append(tr.runs('CSGCL+inner', init_model, pretr.pretrain_csgcl, data_split, evaluator, hp))
+# hp['ct_param']['drop_scheme'] = 'evc'
+# def init_model(data, hp):
+#     _encoder = enc.ENCODER_BGRL([data.num_features, hp['ct_param']['num_hidden']], batchnorm=True).to(device)
+#     _predictor = ut.MLP_Head_BGRL(hp['ct_param']['num_hidden'], hp['ct_param']['num_hidden']).to(device)
+#     encoder = ctmod.BGRL(_encoder, _predictor).to(device)
+#     predictor = dec.inner_prod().to(device)
+#     return encoder, predictor
+# full_res.append(tr.runs('BGRL_evc+inner', init_model, pretr.pretrain_bgrl_adaptative, data_split, evaluator, hp))
 
 
-def init_model(data, hp):
-    _encoder = enc.ENCODER_BGRL([data.num_features, hp['ct_param']['num_hidden']], batchnorm=True).to(device)
-    _predictor = ut.MLP_Head_BGRL(hp['ct_param']['num_hidden'], hp['ct_param']['num_hidden']).to(device)
-    encoder = ctmod.BGRL(_encoder, _predictor).to(device)
-    predictor = dec.inner_prod().to(device)
-    return encoder, predictor
-full_res.append(tr.runs('BGRL_cs+inner', init_model, pretr.pretrain_bgrl_cs, data_split, evaluator, hp))
+# def init_model(data, hp):
+#     _encoder = enc.ENCODER_GRACE(data.num_features, hp['ct_param']['num_hidden'], nn.Identity()).to(device)
+#     encoder = ctmod.CSGCL(_encoder,
+#                       hp['ct_param']['num_hidden'],
+#                       hp['ct_param']['num_proj_hidden'],
+#                       hp['ct_param']['tau']).to(device)
+#     predictor = dec.inner_prod().to(device)
+#     return encoder, predictor
+# full_res.append(tr.runs('CSGCL+inner', init_model, pretr.pretrain_csgcl, data_split, evaluator, hp))
+
+
+# def init_model(data, hp):
+#     _encoder = enc.ENCODER_BGRL([data.num_features, hp['ct_param']['num_hidden']], batchnorm=True).to(device)
+#     _predictor = ut.MLP_Head_BGRL(hp['ct_param']['num_hidden'], hp['ct_param']['num_hidden']).to(device)
+#     encoder = ctmod.BGRL(_encoder, _predictor).to(device)
+#     predictor = dec.inner_prod().to(device)
+#     return encoder, predictor
+# full_res.append(tr.runs('BGRL_cs+inner', init_model, pretr.pretrain_bgrl_cs, data_split, evaluator, hp))
 
 
 df, tex = ut.full_output(full_res)
