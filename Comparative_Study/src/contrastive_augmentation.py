@@ -23,7 +23,7 @@ def compute_pr(data, damp: float = 0.85, k: int = 10):
 
 def eigenvector_centrality(data):
     graph = to_networkx(data)
-    x = nx.eigenvector_centrality(graph)
+    x = nx.eigenvector_centrality(graph, max_iter=200)
     x = [x[i] for i in range(data.num_nodes)]
     return torch.tensor(x, dtype=torch.float32).to(data.edge_index.device)
 

@@ -682,8 +682,8 @@ def full_output(full_res: list):
     print(full_latex)
     return full_res, full_latex
 
-def get_evaluator(dataset: str):
-    if dataset in ["Cora", "Citeseer", "Pubmed"]:
+def get_evaluator(dataset: str = 'ogbl-ppa'):
+    if dataset in ["Cora", "Citeseer", "Pubmed", 'ogbl-ppa']:
         evaluator = Evaluator(name='ogbl-ppa')
     else:
         evaluator = Evaluator(name=f'ogbl-{dataset}')
