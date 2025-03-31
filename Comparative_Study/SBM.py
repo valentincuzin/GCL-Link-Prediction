@@ -67,10 +67,10 @@ hp = {
     	'num_layers': 2,
     	'drop_edge_rate_1': 0.3,
     	'drop_edge_rate_2': 0.4,
-    	'drop_feature_rate_1': 0.1,
+    	'drop_feature_rate_1': 0.0,
     	'drop_feature_rate_2': 0.0,
     	'tau': 0.4,
-    	'num_epochs': 1500,
+    	'num_epochs': 500,
     	'weight_decay': 1e-5,
     	'drop_scheme': 'degree',
     }
@@ -263,7 +263,6 @@ def pretrain_bgrl_commu(model, data, param):
         mm = 1 - mm_scheduler.get(epoch)
 
         optimizer.zero_grad()
-        data_sbm = gen_sbm(data.sizes, data.probs, data.x.device)
 
         data_c1 = gen_sbm(data.sizes, data.probs, data.x.device, epoch)
         data_c2 = gen_sbm(data.sizes, data.probs, data.x.device, epoch)
@@ -377,7 +376,7 @@ def init_model(data, hp):
     encoder = ctmod.GRACE(_encoder, hp['ct_param']['num_hidden'], hp['ct_param']['num_proj_hidden']).to(device)
     predictor = dec.inner_prod().to(device)
     return encoder, predictor
-full_res.append(tr.runs('GCA_deg+inner', init_model, pretr.pretrain_gca, data_split, evaluator, hp))
+#full_res.append(tr.runs('GCA_deg+inner', init_model, pretr.pretrain_gca, data_split, evaluator, hp))
 
 
 hp['ct_param']['drop_scheme'] = 'pr'
@@ -386,7 +385,7 @@ def init_model(data, hp):
     encoder = ctmod.GRACE(_encoder, hp['ct_param']['num_hidden'], hp['ct_param']['num_proj_hidden']).to(device)
     predictor = dec.inner_prod().to(device)
     return encoder, predictor
-full_res.append(tr.runs('GCA_pr+inner', init_model, pretr.pretrain_gca, data_split, evaluator, hp))
+#full_res.append(tr.runs('GCA_pr+inner', init_model, pretr.pretrain_gca, data_split, evaluator, hp))
 
 
 hp['ct_param']['drop_scheme'] = 'evc'
@@ -395,7 +394,7 @@ def init_model(data, hp):
     encoder = ctmod.GRACE(_encoder, hp['ct_param']['num_hidden'], hp['ct_param']['num_proj_hidden']).to(device)
     predictor = dec.inner_prod().to(device)
     return encoder, predictor
-full_res.append(tr.runs('GCA_evc+inner', init_model, pretr.pretrain_gca, data_split, evaluator, hp))
+#full_res.append(tr.runs('GCA_evc+inner', init_model, pretr.pretrain_gca, data_split, evaluator, hp))
 
 
 def init_model(data, hp):
@@ -406,7 +405,6 @@ def init_model(data, hp):
     return encoder, predictor
 full_res.append(tr.runs('BGRL+inner', init_model, pretr.pretrain_bgrl, data_split, evaluator, hp))
 
-
 hp['ct_param']['drop_scheme'] = 'degree'
 def init_model(data, hp):
     _encoder = enc.ENCODER_BGRL([data.num_features, hp['ct_param']['num_hidden']], batchnorm=True).to(device)
@@ -414,7 +412,7 @@ def init_model(data, hp):
     encoder = ctmod.BGRL(_encoder, _predictor).to(device)
     predictor = dec.inner_prod().to(device)
     return encoder, predictor
-full_res.append(tr.runs('BGRL_deg+inner', init_model, pretr.pretrain_bgrl_adaptative, data_split, evaluator, hp))
+#full_res.append(tr.runs('BGRL_deg+inner', init_model, pretr.pretrain_bgrl_adaptative, data_split, evaluator, hp))
 
 
 hp['ct_param']['drop_scheme'] = 'pr'
@@ -424,7 +422,7 @@ def init_model(data, hp):
     encoder = ctmod.BGRL(_encoder, _predictor).to(device)
     predictor = dec.inner_prod().to(device)
     return encoder, predictor
-full_res.append(tr.runs('BGRL_pr+inner', init_model, pretr.pretrain_bgrl_adaptative, data_split, evaluator, hp))
+#full_res.append(tr.runs('BGRL_pr+inner', init_model, pretr.pretrain_bgrl_adaptative, data_split, evaluator, hp))
 
 
 hp['ct_param']['drop_scheme'] = 'evc'
@@ -434,7 +432,7 @@ def init_model(data, hp):
     encoder = ctmod.BGRL(_encoder, _predictor).to(device)
     predictor = dec.inner_prod().to(device)
     return encoder, predictor
-full_res.append(tr.runs('BGRL_evc+inner', init_model, pretr.pretrain_bgrl_adaptative, data_split, evaluator, hp))
+#full_res.append(tr.runs('BGRL_evc+inner', init_model, pretr.pretrain_bgrl_adaptative, data_split, evaluator, hp))
 
 
 def init_model(data, hp):
@@ -458,5 +456,5 @@ full_res.append(tr.runs('BGRL_cs+inner', init_model, pretr.pretrain_bgrl_cs, dat
 
 
 df, tex = ut.full_output(full_res)
-df.to_csv(f'output/SBM_inner_400_res.csv', sep=';')
+df.to_csv(f'output/SBM_inner_400_res3.csv', sep=';')
 
