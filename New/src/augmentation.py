@@ -11,6 +11,8 @@ class Aug:
     def __init__(self, data, param, type: str = 'random'):
         self.data = data
         self.device = self.data.x.device
+        feature_weights = None
+        drop_weights = None
         if type in ['deg', 'pr', 'evc']:
             compute_weight = {
                 "deg": self.degree,
@@ -109,7 +111,7 @@ class Aug:
         feature_weights = _feature_drop_weights(self.data.x, node_c=node_evc).to(self.device)
         return feature_weights, drop_weights
 
-    def weighted(self, feature_weights, drop_weights):
+    def gca(self, feature_weights, drop_weights):
         edge_index_1 = _drop_edge_weighted(self.data.edge_index, drop_weights, p=self.param[f'drop_edge_rate_{1}'], threshold=0.7)
         edge_index_2 = _drop_edge_weighted(self.data.edge_index, drop_weights, p=self.param[f'drop_edge_rate_{2}'], threshold=0.7)
         x_1 = _drop_feature_weighted(self.data.x, feature_weights, self.param['drop_feature_rate_1'])

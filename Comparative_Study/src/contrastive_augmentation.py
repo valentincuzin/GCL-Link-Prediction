@@ -1,4 +1,5 @@
 import torch
+import random
 import networkx as nx
 import numpy as np
 from torch_geometric.utils import degree, to_undirected, to_networkx
@@ -201,3 +202,21 @@ def community_strength(graph: nx.Graph,
         for j in communities[i]:
             node_cs[j] = com_cs[i]
     return com_cs, node_cs
+
+
+# generator of graph
+def gen_sbm(sizes, probs, device=None, seed=random.randint(1, 10000), draw=False):
+    G = stochastic_block_model(sizes, probs, seed=seed)
+    G.remove_edges_from(nx.selfloop_edges(G)) # remove self loops
+    if draw:
+        nx.draw(G)
+    #plt.savefig(f'{random.randint(0, 10000)}sbm.png')
+    data = from_networkx(G)
+    data.num_nodes = sum(sizes)
+    data.sizes = sizes
+    data.probs = probs
+    data.num_features = data.num_nodes
+    data.x = F.one_hot(torch.arange(0, sum(sizes))).float()
+    if device is not None:
+        data = data.to(device)
+    return data

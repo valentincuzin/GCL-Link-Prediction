@@ -273,3 +273,16 @@ class MPLP(torch.nn.Module):
     
     def forward(self, x, adj, edges, filled1: bool = False):
         return self.multidomainforward(x, adj, edges, filled1, [])
+
+
+class perfect_pred:
+    def __init__(self, probs, block):
+        super().__init__()
+        self.probs = probs
+        self.block = block
+
+    def __call__(self, u, v):
+        b1 = self.block[u]
+        b2 = self.block[v]
+        return torch.tensor(self.probs[b1][b2]).unsqueeze(0)
+

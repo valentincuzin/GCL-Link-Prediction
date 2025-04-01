@@ -63,7 +63,7 @@ def loaddataset(name: str|list, use_valedges_as_input: bool, reduce_feature: int
 
         if data.edge_index.max().item() + 1 < data.num_nodes:
             data.edge_index = add_self_loops(data.edge_index, num_nodes=data.num_nodes)[0]
-    elif name in ["Cora", "Citeseer", "Pubmed"]:
+    elif name in ["cora", "citeseer", "pubmed"]:
         dataset = Planetoid(root="dataset", name=name)
         split_edge = randomsplit(dataset)
         data = dataset[0]
@@ -168,7 +168,7 @@ class DataSplit:
                 print(key1, key2, split_edge[key1][key2].shape[0])
 
 def get_evaluator(dataset: str = 'ogbl-ppa'):
-    if dataset in ["Cora", "Citeseer", "Pubmed", 'ogbl-ppa']:
+    if dataset in ["cora", "citeseer", "pubmed", 'ogbl-ppa']:
         evaluator = Evaluator(name='ogbl-ppa')
     else:
         evaluator = Evaluator(name=f'ogbl-{dataset}')

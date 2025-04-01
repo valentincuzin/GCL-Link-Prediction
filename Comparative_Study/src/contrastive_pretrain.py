@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from tqdm import tqdm
 from src.utils import CosineDecayScheduler
 from torch_geometric.utils import degree, to_undirected, to_networkx, dropout_adj
-from src.contrastive_augmentation import drop_feature, drop_feature_weighted, drop_edge_weighted, feature_drop_weights, degree_drop_weights, pr_drop_weights, compute_pr, eigenvector_centrality, evc_drop_weights, cav, ced, community_detection, community_strength, transition, get_edge_weight
+from src.contrastive_augmentation import drop_feature, drop_feature_weighted, drop_edge_weighted, feature_drop_weights, degree_drop_weights, pr_drop_weights, compute_pr, eigenvector_centrality, evc_drop_weights, cav, ced, community_detection, community_strength, transition, get_edge_weight, gen_sbm
 
 def pretrain_grace(model, data, param):
     optimizer = torch.optim.Adam(
@@ -90,7 +90,7 @@ def pretrain_gca(model, data, param):
     return pre_time
     
 def pretrain_bgrl(model, data, param):
-      # optimizer
+    # optimizer
     optimizer = torch.optim.AdamW(model.trainable_parameters(), lr=param['learning_rate'], weight_decay=param['weight_decay'])
 
     # scheduler
@@ -286,3 +286,94 @@ def pretrain_bgrl_cs(model, data, param):
     pre_time = time.time()-t1
     print(f"pretrain time: {pre_time:.2f} s, loss :{loss:.4f}")
     return pre_time
+
+
+
+def pretrain_grace_commu(model, data, param):
+    optimizer = torch.optim.Adam(
+        model.parameters(),
+        lr=param['learning_rate'],
+        weight_decay=param['weight_decay']
+    )
+    t1 = time.time()
+    loss_res = []
+    for epoch in tqdm(range(1, param['num_epochs'] + 1)):
+        model.train()
+        optimizer.zero_grad()
+        data_sbm1 = gen_sbm(data.sizes, data.probs, data.x.device, epoch)
+        data_sbm2 = gen_sbm(data.sizes, data.probs, data.x.device, epoch)
+
+        z1 = model(data_sbm1.x, data_sbm1.edge_index)
+        z2 = model(data_sbm2.x, data_sbm2.edge_index)
+        loss = model.loss(z1, z2)
+        loss.backward()
+        optimizer.step()
+        if epoch % 100 == 0:
+            loss_res.append(round(float(loss), 2))
+    print('pretrain loss: ', loss_res)
+    pre_time = time.time()-t1
+    print(f"pretrain time: {pre_time:.2f} s")
+    return pre_time
+
+def pretrain_bgrl_commu(model, data, param):
+    optimizer = torch.optim.AdamW(model.trainable_parameters(), lr=param['learning_rate'], weight_decay=param['weight_decay'])
+
+    lr_scheduler = ut.CosineDecayScheduler(param['learning_rate'], 1000, param['num_epochs'])
+    mm_scheduler = ut.CosineDecayScheduler(1 - 0.99, 0, param['num_epochs'])
+
+    t1 = time.time()
+    loss_res = []
+    for epoch in tqdm(range(1, param['num_epochs'] + 1)):
+        model.train()
+
+        lr = lr_scheduler.get(epoch)
+        mm = 1 - mm_scheduler.get(epoch)
+
+        optimizer.zero_grad()
+
+        data_c1 = gen_sbm(data.sizes, data.probs, data.x.device, epoch)
+        data_c2 = gen_sbm(data.sizes, data.probs, data.x.device, epoch)
+
+        z1, y2 = model.train_forward(data_c1, data_c2)
+        z2, y1 = model.train_forward(data_c2, data_c1)
+
+        loss = 2 - F.cosine_similarity(z1, y2.detach(), dim=-1).mean() - F.cosine_similarity(z2, y1.detach(), dim=-1).mean() # loss simple
+        loss.backward()
+        optimizer.step()
+        model.update_target_network(mm)
+
+        if epoch % 100 == 0:
+            loss_res.append(round(float(loss), 2))
+    print('pretrain loss: ', loss_res)
+    pre_time = time.time()-t1
+    print(f"pretrain time: {pre_time:.2f} s")
+    return pre_time
+
+def pretrain_csgcl_commu(model, data, param):
+    optimizer = torch.optim.Adam(model.parameters(),
+                                 lr=param['learning_rate'],
+                                 weight_decay=param['weight_decay'])
+    t1 = time.time()
+    loss_res = []
+    for epoch in tqdm(range(1, param['num_epochs'] + 1)):
+        model.train()
+        optimizer.zero_grad()
+        data_sbm1 = gen_sbm(data.sizes, data.probs, data.x.device)
+        data_sbm2 = gen_sbm(data.sizes, data.probs, data.x.device)
+        g = to_networkx(data_sbm1, to_undirected=True)
+        communities = community_detection('leiden')(g).communities
+        com_cs, node_cs = community_strength(g, communities)
+        z1 = model(data_sbm1.x, data_sbm1.edge_index)
+        z2 = model(data_sbm2.x, data_sbm2.edge_index)
+        loss = model.team_up_loss(z1, z2,
+                                  cs=node_cs,
+                                  current_ep=epoch)
+        loss.backward()
+        optimizer.step()
+        if epoch % 100 == 0:
+            loss_res.append(round(float(loss), 2))
+    print('pretrain loss: ', loss_res, ' s')
+    pre_time = time.time()-t1
+    print(f"pretrain time: {pre_time:.2f} s")
+    return pre_time
+

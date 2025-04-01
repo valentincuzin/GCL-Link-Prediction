@@ -28,7 +28,7 @@ hp = {
     'lnnn': True,
     'epochs': 100,
     'model': 'puregcn',
-    'runs': 1,
+    'runs': 10,
     'hiddim': 256,
     'mplayers': 1,
     'testbs': 8192,
@@ -262,6 +262,8 @@ def run_all(dataset: str, hp: dict):
         predictor = dec.MlpProdDecoder(hp['hiddim'], hp['hiddim']).to(device)
         return encoder, predictor
     full_res.append(tr.runs('Cora BGRL_cs+MLP', init_model, pretr.pretrain_bgrl_cs, data_split, evaluator, hp))
+
+
     
     df, tex = ut.full_output(full_res)
     df.to_csv(f'{DATASET}_res.csv', sep=';')

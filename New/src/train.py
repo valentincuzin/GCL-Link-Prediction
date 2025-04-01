@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 from torch_geometric.utils import negative_sampling
 from torch_sparse import SparseTensor
 import numpy as np
-from utils import CosineDecayScheduler
+from src.utils import CosineDecayScheduler
 
 @torch.no_grad()
 def test(encoder: nn.Module, predictor: nn.Module, data, split_edge: dict, hp: dict):
