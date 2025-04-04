@@ -392,14 +392,14 @@ class BGRL(torch.nn.Module):
 
     def train_forward(self, online_x, target_x):
         # forward online network
-        online_y = self.online_encoder(online_x.x, online_x.edge_index)
+        online_y = self.online_encoder(online_x[0], online_x[1])
 
         # prediction
         online_q = self.predictor(online_y)
 
         # forward target network
         with torch.no_grad():
-            target_y = self.target_encoder(target_x.x, target_x.edge_index).detach()
+            target_y = self.target_encoder(target_x[0], target_x[1]).detach()
         return online_q, target_y
 
     def forward(self, x: torch.Tensor, edge_index: torch.Tensor):

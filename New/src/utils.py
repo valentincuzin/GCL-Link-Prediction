@@ -1,6 +1,66 @@
-from unittest import result
 import numpy as np
 import pandas as pd
+import networkx as nx
+from cdlib import algorithms
+from cdlib.utils import convert_graph_formats
+from torch_geometric.utils import to_networkx
+def community_detection(name):
+    algs = {
+        # non-overlapping algorithms
+        'louvain': algorithms.louvain,
+        'combo': algorithms.pycombo,
+        'leiden': algorithms.leiden,
+        'ilouvain': algorithms.ilouvain,
+        #'edmot': algorithms.edmot,
+        'eigenvector': algorithms.eigenvector,
+        'girvan_newman': algorithms.girvan_newman,
+        # overlapping algorithms
+        'demon': algorithms.demon,
+        'lemon': algorithms.lemon,
+        #'ego-splitting': algorithms.egonet_splitter,
+        #'nnsed': algorithms.nnsed,
+        'lpanni': algorithms.lpanni,
+    }
+    return algs[name]
+
+def community_strength(graph: nx.Graph,
+                            communities) -> (np.ndarray, np.ndarray):
+    graph = convert_graph_formats(graph, nx.Graph)
+    coms = {}
+    for cid, com in enumerate(communities):
+        for node in com:
+            coms[node] = cid
+    inc, deg = {}, {}
+    links = graph.size(weight="weight")
+    assert links > 0, "A graph without link has no communities."
+    for node in graph:
+        try:
+            com = coms[node]
+            deg[com] = deg.get(com, 0.0) + graph.degree(node, weight="weight")
+            for neighbor, dt in graph[node].items():
+                weight = dt.get("weight", 1)
+                if coms[neighbor] == com:
+                    if neighbor == node:
+                        inc[com] = inc.get(com, 0.0) + float(weight)
+                    else:
+                        inc[com] = inc.get(com, 0.0) + float(weight) / 2.0
+        except:
+            pass
+    com_cs = []
+    for idx, com in enumerate(set(coms.values())):
+        com_cs.append((inc.get(com, 0.0) / links) - (deg.get(com, 0.0) / (2.0 * links)) ** 2)
+    com_cs = np.asarray(com_cs)
+    node_cs = np.zeros(graph.number_of_nodes(), dtype=np.float32)
+    for i, w in enumerate(com_cs):
+        for j in communities[i]:
+            node_cs[j] = com_cs[i]
+    return com_cs, node_cs
+
+def get_commu_strength(data):
+    g = to_networkx(data, to_undirected=True)
+    communities = community_detection('leiden')(g).communities
+    com_cs, node_cs = community_strength(g, communities)
+    return communities, com_cs, node_cs
 
 class CosineDecayScheduler:
     def __init__(self, max_val, warmup_steps, total_steps):

@@ -8,6 +8,7 @@ from torch_geometric.utils import negative_sampling
 from torch_sparse import SparseTensor
 import numpy as np
 from src.utils import CosineDecayScheduler
+from src.utils import get_commu_strength
 
 @torch.no_grad()
 def test(encoder: nn.Module, predictor: nn.Module, data, split_edge: dict, hp: dict):
@@ -144,10 +145,11 @@ def pretrain_csgcl(model, aug, param):
                                  weight_decay=param['weight_decay'])
     t1 = time.time()
     loss_res = []
+    _, _, node_cs = get_commu_strength(aug.data)
     for epoch in tqdm(range(1, param['epochs'] + 1)):
         model.train()
         optimizer.zero_grad()
-        x_1, edge_index_1, x_2, edge_index_2, node_cs = aug()
+        x_1, edge_index_1, x_2, edge_index_2 = aug()
         z1 = model(x_1, edge_index_1)
         z2 = model(x_2, edge_index_2)
         loss = model.team_up_loss(z1, z2,
