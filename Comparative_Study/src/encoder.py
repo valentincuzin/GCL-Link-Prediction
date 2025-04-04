@@ -194,7 +194,13 @@ class ENCODER_GRACE(nn.Module):
                 u = sum(hs)
                 hs.append(self.activation(self.conv[i](u, edge_index)))
             return hs[-1]
-    
+
+    def reset_parameters(self):
+        for conv in self.conv:
+            conv.reset_parameters()
+        if self.skip:
+            self.fc_skip.reset_parameters()
+
 ###############################################
 # Code from BGRL
 
