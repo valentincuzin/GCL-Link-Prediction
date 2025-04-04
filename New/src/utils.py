@@ -112,5 +112,4 @@ def full_output(full_res: list):
     full_latex = full_res.to_latex(
         index=True, formatters={"name": str.upper}, float_format="{:.1f}".format
     )
-    print(full_latex)
     return full_res, full_latex

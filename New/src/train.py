@@ -59,10 +59,34 @@ def pred_train(encoder: nn.Module,
         )
     elif hp['freeze']:
         optimizer = torch.optim.Adam(params=predictor.parameters(), lr=hp["pre_lr"])
-    loss_res = []
-    t1 = time.time()
     encoder.train()
     predictor.train()
+    return _train(encoder, predictor, data, split_edge, optimizer, hp, loss_compute)
+
+def baseline_train(encoder: nn.Module,
+          predictor: nn.Module,
+          data,
+          split_edge: dict,
+          loss_compute: callable,
+          hp: dict):
+    if isinstance(predictor, nn.Module):
+        predictor = predictor.to(data.x.device)
+        optimizer = torch.optim.Adam(
+            [
+                {"params": encoder.parameters(), "lr": hp["gnn_lr"],  "weight_decay": hp['weight_decay']},
+                {"params": predictor.parameters(), "lr": hp["pre_lr"]},
+            ]
+        )
+        predictor.train()
+    else:
+        optimizer = torch.optim.Adam(params=encoder.parameters(), lr=hp["gnn_lr"], weight_decay=hp['weight_decay'])
+    encoder.train()
+    return _train(encoder, predictor, data, split_edge, optimizer, hp, loss_compute)
+
+
+def _train(encoder, predictor, data, split_edge, optimizer, hp, loss_compute):
+    loss_res = []
+    t1 = time.time()
     device = data.adj_t.device()
 
     pos_train_edge = split_edge['train']['edge'].to(device)
@@ -86,17 +110,21 @@ def pred_train(encoder: nn.Module,
                 adj = data.adj_t
             h = encoder(data.x, adj)
             edge = pos_train_edge[:, perm]
-            pos_outs = predictor(h, adj, edge)
+            pos_outs = predictor(h, edge[0], edge[1])
 
             edge = negedge[:, perm]
-            neg_outs = predictor(h, adj, edge)
+            neg_outs = predictor(h, edge[0], edge[1])
             loss = loss_compute(pos_outs, neg_outs)
             loss.backward()
+            if data.x is not None:
+                nn.utils.clip_grad_norm_(data.x, 1.0)
+            nn.utils.clip_grad_norm_(encoder.parameters(), 1.0)
+            nn.utils.clip_grad_norm_(predictor.parameters(), 1.0)
             optimizer.step()
             total_loss.append(loss)
-        total_loss = np.average([_.item() for _ in total_loss])
-        if epoch % 10 == 0:
-            loss_res.append(round(float(total_loss), 2))
+    total_loss = np.average([_.item() for _ in total_loss])
+    if epoch % 10 == 0:
+        loss_res.append(round(float(total_loss), 2))
     print('train loss: ', loss_res)
     print(f"train time: {time.time()-t1:.2f} s")
     return total_loss
@@ -106,6 +134,10 @@ def ncn_loss(pos_outs, neg_outs):
     neg_losss = -F.logsigmoid(-neg_outs).mean()
     return neg_losss + pos_losss
 
+def mplp_loss(pos_out, neg_out):
+    out = torch.cat((pos_out, neg_out), dim=-1).to(pos_out.device())
+    label = torch.cat((torch.ones(pos_out.size()[1]), torch.zeros(neg_out.size()[1])), dim=0).to(pos_out.device())
+    return F.binary_cross_entropy_with_logits(out, label, reduction="mean")
 
 def pretrain(model_name, model, aug, param):
     switch = {"grace": pretrain_grace,

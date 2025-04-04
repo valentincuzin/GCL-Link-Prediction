@@ -1,0 +1,7 @@
+metrics;baseline_random+mlp
+Hits@10;54.5$\pm$0.0
+Hits@20;61.23$\pm$0.0
+Hits@50;70.81$\pm$0.0
+Hits@100;77.63$\pm$0.0
+ROCAUC;90.61$\pm$0.0
+pretrain_time;nan$\pm$nan

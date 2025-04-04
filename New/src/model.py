@@ -8,7 +8,9 @@ from torch_geometric.nn import GCNConv, BatchNorm, LayerNorm, Sequential
 def get_model(model_name: str, data, hp: dict):
     device = data.x.device
     _encoder = ENCODER_GRACE(data.num_features, hp['hidden'], nn.Identity()).to(device)
-    if model_name == "grace":
+    if model_name == "baseline":
+        return _encoder
+    elif model_name == "grace":
         model = GRACE(_encoder, hp['hidden'], hp['proj_hidden']).to(device)
     elif model_name == "csgcl":
         model = CSGCL(_encoder,

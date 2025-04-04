@@ -3,6 +3,11 @@ from tqdm import tqdm
 from copy import deepcopy
 import torch
 import numpy as np
+import copy
+import random
+import networkx as nx
+import matplotlib.pyplot as plt
+from torch_geometric.utils import from_networkx, to_networkx
 import torch.nn.functional as F
 from sklearn.metrics import average_precision_score
 from ogb.linkproppred import PygLinkPropPredDataset, Evaluator
@@ -207,3 +212,29 @@ def full_eval(evaluator, pos_pred, neg_pred):
     
     results['AP'] = average_precision(pos_pred, neg_pred)
     return results
+
+def deplete(data, rm: float = 0.2):
+    data_poor = copy.deepcopy(data)
+    data_poor.to(data.x.device)
+    G = to_networkx(data_poor, to_undirected=True)
+    max_value = np.max(data_poor.probs)
+    print("max_value", max_value)
+    index_1, index_2 = np.where(data_poor.probs == max_value)
+    for i, j in list(zip(index_1, index_2)):
+        if i == j:
+            nodes = torch.nonzero(data_poor.block==i).squeeze(1)
+        else:
+            nodes_1 = torch.nonzero(data_poor.block==i).squeeze(1)
+            nodes_2 = torch.nonzero(data_poor.block==j).squeeze(1)
+            nodes = torch.cat((nodes_1, nodes_2))
+        edges_in_community = [(u, v) for u in nodes.tolist() for v in nodes.tolist() if G.has_edge(u, v)]
+        edges_to_remove = random.sample(edges_in_community, int(rm*len(edges_in_community)))
+        G.remove_edges_from(edges_to_remove)
+    data_poor = from_networkx(G)
+    print(data_poor)
+    data_poor.x = F.one_hot(torch.arange(0, data_poor.num_nodes)).float()
+    pos = nx.spring_layout(G)
+    G.remove_nodes_from(list(nx.isolates(G)))
+    nx.draw(G, pos, node_size=30, cmap = plt.get_cmap('jet'))
+    print(data_poor.edge_index.shape)
+    return data_poor
