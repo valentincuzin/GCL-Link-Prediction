@@ -1,7 +1,9 @@
 import torch
+import torch.nn.functional as F
 import numpy as np
 import networkx as nx
-from torch_geometric.utils import degree, to_undirected, to_networkx, dropout_adj
+from networkx.generators.community import stochastic_block_model
+from torch_geometric.utils import degree, to_undirected, to_networkx, dropout_adj, from_networkx
 from torch_scatter import scatter
 from functools import partial
 
@@ -23,6 +25,8 @@ class Aug:
             feature_weights, drop_weights = compute_weight[type]()
         elif type == 'scom':
             feature_weights, drop_weights = self.commu_strength()
+        elif type == 'sbm':
+            self.commu_repartition()
         self.types = {
             'random': self.random,
             'deg': partial(self.gca, feature_weights, drop_weights),
@@ -140,7 +144,7 @@ class Aug:
         communities, com_cs, node_cs = get_commu_strength(self.data)
         com = transition(communities, self.data.num_nodes)
         edge_weight = get_edge_weight(self.data.edge_index, com, com_cs)
-        return node_cs, edge_weight # TODO test 1-node_cs for call weighted
+        return node_cs, edge_weight
 
     def csgcl(self, feature_weights, node_cs):
         def ced(edge_index: torch.Tensor,
@@ -177,8 +181,51 @@ class Aug:
         x_2 = cav(self.data.x, feature_weights, self.param['drop_feature_rate_2'])
         return x_1, edge_index_1, x_2, edge_index_2
 
+    def commu_repartition(self):
+        G = to_networkx(self.data)
+        communities = nx.community.louvain_communities(G, resolution=0.5)
+        probs = np.zeros((len(communities), len(communities)))
+        sizes = []
+        for idx, c in enumerate(communities):
+            sizes.append(len(c))
+            for n in c:
+                G.nodes[n]["com"] = idx # get com label
+        for u, v in zip(self.data.edge_index[0], self.data.edge_index[1]): # count number of edge per com
+            u = float(u)
+            v = float(v)
+            probs[G.nodes[u]["com"], G.nodes[v]["com"]] += 1
+        for x in range(len(probs)): # make the probs
+            for y in range(len(probs)):
+                if x == y:
+                    probs[x,x] /= (sizes[x]*(sizes[x]-1))/2 #complete graph formula
+                else:
+                    probs[x,y] /= ((sizes[x]+sizes[y])*(sizes[x]+sizes[y]-1))/2
+        probs /= 2 # undirected graph
+        self.data.community = communities
+        self.data.probs = probs
+        print("probs, ", probs)
+        self.data.sizes = sizes
+        print("sizes, ", sizes)
+
     def sbm(self):
-        pass
+        def gen_sbm(sizes, probs):
+            G = stochastic_block_model(sizes, probs)
+            G.remove_edges_from(nx.selfloop_edges(G)) # remove self loops
+            data = from_networkx(G)
+            data.num_nodes = sum(sizes)
+            data.sizes = sizes
+            data.probs = probs
+            data.num_features = data.num_nodes
+            data.x = self.data.x # F.one_hot(torch.arange(0, data.num_nodes)).float()
+            data = data.to(self.device)
+            return data
+        
+        sizes, probs = self.data.sizes, self.data.probs
+        data_1 = gen_sbm(sizes, probs)
+        data_1.x = _drop_feature(data_1.x, self.param['drop_feature_rate_1'])
+        data_2 = gen_sbm(sizes, probs)
+        data_2.x = _drop_feature(data_2.x, self.param['drop_feature_rate_2'])
+        return data_1.x, data_1.edge_index, data_2.x, data_2.edge_index
 
 
 def _drop_feature(x, drop_prob):

@@ -17,34 +17,35 @@ MODELS = ["grace", "csgcl", "bgrl"]
 AUGMENTATIONS = ["random", "deg", "pr", "evc", "scom", "sbm"]
 
 def arguments():
+    def multiparse(input: str, choices: list):
+        if input == "all":
+            return choices
+        if ',' not in input and input in choices:
+            return [input]
+        inputs: list = [i.strip() for i in input.split(',') if i.strip() in choices]
+        return inputs
+
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dataset', type=str, default='cora', choices=DATASETS.append("all"))
+    parser.add_argument('--dataset', type=str, default='cora', choices=DATASETS+["all"])
     parser.add_argument('--reduce_feature', type=int, default=None, help='0 for Identity matrix, >0 for PCA reduce')
     parser.add_argument('--only_feature', action='store_true', default=False, help='erase structure information')
-    parser.add_argument('--model', type=str, default='grace', choices=MODELS.append("all"))
-    parser.add_argument('--augmentation', type=str, default='random', choices=AUGMENTATIONS.append("all"))
+    parser.add_argument('--model', type=str, default='grace', choices=MODELS+["all"])
+    parser.add_argument('--augmentation', type=str, default='random', choices=AUGMENTATIONS+["all"])
     parser.add_argument('--predictor', type=str, default='inner', choices=["inner", "mlp"])
-    parser.add_argument('--epochs', type=int, default=1500)
+    parser.add_argument('--epochs', type=int, default=500)
     parser.add_argument('--runs', type=int, default=10)
     parser.add_argument('--use_valedges_as_input', action='store_true', default=True, help="add validation edges to the input adjacency matrix of gnn")
     args = parser.parse_args()
-    if args.dataset == 'all':
-        args.dataset = DATASETS
-    else:
-        args.dataset = [args.dataset]
-    if args.model == 'all':
-        args.model = MODELS
-    else:
-        args.model = [args.model]
-    if args.augmentation == 'all':
-        args.augmentation = AUGMENTATIONS
-    else:
-        args.augmentation = [args.augmentation]
+    args.dataset = multiparse(args.dataset, DATASETS)
+    print("tested dataset: ", args.dataset)
+    args.model = multiparse(args.model, MODELS)
+    args.augmentation = multiparse(args.augmentation, AUGMENTATIONS)
     return args
 
 if __name__ == "__main__":
     args = arguments()
     for dataset in args.dataset:
+        print(f"....{dataset}....")
         hp_files = os.path.join('params', dataset+'.json')
         with open(hp_files) as json_file:
             hp = json.load(json_file)
@@ -53,10 +54,11 @@ if __name__ == "__main__":
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         data_split = DataSplit(dataset, device, args.runs, args.use_valedges_as_input, args.reduce_feature, args.only_feature)
         evaluator = get_evaluator(dataset)
+        full_res = []
         for model_name in args.model:
             print(f"...{model_name}...")
             for augmentation in args.augmentation:
-                print(f"...{augmentation}...")
+                print(f"..{augmentation}..")
                 res_dict = {"Hits@10": [], "Hits@20": [], "Hits@50": [], "Hits@100": [], 'ROCAUC': [], 'pretrain_time': []}
                 for r in range(args.runs):
                     seed_everything(r)
@@ -76,4 +78,6 @@ if __name__ == "__main__":
                         print(f"{key}:  val: {100 * v_res:.2f}%, test: {100 * t_res:.2f}%")
                     res_dict = store_res(test_res, res_dict)
                 df_res, res_latex = compute_table(res_dict, f"{model_name}_{augmentation}+{args.predictor}")
-        # TODO save CSV des resultats
+                full_res.append(df_res)
+        df, tex = full_output(full_res)
+        df.to_csv(f'output/{dataset}_results.csv', sep=';')

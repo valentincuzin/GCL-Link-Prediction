@@ -7,17 +7,15 @@ from torch_geometric.nn import GCNConv, BatchNorm, LayerNorm, Sequential
 
 def get_model(model_name: str, data, hp: dict):
     device = data.x.device
-    if model_name in ["grace", "csgcl"]:
-        _encoder = ENCODER_GRACE(data.num_features, hp['hidden'], nn.Identity()).to(device)
-        if model_name == "grace":
-            model = GRACE(_encoder, hp['hidden'], hp['proj_hidden']).to(device)
-        elif model_name == "csgcl":
-            model = CSGCL(_encoder,
-                          hp['hidden'],
-                          hp['proj_hidden'],
-                          hp['tau']).to(device)
+    _encoder = ENCODER_GRACE(data.num_features, hp['hidden'], nn.Identity()).to(device)
+    if model_name == "grace":
+        model = GRACE(_encoder, hp['hidden'], hp['proj_hidden']).to(device)
+    elif model_name == "csgcl":
+        model = CSGCL(_encoder,
+                        hp['hidden'],
+                        hp['proj_hidden'],
+                        hp['tau']).to(device)
     else:
-        _encoder = ENCODER_BGRL([data.num_features, hp['hidden']], batchnorm=True).to(device)
         _predictor = MLP_Head_BGRL(hp['hidden'], hp['hidden']).to(device)
         model = BGRL(_encoder, _predictor).to(device)
     return model
@@ -63,6 +61,13 @@ class ENCODER_GRACE(nn.Module):
                 u = sum(hs)
                 hs.append(self.activation(self.conv[i](u, edge_index)))
             return hs[-1]
+    
+    def reset_parameters(self):
+        for conv in self.conv:
+            conv.reset_parameters()
+        if self.skip:
+            self.fc_skip.reset_parameters()
+
 
 class GRACE(nn.Module):
     def __init__(self, encoder: ENCODER_GRACE, hidden: int, proj_hidden: int, tau: float = 0.5):

@@ -4,6 +4,7 @@ import networkx as nx
 from cdlib import algorithms
 from cdlib.utils import convert_graph_formats
 from torch_geometric.utils import to_networkx
+
 def community_detection(name):
     algs = {
         # non-overlapping algorithms

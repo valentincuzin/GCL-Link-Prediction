@@ -13,7 +13,7 @@
 		"tau": 0.4,
 		"weight_decay": 1e-5,
 		"freeze": true,
-		"batch_size": 1152,
+		"batch_size": 2048,
 		"mask_input": true
 	}
 }
