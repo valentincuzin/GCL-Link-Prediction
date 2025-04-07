@@ -197,9 +197,9 @@ class Aug:
         for x in range(len(probs)): # make the probs
             for y in range(len(probs)):
                 if x == y:
-                    probs[x,x] /= (sizes[x]*(sizes[x]-1))/2 #complete graph formula
+                    probs[x,x] = probs[x,x]/(sizes[x]*(sizes[x]-1))/2 if sizes[x] > 1 else probs[x,x]
                 else:
-                    probs[x,y] /= ((sizes[x]+sizes[y])*(sizes[x]+sizes[y]-1))/2
+                    probs[x,y] /= ((sizes[x]+sizes[y])*(sizes[x]+sizes[y]-1))/2 #complete graph formula
         probs /= 2 # undirected graph
         self.data.community = communities
         self.data.probs = probs
@@ -219,7 +219,7 @@ class Aug:
             data.x = self.data.x # F.one_hot(torch.arange(0, data.num_nodes)).float()
             data = data.to(self.device)
             return data
-        
+
         sizes, probs = self.data.sizes, self.data.probs
         data_1 = gen_sbm(sizes, probs)
         data_1.x = _drop_feature(data_1.x, self.param['drop_feature_rate_1'])

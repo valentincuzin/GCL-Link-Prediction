@@ -26,13 +26,14 @@ def arguments():
         return inputs
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dataset', type=str, default='cora', choices=DATASETS+["all"])
+    parser.add_argument('--dataset', type=str, default='cora')
     parser.add_argument('--reduce_feature', type=int, default=None, help='0 for Identity matrix, >0 for PCA reduce')
     parser.add_argument('--only_feature', action='store_true', default=False, help='erase structure information')
-    parser.add_argument('--model', type=str, default='grace', choices=MODELS+["all"])
-    parser.add_argument('--augmentation', type=str, default='random', choices=AUGMENTATIONS+["all"])
+    parser.add_argument('--model', type=str, default='grace')
+    parser.add_argument('--augmentation', type=str, default='random')
     parser.add_argument('--predictor', type=str, default='inner', choices=["inner", "mlp"])
-    parser.add_argument('--epochs', type=int, default=500)
+    parser.add_argument('--epochs', type=int, default=100)
+    parser.add_argument('--ct_epochs', type=int, default=500)
     parser.add_argument('--runs', type=int, default=10)
     parser.add_argument('--name', type=str, default="")
     parser.add_argument('--use_valedges_as_input', action='store_true', default=True, help="add validation edges to the input adjacency matrix of gnn")
@@ -43,16 +44,21 @@ def arguments():
     print(args)
     return args
 
+def hp_load(dataset: str, args):
+    print(f"....{dataset}....")
+    hp_files = os.path.join('params', dataset+'.json')
+    with open(hp_files) as json_file:
+        hp = json.load(json_file)
+        hp["model"]["epochs"] = args.epochs
+        hp["model"]["ct_epochs"] = args.ct_epochs
+        hp["model"]["use_valedges_as_input"] = args.use_valedges_as_input
+    return hp
+
 if __name__ == "__main__":
     args = arguments()
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     for dataset in args.dataset:
-        print(f"....{dataset}....")
-        hp_files = os.path.join('params', dataset+'.json')
-        with open(hp_files) as json_file:
-            hp = json.load(json_file)
-            hp["model"]["epochs"] = args.epochs
-            hp["model"]["use_valedges_as_input"] = args.use_valedges_as_input
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        hp = hp_load(dataset, args)
         data_split = DataSplit(dataset, device, args.runs, args.use_valedges_as_input, args.reduce_feature, args.only_feature)
         evaluator = get_evaluator(dataset)
         full_res = []

@@ -116,10 +116,6 @@ def _train(encoder, predictor, data, split_edge, optimizer, hp, loss_compute):
             neg_outs = predictor(h, edge[0], edge[1])
             loss = loss_compute(pos_outs, neg_outs)
             loss.backward()
-            if data.x is not None:
-                nn.utils.clip_grad_norm_(data.x, 1.0)
-            nn.utils.clip_grad_norm_(encoder.parameters(), 1.0)
-            nn.utils.clip_grad_norm_(predictor.parameters(), 1.0)
             optimizer.step()
             total_loss.append(loss)
     total_loss = np.average([_.item() for _ in total_loss])
@@ -153,7 +149,7 @@ def pretrain_grace(model, aug, param):
     )
     t1 = time.time()
     loss_res = []
-    for epoch in tqdm(range(1, param['epochs'] + 1)):
+    for epoch in tqdm(range(1, param['ct_epochs'] + 1)):
         model.train()
         optimizer.zero_grad()
         x_1, edge_index_1, x_2, edge_index_2 = aug()
@@ -178,7 +174,7 @@ def pretrain_csgcl(model, aug, param):
     t1 = time.time()
     loss_res = []
     _, _, node_cs = get_commu_strength(aug.data)
-    for epoch in tqdm(range(1, param['epochs'] + 1)):
+    for epoch in tqdm(range(1, param['ct_epochs'] + 1)):
         model.train()
         optimizer.zero_grad()
         x_1, edge_index_1, x_2, edge_index_2 = aug()
@@ -202,12 +198,12 @@ def pretrain_bgrl(model, aug, param):
     optimizer = torch.optim.AdamW(model.trainable_parameters(), lr=param['gnn_lr'], weight_decay=param['weight_decay'])
 
     # scheduler
-    lr_scheduler = CosineDecayScheduler(param['gnn_lr'], 1000, param['epochs'])
-    mm_scheduler = CosineDecayScheduler(1 - 0.99, 0, param['epochs'])
+    lr_scheduler = CosineDecayScheduler(param['gnn_lr'], 1000, param['ct_epochs'])
+    mm_scheduler = CosineDecayScheduler(1 - 0.99, 0, param['ct_epochs'])
 
     t1 = time.time()
     loss_res = []
-    for epoch in tqdm(range(1, param['epochs'] + 1)):
+    for epoch in tqdm(range(1, param['ct_epochs'] + 1)):
         model.train()
 
         lr = lr_scheduler.get(epoch)
