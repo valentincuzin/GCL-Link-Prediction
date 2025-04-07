@@ -87,9 +87,10 @@ if __name__ == "__main__":
                     for (key, v_res), t_res in zip(val_res.items(), test_res.values()):
                         print(f"{key}:  val: {100 * v_res:.2f}%, test: {100 * t_res:.2f}%")
                     res_dict = store_res(test_res, res_dict)
-                df_res, res_latex = compute_table(res_dict, f"{model_name}_{augmentation}+{args.predictor}")
+                save_name = f"{model_name}{'_'+augmentation if model_name != "baseline" else ""}"
+                df_res, res_latex = compute_table(res_dict, save_name)
                 full_res.append(df_res)
                 if model_name == "baseline":
                     break
         df, tex = full_output(full_res)
-        df.to_csv(f'output/{args.name}{dataset}_results.csv', sep=';')
+        df.to_csv(f'output/{args.name}_{dataset}_res.csv', sep=';')

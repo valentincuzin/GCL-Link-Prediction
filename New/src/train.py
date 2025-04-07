@@ -118,9 +118,9 @@ def _train(encoder, predictor, data, split_edge, optimizer, hp, loss_compute):
             loss.backward()
             optimizer.step()
             total_loss.append(loss)
-    total_loss = np.average([_.item() for _ in total_loss])
-    if epoch % 10 == 0:
-        loss_res.append(round(float(total_loss), 2))
+        total_loss = np.average([_.item() for _ in total_loss])
+        if epoch % 10 == 0:
+            loss_res.append(round(float(total_loss), 2))
     print('train loss: ', loss_res)
     print(f"train time: {time.time()-t1:.2f} s")
     return total_loss
@@ -130,7 +130,7 @@ def ncn_loss(pos_outs, neg_outs):
     neg_losss = -F.logsigmoid(-neg_outs).mean()
     return neg_losss + pos_losss
 
-def mplp_loss(pos_out, neg_out):
+def bce_loss(pos_out, neg_out):
     out = torch.cat((pos_out, neg_out), dim=-1).to(pos_out.device())
     label = torch.cat((torch.ones(pos_out.size()[1]), torch.zeros(neg_out.size()[1])), dim=0).to(pos_out.device())
     return F.binary_cross_entropy_with_logits(out, label, reduction="mean")
