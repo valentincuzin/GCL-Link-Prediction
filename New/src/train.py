@@ -118,9 +118,9 @@ def _train(encoder, predictor, data, split_edge, optimizer, hp, loss_compute):
             loss.backward()
             optimizer.step()
             total_loss.append(loss)
-        total_loss = np.average([_.item() for _ in total_loss])
         if epoch % 10 == 0:
-            loss_res.append(round(float(total_loss), 2))
+            _loss = np.average([_.item() for _ in total_loss])
+            loss_res.append(round(float(_loss), 2))
     print('train loss: ', loss_res)
     print(f"train time: {time.time()-t1:.2f} s")
     return total_loss
