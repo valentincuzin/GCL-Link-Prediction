@@ -143,51 +143,8 @@ def gen_sbm(sizes, probs, device=None, seed=random.randint(1, 10000), draw=False
     return data
 data = gen_sbm(data.sizes, data.probs, device, 0, True)
 
-def deplete(data, rm: float = 0.2):
-    data_poor = copy.deepcopy(data)
-    data_poor.to(data.x.device)
-    G = to_networkx(data_poor, to_undirected=True)
-    max_value = np.max(data_poor.probs)
-    print("max_value", max_value)
-    index_1, index_2 = np.where(data_poor.probs == max_value)
-    for i, j in list(zip(index_1, index_2)):
-        if i == j:
-            nodes = torch.nonzero(data_poor.block==i).squeeze(1)
-        else:
-            nodes_1 = torch.nonzero(data_poor.block==i).squeeze(1)
-            nodes_2 = torch.nonzero(data_poor.block==j).squeeze(1)
-            nodes = torch.cat((nodes_1, nodes_2))
-        edges_in_community = [(u, v) for u in nodes.tolist() for v in nodes.tolist() if G.has_edge(u, v)]
-        edges_to_remove = random.sample(edges_in_community, int(rm*len(edges_in_community)))
-        G.remove_edges_from(edges_to_remove)
-    data_poor = from_networkx(G)
-    print(data_poor)
-    data_poor.x = F.one_hot(torch.arange(0, data_poor.num_nodes)).float()
-    pos = nx.spring_layout(G)
-    G.remove_nodes_from(list(nx.isolates(G)))
-    nx.draw(G, pos, node_size=30, cmap = plt.get_cmap('jet'))
-    print(data_poor.edge_index.shape)
-    return data_poor
-
-poor_data_05 = deplete(data, 0.5)
-poor_data_08 = deplete(data, 0.8)
-poor_data_02 = deplete(data, 0.2)
-
 evaluator = ut.get_evaluator()
 data_split = ut.DataSplit([data], device, 10)
-
-poor_data_05_split = ut.DataSplit([poor_data_05], device, 10)
-poor_data_08_split = ut.DataSplit([poor_data_08], device, 10)
-poor_data_02_split = ut.DataSplit([poor_data_02], device, 10)
-
-for r in range(hp['runs']):
-    data, split_edge = data_split.data_runs[r]
-    poor_data_05_split.data_runs[r][1]['valid'] = split_edge['valid']
-    poor_data_05_split.data_runs[r][1]['test'] = split_edge['test']
-    poor_data_08_split.data_runs[r][1]['valid'] = split_edge['valid']
-    poor_data_08_split.data_runs[r][1]['test'] = split_edge['test']
-    poor_data_02_split.data_runs[r][1]['valid'] = split_edge['valid']
-    poor_data_02_split.data_runs[r][1]['test'] = split_edge['test']
 # In[5]:
 
 
@@ -368,16 +325,121 @@ def pretrain_csgcl_commu(model, data, param):
     return pre_time
 
 
+
+def pretrain_grace_commu2(model, data, param):
+    optimizer = torch.optim.Adam(
+        model.parameters(),
+        lr=param['learning_rate'],
+        weight_decay=param['weight_decay']
+    )
+    t1 = time.time()
+    loss_res = []
+    for epoch in tqdm(range(1, param['num_epochs'] + 1)):
+        model.train()
+        optimizer.zero_grad()
+        data_sbm1 = gen_sbm(data.sizes, data.probs, data.x.device, epoch)
+        data_sbm2 = data
+        # edge_index_1 = dropout_adj(data_sbm.edge_index, p=param[f'drop_edge_rate_{1}'])[0]
+        # edge_index_2 = dropout_adj(data_sbm.edge_index, p=param[f'drop_edge_rate_{2}'])[0]
+        # x_1 = drop_feature(data_sbm.x, param['drop_feature_rate_1'])
+        # x_2 = drop_feature(data_sbm.x, param['drop_feature_rate_2'])
+        z1 = model(data_sbm1.x, data_sbm1.edge_index)
+        z2 = model(data_sbm2.x, data_sbm2.edge_index)
+        loss = model.loss(z1, z2)
+        loss.backward()
+        optimizer.step()
+        if epoch % 100 == 0:
+            loss_res.append(round(float(loss), 2))
+    print('pretrain loss: ', loss_res)
+    pre_time = time.time()-t1
+    print(f"pretrain time: {pre_time:.2f} s")
+    return pre_time
+
+def pretrain_bgrl_commu2(model, data, param):
+    optimizer = torch.optim.AdamW(model.trainable_parameters(), lr=param['learning_rate'], weight_decay=param['weight_decay'])
+
+    lr_scheduler = ut.CosineDecayScheduler(param['learning_rate'], 1000, param['num_epochs'])
+    mm_scheduler = ut.CosineDecayScheduler(1 - 0.99, 0, param['num_epochs'])
+
+    t1 = time.time()
+    loss_res = []
+    for epoch in tqdm(range(1, param['num_epochs'] + 1)):
+        model.train()
+
+        lr = lr_scheduler.get(epoch)
+        mm = 1 - mm_scheduler.get(epoch)
+
+        optimizer.zero_grad()
+
+        data_c1 = gen_sbm(data.sizes, data.probs, data.x.device, epoch)
+        data_c2 = data
+        # data_c1.edge_index = dropout_adj(data_sbm.edge_index, p=param[f'drop_edge_rate_{1}'])[0]
+        # data_c2.edge_index = dropout_adj(data_sbm.edge_index, p=param[f'drop_edge_rate_{2}'])[0]
+
+        # data_c1.x = drop_feature(data_sbm.x, param['drop_feature_rate_1'])
+        # data_c2.x = drop_feature(data_sbm.x, param['drop_feature_rate_2'])
+
+        z1, y2 = model.train_forward(data_c1, data_c2)
+        z2, y1 = model.train_forward(data_c2, data_c1)
+
+        loss = 2 - F.cosine_similarity(z1, y2.detach(), dim=-1).mean() - F.cosine_similarity(z2, y1.detach(), dim=-1).mean() # loss simple
+        loss.backward()
+        optimizer.step()
+        model.update_target_network(mm)
+
+        if epoch % 100 == 0:
+            loss_res.append(round(float(loss), 2))
+    print('pretrain loss: ', loss_res)
+    pre_time = time.time()-t1
+    print(f"pretrain time: {pre_time:.2f} s")
+    return pre_time
+
+def pretrain_csgcl_commu2(model, data, param):
+    optimizer = torch.optim.Adam(model.parameters(),
+                                 lr=param['learning_rate'],
+                                 weight_decay=param['weight_decay'])
+    t1 = time.time()
+    loss_res = []
+    for epoch in tqdm(range(1, param['num_epochs'] + 1)):
+        model.train()
+        optimizer.zero_grad()
+        data_sbm1 = gen_sbm(data.sizes, data.probs, data.x.device)
+        data_sbm2 = data
+        g = to_networkx(data_sbm1, to_undirected=True)
+        communities = community_detection('leiden')(g).communities
+        # com = transition(communities, g.number_of_nodes())
+        com_cs, node_cs = community_strength(g, communities)
+        # edge_weight = get_edge_weight(data_sbm.edge_index, com, com_cs)
+        # edge_index_1 = ced(data_sbm.edge_index, edge_weight, p=param['drop_edge_rate_1'])
+        # edge_index_2 = ced(data_sbm.edge_index, edge_weight, p=param['drop_edge_rate_2'])
+        # x1 = cav(data_sbm.x, node_cs, param["drop_feature_rate_1"])
+        # x2 = cav(data_sbm.x, node_cs, param['drop_feature_rate_2'])
+        z1 = model(data_sbm1.x, data_sbm1.edge_index)
+        z2 = model(data_sbm2.x, data_sbm2.edge_index)
+        loss = model.team_up_loss(z1, z2,
+                                  cs=node_cs,
+                                  current_ep=epoch)
+        loss.backward()
+        optimizer.step()
+        if epoch % 100 == 0:
+            loss_res.append(round(float(loss), 2))
+    print('pretrain loss: ', loss_res, ' s')
+    pre_time = time.time()-t1
+    print(f"pretrain time: {pre_time:.2f} s")
+    return pre_time
+
+
 # In[7]:
 
 
 full_res = []
+
 def init_model(data, hp):
     _encoder = enc.ENCODER_GRACE(data.num_features, hp['ct_param']['num_hidden'], nn.Identity()).to(device)
     encoder = ctmod.GRACE(_encoder, hp['ct_param']['num_hidden'], hp['ct_param']['num_proj_hidden']).to(device)
     predictor = dec.MlpProdDecoder(hp['hiddim'], hp['hiddim']).to(device)
     return encoder, predictor
-#full_res.append(tr.runs('SBM_GRACE+MLP', init_model, pretrain_grace_commu, data_split, evaluator, hp))
+full_res.append(tr.runs('SBM_GRACE+MLP', init_model, pretrain_grace_commu, data_split, evaluator, hp))
 
 def init_model(data, hp):
     _encoder = enc.ENCODER_GRACE(data.num_features, hp['ct_param']['num_hidden'], nn.Identity()).to(device)
@@ -385,7 +447,7 @@ def init_model(data, hp):
     encoder = ctmod.BGRL(_encoder, _predictor).to(device)
     predictor = dec.MlpProdDecoder(hp['hiddim'], hp['hiddim']).to(device)
     return encoder, predictor
-#full_res.append(tr.runs('SBM_BGRL+MLP', init_model, pretrain_bgrl_commu, data_split, evaluator, hp))
+full_res.append(tr.runs('SBM_BGRL+MLP', init_model, pretrain_bgrl_commu, data_split, evaluator, hp))
 
 def init_model(data, hp):
     _encoder = enc.ENCODER_GRACE(data.num_features, hp['ct_param']['num_hidden'], nn.Identity()).to(device)
@@ -395,7 +457,34 @@ def init_model(data, hp):
                       hp['ct_param']['tau']).to(device)
     predictor = dec.MlpProdDecoder(hp['hiddim'], hp['hiddim']).to(device)
     return encoder, predictor
-#full_res.append(tr.runs('SBM_CSGCL+mlp', init_model, pretrain_csgcl_commu, data_split, evaluator, hp))
+full_res.append(tr.runs('SBM_CSGCL+mlp', init_model, pretrain_csgcl_commu, data_split, evaluator, hp))
+
+
+def init_model(data, hp):
+    _encoder = enc.ENCODER_GRACE(data.num_features, hp['ct_param']['num_hidden'], nn.Identity()).to(device)
+    encoder = ctmod.GRACE(_encoder, hp['ct_param']['num_hidden'], hp['ct_param']['num_proj_hidden']).to(device)
+    predictor = dec.MlpProdDecoder(hp['hiddim'], hp['hiddim']).to(device)
+    return encoder, predictor
+full_res.append(tr.runs('SBM2_GRACE+MLP', init_model, pretrain_grace_commu2, data_split, evaluator, hp))
+
+def init_model(data, hp):
+    _encoder = enc.ENCODER_GRACE(data.num_features, hp['ct_param']['num_hidden'], nn.Identity()).to(device)
+    _predictor = ut.MLP_Head_BGRL(hp['ct_param']['num_hidden'], hp['ct_param']['num_hidden']).to(device)
+    encoder = ctmod.BGRL(_encoder, _predictor).to(device)
+    predictor = dec.MlpProdDecoder(hp['hiddim'], hp['hiddim']).to(device)
+    return encoder, predictor
+full_res.append(tr.runs('SBM2_BGRL+MLP', init_model, pretrain_bgrl_commu2, data_split, evaluator, hp))
+
+def init_model(data, hp):
+    _encoder = enc.ENCODER_GRACE(data.num_features, hp['ct_param']['num_hidden'], nn.Identity()).to(device)
+    encoder = ctmod.CSGCL(_encoder,
+                      hp['ct_param']['num_hidden'],
+                      hp['ct_param']['num_proj_hidden'],
+                      hp['ct_param']['tau']).to(device)
+    predictor = dec.MlpProdDecoder(hp['hiddim'], hp['hiddim']).to(device)
+    return encoder, predictor
+full_res.append(tr.runs('SBM2_CSGCL+mlp', init_model, pretrain_csgcl_commu2, data_split, evaluator, hp))
+
 
 def init_model(data, hp):
     encoder = enc.ENCODER_GRACE(data.num_features, hp['ct_param']['num_hidden'], nn.Identity()).to(device)
@@ -404,29 +493,11 @@ def init_model(data, hp):
 full_res.append(tr.runs('graceGCN+mlp', init_model, None, data_split, evaluator, hp))
 
 def init_model(data, hp):
-    encoder = enc.ENCODER_GRACE(data.num_features, hp['ct_param']['num_hidden'], nn.Identity()).to(device)
-    predictor = dec.MlpProdDecoder(hp['hiddim'], hp['hiddim']).to(device)
-    return encoder, predictor
-full_res.append(tr.runs('05: graceGCN+mlp', init_model, None, poor_data_05_split, evaluator, hp))
-
-def init_model(data, hp):
-    encoder = enc.ENCODER_GRACE(data.num_features, hp['ct_param']['num_hidden'], nn.Identity()).to(device)
-    predictor = dec.MlpProdDecoder(hp['hiddim'], hp['hiddim']).to(device)
-    return encoder, predictor
-full_res.append(tr.runs('08: graceGCN+mlp', init_model, None, poor_data_08_split, evaluator, hp))
-
-def init_model(data, hp):
-    encoder = enc.ENCODER_GRACE(data.num_features, hp['ct_param']['num_hidden'], nn.Identity()).to(device)
-    predictor = dec.MlpProdDecoder(hp['hiddim'], hp['hiddim']).to(device)
-    return encoder, predictor
-full_res.append(tr.runs('02: graceGCN+mlp', init_model, None, poor_data_02_split, evaluator, hp))
-
-def init_model(data, hp):
     _encoder = enc.ENCODER_GRACE(data.num_features, hp['ct_param']['num_hidden'], nn.Identity()).to(device)
     encoder = ctmod.GRACE(_encoder, hp['ct_param']['num_hidden'], hp['ct_param']['num_proj_hidden']).to(device)
     predictor = dec.MlpProdDecoder(hp['hiddim'], hp['hiddim']).to(device)
     return encoder, predictor
-#full_res.append(tr.runs('GRACE+mlp', init_model, pretr.pretrain_grace, data_split, evaluator, hp))
+full_res.append(tr.runs('GRACE+mlp', init_model, pretr.pretrain_grace, data_split, evaluator, hp))
 
 def init_model(data, hp):
     _encoder = enc.ENCODER_GRACE(data.num_features, hp['ct_param']['num_hidden'], nn.Identity()).to(device)
@@ -434,7 +505,7 @@ def init_model(data, hp):
     encoder = ctmod.BGRL(_encoder, _predictor).to(device)
     predictor = dec.MlpProdDecoder(hp['hiddim'], hp['hiddim']).to(device)
     return encoder, predictor
-#full_res.append(tr.runs('BGRL+mlp', init_model, pretr.pretrain_bgrl, data_split, evaluator, hp))
+full_res.append(tr.runs('BGRL+mlp', init_model, pretr.pretrain_bgrl, data_split, evaluator, hp))
 
 def init_model(data, hp):
     _encoder = enc.ENCODER_GRACE(data.num_features, hp['ct_param']['num_hidden'], nn.Identity()).to(device)
@@ -444,17 +515,9 @@ def init_model(data, hp):
                       hp['ct_param']['tau']).to(device)
     predictor = dec.MlpProdDecoder(hp['hiddim'], hp['hiddim']).to(device)
     return encoder, predictor
-#full_res.append(tr.runs('CSGCL+mlp', init_model, pretr.pretrain_csgcl, data_split, evaluator, hp))
-
-def init_model(data, hp):
-    _encoder = enc.ENCODER_GRACE(data.num_features, hp['ct_param']['num_hidden'], nn.Identity()).to(device)
-    _predictor = ut.MLP_Head_BGRL(hp['ct_param']['num_hidden'], hp['ct_param']['num_hidden']).to(device)
-    encoder = ctmod.BGRL(_encoder, _predictor).to(device)
-    predictor = dec.MlpProdDecoder(hp['hiddim'], hp['hiddim']).to(device)
-    return encoder, predictor
-#full_res.append(tr.runs('BGRL_cs+mlp', init_model, pretr.pretrain_bgrl_cs, data_split, evaluator, hp))
+full_res.append(tr.runs('CSGCL+mlp', init_model, pretr.pretrain_csgcl, data_split, evaluator, hp))
 
 
 df, tex = ut.full_output(full_res)
-df.to_csv(f'output/SBM_mlp_400_res_hard_2.csv', sep=';')
+df.to_csv(f'SBMvsSBM2_mlp_400_res_hard.csv', sep=';')
 

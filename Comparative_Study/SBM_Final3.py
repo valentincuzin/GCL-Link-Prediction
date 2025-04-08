@@ -76,7 +76,7 @@ hp = {
     	'drop_feature_rate_1': 0.0,
     	'drop_feature_rate_2': 0.0,
     	'tau': 0.4,
-    	'num_epochs': 100,
+    	'num_epochs': 500,
     	'weight_decay': 1e-5,
     	'drop_scheme': 'degree',
     }
@@ -376,7 +376,7 @@ def init_model(data, hp):
     encoder = ctmod.GRACE(_encoder, hp['ct_param']['num_hidden'], hp['ct_param']['num_proj_hidden']).to(device)
     predictor = dec.MlpProdDecoder(hp['hiddim'], hp['hiddim']).to(device)
     return encoder, predictor
-#full_res.append(tr.runs('SBM_GRACE+MLP', init_model, pretrain_grace_commu, data_split, evaluator, hp))
+full_res.append(tr.runs('SBM_GRACE+MLP', init_model, pretrain_grace_commu, data_split, evaluator, hp))
 
 def init_model(data, hp):
     _encoder = enc.ENCODER_GRACE(data.num_features, hp['ct_param']['num_hidden'], nn.Identity()).to(device)
@@ -384,7 +384,7 @@ def init_model(data, hp):
     encoder = ctmod.BGRL(_encoder, _predictor).to(device)
     predictor = dec.MlpProdDecoder(hp['hiddim'], hp['hiddim']).to(device)
     return encoder, predictor
-#full_res.append(tr.runs('SBM_BGRL+MLP', init_model, pretrain_bgrl_commu, data_split, evaluator, hp))
+full_res.append(tr.runs('SBM_BGRL+MLP', init_model, pretrain_bgrl_commu, data_split, evaluator, hp))
 
 def init_model(data, hp):
     _encoder = enc.ENCODER_GRACE(data.num_features, hp['ct_param']['num_hidden'], nn.Identity()).to(device)
@@ -407,19 +407,19 @@ def init_model(data, hp):
     encoder = enc.ENCODER_GRACE(data.num_features, hp['ct_param']['num_hidden'], nn.Identity()).to(device)
     predictor = dec.MlpProdDecoder(hp['hiddim'], hp['hiddim']).to(device)
     return encoder, predictor
-full_res.append(tr.runs('02: graceGCN+mlp', init_model, None, poor_data_02_split, evaluator, hp))
+#full_res.append(tr.runs('02: graceGCN+mlp', init_model, None, poor_data_02_split, evaluator, hp))
 
 def init_model(data, hp):
     encoder = enc.ENCODER_GRACE(data.num_features, hp['ct_param']['num_hidden'], nn.Identity()).to(device)
     predictor = dec.MlpProdDecoder(hp['hiddim'], hp['hiddim']).to(device)
     return encoder, predictor
-full_res.append(tr.runs('05: graceGCN+mlp', init_model, None, poor_data_05_split, evaluator, hp))
+#full_res.append(tr.runs('05: graceGCN+mlp', init_model, None, poor_data_05_split, evaluator, hp))
 
 def init_model(data, hp):
     encoder = enc.ENCODER_GRACE(data.num_features, hp['ct_param']['num_hidden'], nn.Identity()).to(device)
     predictor = dec.MlpProdDecoder(hp['hiddim'], hp['hiddim']).to(device)
     return encoder, predictor
-full_res.append(tr.runs('08: graceGCN+mlp', init_model, None, poor_data_08_split, evaluator, hp))
+#full_res.append(tr.runs('08: graceGCN+mlp', init_model, None, poor_data_08_split, evaluator, hp))
 
 
 def init_model(data, hp):
@@ -427,7 +427,7 @@ def init_model(data, hp):
     encoder = ctmod.GRACE(_encoder, hp['ct_param']['num_hidden'], hp['ct_param']['num_proj_hidden']).to(device)
     predictor = dec.MlpProdDecoder(hp['hiddim'], hp['hiddim']).to(device)
     return encoder, predictor
-#full_res.append(tr.runs('GRACE+mlp', init_model, pretr.pretrain_grace, data_split, evaluator, hp))
+full_res.append(tr.runs('GRACE+mlp', init_model, pretr.pretrain_grace, data_split, evaluator, hp))
 
 def init_model(data, hp):
     _encoder = enc.ENCODER_GRACE(data.num_features, hp['ct_param']['num_hidden'], nn.Identity()).to(device)
@@ -435,7 +435,7 @@ def init_model(data, hp):
     encoder = ctmod.BGRL(_encoder, _predictor).to(device)
     predictor = dec.MlpProdDecoder(hp['hiddim'], hp['hiddim']).to(device)
     return encoder, predictor
-#full_res.append(tr.runs('BGRL+mlp', init_model, pretr.pretrain_bgrl, data_split, evaluator, hp))
+full_res.append(tr.runs('BGRL+mlp', init_model, pretr.pretrain_bgrl, data_split, evaluator, hp))
 
 def init_model(data, hp):
     _encoder = enc.ENCODER_GRACE(data.num_features, hp['ct_param']['num_hidden'], nn.Identity()).to(device)
@@ -457,7 +457,7 @@ def init_model(data, hp):
 
 
 df, tex = ut.full_output(full_res)
-df.to_csv(f'output/SBM_mlp_400_res_cora_commu_deplete.csv', sep=';')
+df.to_csv(f'output/SBM_mlp_400_res_cora_commu.csv', sep=';')
 
 
 # In[ ]:
