@@ -275,8 +275,8 @@ def pretrain_bgrl_2(model, aug, param):
 
         optimizer.zero_grad()
         x_1, edge_index_1, x_2, edge_index_2 = aug()
-        h1 = model(x_1, edge_index_1)
-        h2 = model(x_2, edge_index_2)
+        z1 = model(x_1, edge_index_1)
+        z2 = model(x_2, edge_index_2)
         S = z1 @ z2.T
         A_hat = aug.data.adj_t.to_dense()+torch.eye(aug.data.x.shape[0]).to(aug.device)
         target = torch.tensor(A_hat).to(A_hat.device)
