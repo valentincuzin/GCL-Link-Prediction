@@ -140,6 +140,7 @@ def bce_loss(pos_out, neg_out):
 
 def pretrain(model_name, model, aug, param):
     switch = {"grace": pretrain_grace,
+              "agrace": pretrain_agrace,
               "cgrace": pretrain_cgrace,
               "csgcl": pretrain_csgcl,
               "bgrl": pretrain_bgrl,
@@ -162,6 +163,32 @@ def pretrain_grace(model, aug, param):
         z2 = model(x_2, edge_index_2)
 
         loss = model.loss(z1, z2)
+        loss.backward()
+        optimizer.step()
+        if epoch % 100 == 0:
+            loss_res.append(round(float(loss), 2))
+    print('pretrain loss: ', loss_res)
+    pre_time = time.time()-t1
+    print(f"pretrain time: {pre_time:.2f} s")
+    return pre_time
+
+def pretrain_agrace(model, aug, param):
+    optimizer = torch.optim.Adam(
+        model.parameters(),
+        lr=param['gnn_lr'],
+        weight_decay=param['weight_decay']
+    )
+    A_hat = aug.data.adj_t.to_dense()+torch.eye(aug.data.x.shape[0]).to(aug.device)
+    t1 = time.time()
+    loss_res = []
+    for epoch in tqdm(range(1, param['ct_epochs'] + 1)):
+        model.train()
+        optimizer.zero_grad()
+        x_1, edge_index_1, x_2, edge_index_2 = aug()
+        z1 = model(x_1, edge_index_1)
+        z2 = model(x_2, edge_index_2)
+
+        loss = model.loss(z1, z2, A_hat)
         loss.backward()
         optimizer.step()
         if epoch % 100 == 0:
@@ -197,6 +224,7 @@ def pretrain_cgrace(model, aug, param):
     pre_time = time.time()-t1
     print(f"pretrain time: {pre_time:.2f} s")
     return pre_time
+
 def pretrain_csgcl(model, aug, param):
     optimizer = torch.optim.Adam(model.parameters(),
                                  lr=param['gnn_lr'],
