@@ -17,7 +17,7 @@ def get_model(model_name: str, data, hp: dict):
                         hp['hidden'],
                         hp['proj_hidden'],
                         hp['tau']).to(device)
-    else:
+    elif model_name in ["bgrl", "bgrl2"]:
         _predictor = MLP_Head_BGRL(hp['hidden'], hp['hidden']).to(device)
         model = BGRL(_encoder, _predictor).to(device)
     return model

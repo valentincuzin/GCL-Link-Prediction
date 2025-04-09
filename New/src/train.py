@@ -135,10 +135,13 @@ def bce_loss(pos_out, neg_out):
     label = torch.cat((torch.ones(pos_out.size()[1]), torch.zeros(neg_out.size()[1])), dim=0).to(pos_out.device())
     return F.binary_cross_entropy_with_logits(out, label, reduction="mean")
 
+
+
 def pretrain(model_name, model, aug, param):
     switch = {"grace": pretrain_grace,
               "csgcl": pretrain_csgcl,
-              "bgrl": pretrain_bgrl}
+              "bgrl": pretrain_bgrl,
+              "bgrl2": pretrain_bgrl_2}
     return switch[model_name](model, aug, param)
 
 def pretrain_grace(model, aug, param):
@@ -216,6 +219,41 @@ def pretrain_bgrl(model, aug, param):
         z2, y1 = model.train_forward((x_2, edge_index_2), (x_1, edge_index_1))
 
         loss = model.loss(z1, z2, y1, y2)
+        loss.backward()
+        optimizer.step()
+        model.update_target_network(mm)
+        if epoch % 100 == 0:
+            loss_res.append(round(float(loss), 2))
+    print('pretrain loss: ', loss_res, ' s')
+    pre_time = time.time()-t1
+    print(f"pretrain time: {pre_time:.2f} s")
+    return pre_time
+
+def pretrain_bgrl_2(model, aug, param):
+    # optimizer
+    optimizer = torch.optim.AdamW(model.trainable_parameters(), lr=param['gnn_lr'], weight_decay=param['weight_decay'])
+
+    # scheduler
+    lr_scheduler = CosineDecayScheduler(param['gnn_lr'], 1000, param['ct_epochs'])
+    mm_scheduler = CosineDecayScheduler(1 - 0.99, 0, param['ct_epochs'])
+
+    t1 = time.time()
+    loss_res = []
+    for epoch in tqdm(range(1, param['ct_epochs'] + 1)):
+        model.train()
+
+        lr = lr_scheduler.get(epoch)
+        mm = 1 - mm_scheduler.get(epoch)
+
+
+        optimizer.zero_grad()
+        x_1, edge_index_1, x_2, edge_index_2 = aug()
+        h1 = model(x_1, edge_index_1)
+        h2 = model(x_2, edge_index_2)
+        S = z1 @ z2.T
+        A_hat = aug.data.adj_t.to_dense()+torch.eye(aug.data.x.shape[0]).to(aug.device)
+        target = torch.tensor(A_hat).to(A_hat.device)
+        loss = F.mse_loss(S, target)
         loss.backward()
         optimizer.step()
         model.update_target_network(mm)
