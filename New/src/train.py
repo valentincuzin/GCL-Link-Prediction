@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
-from torch_geometric.utils import negative_sampling, to_networkx
+from torch_geometric.utils import negative_sampling, to_networkx, degree
 from torch_sparse import SparseTensor
 import numpy as np
 import networkx as nx
@@ -178,7 +178,18 @@ def pretrain_agrace(model, aug, param):
         lr=param['gnn_lr'],
         weight_decay=param['weight_decay']
     )
-    A_hat = aug.data.adj_t.to_dense()+torch.eye(aug.data.x.shape[0]).to(aug.device)
+    A_hat = aug.data.adj_t.to_dense()+torch.eye(aug.data.x.shape[0]).to(aug.device) #augmenter le torch.eye augmente les perf sur cora
+    """G = to_networkx(aug.data, to_undirected=True)
+    distance_matrix = dict(nx.all_pairs_shortest_path_length(G))
+    adj_matrix = np.zeros((len(G.nodes), len(G.nodes)))
+    for source, distances in distance_matrix.items():
+        for target, distance in distances.items():
+            adj_matrix[source, target] = distance
+    adj_matrix[adj_matrix!=0] = 1/adj_matrix[adj_matrix!=0]**10
+    adj = torch.tensor(adj_matrix, dtype=torch.float).to(aug.device)
+    adj += torch.eye(aug.data.x.shape[0]).to(aug.device)
+    print(adj)
+    """
     t1 = time.time()
     loss_res = []
     for epoch in tqdm(range(1, param['ct_epochs'] + 1)):
