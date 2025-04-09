@@ -13,7 +13,7 @@ from src.train import pretrain, pred_train, baseline_train, test, ncn_loss
 from src.utils import store_res, compute_table, full_output
 
 DATASETS = ["cora", "citeseer", "pubmed", "collab"]
-MODELS = ["baseline", "grace", "csgcl", "bgrl", "bgrl2"]
+MODELS = ["baseline", "grace", "cgrace", "csgcl", "bgrl", "bgrl2"]
 AUGMENTATIONS = ["random", "deg", "pr", "evc", "scom", "sbm"]
 
 def arguments():

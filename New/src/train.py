@@ -4,9 +4,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
-from torch_geometric.utils import negative_sampling
+from torch_geometric.utils import negative_sampling, to_networkx
 from torch_sparse import SparseTensor
 import numpy as np
+import networkx as nx
 from src.utils import CosineDecayScheduler
 from src.utils import get_commu_strength
 
@@ -139,6 +140,7 @@ def bce_loss(pos_out, neg_out):
 
 def pretrain(model_name, model, aug, param):
     switch = {"grace": pretrain_grace,
+              "cgrace": pretrain_cgrace,
               "csgcl": pretrain_csgcl,
               "bgrl": pretrain_bgrl,
               "bgrl2": pretrain_bgrl_2}
@@ -169,7 +171,32 @@ def pretrain_grace(model, aug, param):
     print(f"pretrain time: {pre_time:.2f} s")
     return pre_time
 
+def pretrain_cgrace(model, aug, param):
+    optimizer = torch.optim.Adam(
+        model.parameters(),
+        lr=param['gnn_lr'],
+        weight_decay=param['weight_decay']
+    )
+    G = to_networkx(aug.data, to_undirected=True)
+    L = torch.tensor(nx.laplacian_matrix(G).toarray()).to(aug.device)
+    t1 = time.time()
+    loss_res = []
+    for epoch in tqdm(range(1, param['ct_epochs'] + 1)):
+        model.train()
+        optimizer.zero_grad()
+        x_1, edge_index_1, x_2, edge_index_2 = aug()
+        z1 = model(x_1, edge_index_1)
+        z2 = model(x_2, edge_index_2)
 
+        loss = model.loss(z1, z2, L)
+        loss.backward()
+        optimizer.step()
+        if epoch % 100 == 0:
+            loss_res.append(round(float(loss), 2))
+    print('pretrain loss: ', loss_res)
+    pre_time = time.time()-t1
+    print(f"pretrain time: {pre_time:.2f} s")
+    return pre_time
 def pretrain_csgcl(model, aug, param):
     optimizer = torch.optim.Adam(model.parameters(),
                                  lr=param['gnn_lr'],
