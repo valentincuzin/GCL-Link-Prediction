@@ -138,8 +138,18 @@ def bce_loss(pos_out, neg_out):
 
 
 
+
+
+
+
+
+
+### CONTRASTIVE FRAMEWORK ###
+
+
 def pretrain(model_name, model, aug, param):
     switch = {"grace": pretrain_grace,
+              "lgrace": pretrain_lgrace,
               "agrace": pretrain_agrace,
               "cgrace": pretrain_cgrace,
               "csgcl": pretrain_csgcl,
@@ -171,6 +181,55 @@ def pretrain_grace(model, aug, param):
     pre_time = time.time()-t1
     print(f"pretrain time: {pre_time:.2f} s")
     return pre_time
+
+def pretrain_lgrace(model, aug, param):
+    optimizer = torch.optim.Adam(
+        model.parameters(),
+        lr=param['gnn_lr'],
+        weight_decay=param['weight_decay']
+    )
+    loss_res = []
+    t1 = time.time()
+    device = aug.data.adj_t.device()
+
+    total_loss = []
+    for epoch in tqdm(range(1, 1 + param["ct_epochs"])):
+        model.train()
+        optimizer.zero_grad()
+        x_1, edge_index_1, x_2, edge_index_2 = aug()
+        adjmask = torch.ones_like(edge_index_1[0], dtype=torch.bool)
+        negedge_1 = negative_sampling(edge_index_1, aug.data.adj_t.sizes()[0])
+        negedge_2 = negative_sampling(edge_index_2, aug.data.adj_t.sizes()[0])
+        for perm in DataLoader(range(adjmask.size(0)), param['batch_size'], shuffle=True):
+            optimizer.zero_grad()
+            if param['mask_input']:
+                adjmask[perm] = 0
+                tei = edge_index_1[:, adjmask]
+                adj = SparseTensor.from_edge_index(tei,
+                                sparse_sizes=(aug.data.num_nodes, aug.data.num_nodes)).to_device(
+                                    edge_index_1.device, non_blocking=True)
+                adjmask[perm] = 1
+                adj = adj.to_symmetric()
+            else:
+                adj = aug.data.adj_t
+            h1 = model(x_1, edge_index_1)
+            h2 = model(x_2, edge_index_2)
+            edge = edge_index_1[:, perm]
+            neg_edge = negedge_1[:, perm]
+            pos_outs = model.predictor(h1, edge[0], edge[1])
+            neg_outs = model.predictor(h1, neg_edge[0], neg_edge[1])
+
+            ct_loss = model.loss(h1, h2, edge, neg_edge)
+            pred_loss = ncn_loss(pos_outs, neg_outs)
+            loss = ct_loss
+            loss.backward()
+            optimizer.step()
+            total_loss.append(loss)
+        if epoch % 10 == 0:
+            _loss = np.average([_.item() for _ in total_loss])
+            loss_res.append(round(float(_loss), 2))
+    print('train loss: ', loss_res)
+    print(f"train time: {time.time()-t1:.2f} s")
 
 def pretrain_agrace(model, aug, param):
     optimizer = torch.optim.Adam(
