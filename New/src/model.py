@@ -23,9 +23,12 @@ def get_model(model_name: str, data, hp: dict):
                         hp['hidden'],
                         hp['proj_hidden'],
                         hp['tau']).to(device)
-    elif model_name in ["bgrl", "bgrl2"]:
+    elif model_name in "bgrl":
         _predictor = MLP_Head_BGRL(hp['hidden'], hp['hidden']).to(device)
         model = BGRL(_encoder, _predictor).to(device)
+    elif model_name in "cbgrl":
+        _predictor = MLP_Head_BGRL(hp['hidden'], hp['hidden']).to(device)
+        model = CBGRL(_encoder, _predictor).to(device)
     return model
 
 ###############################################
@@ -176,10 +179,34 @@ class LGRACE(nn.Module):
         z2_u = z2[edge[0]]
         z2_v = z2[edge[1]]
         z2_uv = z2_u*z2_v
-        refl_sim = f(self.sim(z1_uv, z1_uv))
-        between_sim = f(self.sim(z1_uv, z2_uv))
+        pos_refl_sim = f(self.sim(z1_uv, z1_uv))
+        pos_between_sim = f(self.sim(z1_uv, z2_uv))
 
-        return -torch.log(between_sim.diag() / (refl_sim.sum(1) + between_sim.sum(1) - refl_sim.diag()))
+        z1_u = z1[neg_edge[0]]
+        z1_v = z1[neg_edge[1]]
+        z1_uv = z1_u*z1_v
+        z2_u = z2[neg_edge[0]]
+        z2_v = z2[neg_edge[1]]
+        z2_uv = z2_u*z2_v
+        neg_refl_sim = f(self.sim(z1_uv, z1_uv))
+        neg_between_sim = f(self.sim(z1_uv, z2_uv))
+        loss = -torch.log((pos_between_sim.diag())/(neg_refl_sim.sum(1) + neg_between_sim.sum(1) - pos_refl_sim.diag()))
+        # loss = -torch.log((pos_refl_sim.sum(1)+pos_between_sim.sum(1))/(neg_refl_sim.sum(1)+neg_between_sim.sum(1)))
+        return loss
+
+
+    def semi_loss2(self, z1: torch.Tensor, z2: torch.Tensor, edge, neg_edge):
+        f = lambda x: torch.exp(x / self.tau)
+        refl_sim = f(self.sim(z1, z1))
+        between_sim = f(self.sim(z1, z2))
+        pos_refl_out = self.predictor.forward(refl_sim, edge[0], edge[1])
+        pos_between_out = self.predictor.forward(between_sim, edge[0], edge[1])
+        neg_refl_out = self.predictor.forward(refl_sim, neg_edge[0], neg_edge[1])
+        neg_between_out = self.predictor.forward(between_sim, neg_edge[0], neg_edge[1])
+
+        loss = -torch.log((pos_refl_out.sum(1)+pos_between_out.sum(1))/(neg_refl_out.sum(1)+neg_between_out.sum(1)))
+        return loss
+
 
     def batched_semi_loss(self, z1: torch.Tensor, z2: torch.Tensor, batch_size: int):
         # Space complexity: O(BN) (semi_loss: O(N^2))
@@ -632,4 +659,69 @@ class BGRL(torch.nn.Module):
 
     def loss(self, z1, z2, y1, y2):
         loss = 2 - F.cosine_similarity(z1, y2.detach(), dim=-1).mean() - F.cosine_similarity(z2, y1.detach(), dim=-1).mean()
+        return loss
+
+
+class CBGRL(torch.nn.Module):
+    r"""BGRL architecture for Graph representation learning.
+
+    Args:
+        encoder (torch.nn.Module): Encoder network to be duplicated and used in both online and target networks.
+        predictor (torch.nn.Module): Predictor network used to predict the target projection from the online projection.
+
+    .. note::
+        `encoder` must have a `reset_parameters` method, as the weights of the target network will be initialized
+        differently from the online network.
+    """
+    def __init__(self, encoder, predictor):
+        super().__init__()
+        # online network
+        self.online_encoder = encoder
+        self.predictor = predictor
+
+        # target network
+        self.target_encoder = copy.deepcopy(encoder)
+
+        # reinitialize weights
+        self.target_encoder.reset_parameters()
+        # stop gradient
+        for param in self.target_encoder.parameters():
+            param.requires_grad = False
+
+    def trainable_parameters(self):
+        r"""Returns the parameters that will be updated via an optimizer."""
+        return list(self.online_encoder.parameters()) + list(self.predictor.parameters())
+
+    @torch.no_grad()
+    def update_target_network(self, mm):
+        r"""Performs a momentum update of the target network's weights.
+
+        Args:
+            mm (float): Momentum used in moving average update.
+        """
+        assert 0.0 <= mm <= 1.0, "Momentum needs to be between 0.0 and 1.0, got %.5f" % mm
+        for param_q, param_k in zip(self.online_encoder.parameters(), self.target_encoder.parameters()):
+            param_k.data.mul_(mm).add_(param_q.data, alpha=1. - mm)
+            # mm c'est le poids de la target ~= param_k.data[i] = param_k.data[i] * mm + param_q.data[i] * (1 - mm)
+
+    def train_forward(self, online_x, target_x):
+        # forward online network
+        online_y = self.online_encoder(online_x[0], online_x[1])
+
+        # prediction
+        online_q = self.predictor(online_y)
+
+        # forward target network
+        with torch.no_grad():
+            target_y = self.target_encoder(target_x[0], target_x[1]).detach()
+        return online_y, target_y
+
+    def forward(self, x: torch.Tensor, edge_index: torch.Tensor):
+        # forward online network
+        online_y = self.online_encoder(x, edge_index)
+        return online_y
+
+    def loss(self, z1, z2, target):
+        S = z1 @ z2.T
+        loss = F.mse_loss(S, target)
         return loss

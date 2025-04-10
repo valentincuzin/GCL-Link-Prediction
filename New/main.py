@@ -13,7 +13,7 @@ from src.train import pretrain, pred_train, baseline_train, test, ncn_loss
 from src.utils import store_res, compute_table, full_output
 
 DATASETS = ["cora", "citeseer", "pubmed", "collab"]
-MODELS = ["baseline", "grace", "lgrace", "cgrace", "agrace", "csgcl", "bgrl", "abgrl", "bgrl2"]
+MODELS = ["baseline", "grace", "lgrace", "cgrace", "agrace", "csgcl", "bgrl", "abgrl", "cbgrl"]
 AUGMENTATIONS = ["random", "deg", "pr", "evc", "scom", "sbm"]
 
 def arguments():
@@ -71,6 +71,8 @@ if __name__ == "__main__":
                     data, split_edge = data_split.get(r)
                     model = get_model(model_name, data, hp['model'])
                     predictor = get_predictor(args.predictor, hp['model'])
+                    if model_name == "lgrace":
+                        model.predictor = predictor.to(device)
                     if model_name != "baseline":
                         print(f"..{augmentation}..")
                         aug = Aug(data, hp['augmentation'], augmentation)
@@ -87,6 +89,7 @@ if __name__ == "__main__":
                     for (key, v_res), t_res in zip(val_res.items(), test_res.values()):
                         print(f"{key}:  val: {100 * v_res:.2f}%, test: {100 * t_res:.2f}%")
                     res_dict = store_res(test_res, res_dict)
+                    print(res_dict)
                 save_name = f"{model_name}{'_'+augmentation if model_name != "baseline" else ""}"
                 df_res, res_latex = compute_table(res_dict, save_name)
                 full_res.append(df_res)

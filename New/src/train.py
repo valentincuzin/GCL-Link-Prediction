@@ -154,7 +154,7 @@ def pretrain(model_name, model, aug, param):
               "cgrace": pretrain_cgrace,
               "csgcl": pretrain_csgcl,
               "bgrl": pretrain_bgrl,
-              "bgrl2": pretrain_bgrl_2}
+              "cbgrl": pretrain_cbgrl}
     return switch[model_name](model, aug, param)
 
 def pretrain_grace(model, aug, param):
@@ -198,8 +198,8 @@ def pretrain_lgrace(model, aug, param):
         optimizer.zero_grad()
         x_1, edge_index_1, x_2, edge_index_2 = aug()
         adjmask = torch.ones_like(edge_index_1[0], dtype=torch.bool)
-        negedge_1 = negative_sampling(edge_index_1, aug.data.adj_t.sizes()[0])
-        negedge_2 = negative_sampling(edge_index_2, aug.data.adj_t.sizes()[0])
+        negedge_1 = negative_sampling(edge_index_1.to(aug.device), aug.data.adj_t.sizes()[0])
+        negedge_2 = negative_sampling(edge_index_2.to(aug.device), aug.data.adj_t.sizes()[0])
         for perm in DataLoader(range(adjmask.size(0)), param['batch_size'], shuffle=True):
             optimizer.zero_grad()
             if param['mask_input']:
@@ -212,24 +212,26 @@ def pretrain_lgrace(model, aug, param):
                 adj = adj.to_symmetric()
             else:
                 adj = aug.data.adj_t
-            h1 = model(x_1, edge_index_1)
-            h2 = model(x_2, edge_index_2)
-            edge = edge_index_1[:, perm]
-            neg_edge = negedge_1[:, perm]
+            h1 = model(x_1, edge_index_1).to(aug.device)
+            h2 = model(x_2, edge_index_2).to(aug.device)
+            edge = edge_index_1[:, perm].to(aug.device)
+            neg_edge = negedge_1[:, perm].to(aug.device)
             pos_outs = model.predictor(h1, edge[0], edge[1])
             neg_outs = model.predictor(h1, neg_edge[0], neg_edge[1])
 
             ct_loss = model.loss(h1, h2, edge, neg_edge)
             pred_loss = ncn_loss(pos_outs, neg_outs)
-            loss = ct_loss
+            loss = 0.9*ct_loss # +0.1*pred_loss
             loss.backward()
             optimizer.step()
             total_loss.append(loss)
         if epoch % 10 == 0:
             _loss = np.average([_.item() for _ in total_loss])
             loss_res.append(round(float(_loss), 2))
-    print('train loss: ', loss_res)
-    print(f"train time: {time.time()-t1:.2f} s")
+    print('pretrain loss: ', loss_res)
+    pre_time = time.time()-t1
+    print(f"pretrain time: {pre_time:.2f} s")
+    return pre_time
 
 def pretrain_agrace(model, aug, param):
     optimizer = torch.optim.Adam(
@@ -354,7 +356,7 @@ def pretrain_bgrl(model, aug, param):
     print(f"pretrain time: {pre_time:.2f} s")
     return pre_time
 
-def pretrain_bgrl_2(model, aug, param):
+def pretrain_cbgrl(model, aug, param):
     # optimizer
     optimizer = torch.optim.AdamW(model.trainable_parameters(), lr=param['gnn_lr'], weight_decay=param['weight_decay'])
 
@@ -370,15 +372,12 @@ def pretrain_bgrl_2(model, aug, param):
         lr = lr_scheduler.get(epoch)
         mm = 1 - mm_scheduler.get(epoch)
 
-
         optimizer.zero_grad()
         x_1, edge_index_1, x_2, edge_index_2 = aug()
-        z1 = model(x_1, edge_index_1)
-        z2 = model(x_2, edge_index_2)
-        S = z1 @ z2.T
+        z1, z2 = model.train_forward((x_1, edge_index_1), (x_2, edge_index_2))
         A_hat = aug.data.adj_t.to_dense()+torch.eye(aug.data.x.shape[0]).to(aug.device)
         target = torch.tensor(A_hat).to(A_hat.device)
-        loss = F.mse_loss(S, target)
+        loss = model.loss(z1, z2, target)        
         loss.backward()
         optimizer.step()
         model.update_target_network(mm)
