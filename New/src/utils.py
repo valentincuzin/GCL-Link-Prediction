@@ -108,7 +108,6 @@ def full_output(full_res: list):
     full_res = pd.concat(full_res, axis=1)
     full_res = full_res.loc[:, ~full_res.columns.duplicated()]
     full_res.set_index('metrics', inplace=True)
-    print(full_res)
     full_latex = full_res.to_latex(
         index=True, formatters={"name": str.upper}, float_format="{:.1f}".format
     )
