@@ -194,20 +194,6 @@ class LGRACE(nn.Module):
         # loss = -torch.log((pos_refl_sim.sum(1)+pos_between_sim.sum(1))/(neg_refl_sim.sum(1)+neg_between_sim.sum(1)))
         return loss
 
-
-    def semi_loss2(self, z1: torch.Tensor, z2: torch.Tensor, edge, neg_edge):
-        f = lambda x: torch.exp(x / self.tau)
-        refl_sim = f(self.sim(z1, z1))
-        between_sim = f(self.sim(z1, z2))
-        pos_refl_out = self.predictor.forward(refl_sim, edge[0], edge[1])
-        pos_between_out = self.predictor.forward(between_sim, edge[0], edge[1])
-        neg_refl_out = self.predictor.forward(refl_sim, neg_edge[0], neg_edge[1])
-        neg_between_out = self.predictor.forward(between_sim, neg_edge[0], neg_edge[1])
-
-        loss = -torch.log((pos_refl_out.sum(1)+pos_between_out.sum(1))/(neg_refl_out.sum(1)+neg_between_out.sum(1)))
-        return loss
-
-
     def batched_semi_loss(self, z1: torch.Tensor, z2: torch.Tensor, batch_size: int):
         # Space complexity: O(BN) (semi_loss: O(N^2))
         device = z1.device
@@ -270,9 +256,12 @@ class AGRACE(nn.Module):
     def semi_loss(self, z1: torch.Tensor, z2: torch.Tensor, adjacence: torch.Tensor):
         f = lambda x: torch.exp(x / self.tau)
         Az1 = torch.mm(adjacence, z1)
+        nb_neight = adjacence.sum(1).unsqueeze(1)
+        Az1_mean = Az1 / nb_neight
         Az2 = torch.mm(adjacence, z2)
-        refl_sim = f(self.sim(z1, Az1))
-        between_sim = f(self.sim(z1, Az2))
+        Az2_mean = Az2 / nb_neight
+        refl_sim = f(self.sim(z1, Az1_mean))
+        between_sim = f(self.sim(z1, Az2_mean))
 
         return -torch.log(between_sim.diag() / (refl_sim.sum(1) + between_sim.sum(1) - refl_sim.diag()))
 

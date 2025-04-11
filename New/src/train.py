@@ -84,7 +84,6 @@ def baseline_train(encoder: nn.Module,
     encoder.train()
     return _train(encoder, predictor, data, split_edge, optimizer, hp, loss_compute)
 
-
 def _train(encoder, predictor, data, split_edge, optimizer, hp, loss_compute):
     loss_res = []
     t1 = time.time()
