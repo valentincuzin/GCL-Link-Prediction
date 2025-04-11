@@ -26,6 +26,9 @@ def get_model(model_name: str, data, hp: dict):
     elif model_name in "bgrl":
         _predictor = MLP_Head_BGRL(hp['hidden'], hp['hidden']).to(device)
         model = BGRL(_encoder, _predictor).to(device)
+    elif model_name in "abgrl":
+        _predictor = MLP_Head_BGRL(hp['hidden'], hp['hidden']).to(device)
+        model = ABGRL(_encoder, _predictor).to(device)
     elif model_name in "cbgrl":
         _predictor = MLP_Head_BGRL(hp['hidden'], hp['hidden']).to(device)
         model = CBGRL(_encoder, _predictor).to(device)
@@ -255,8 +258,8 @@ class AGRACE(nn.Module):
 
     def semi_loss(self, z1: torch.Tensor, z2: torch.Tensor, adjacence: torch.Tensor):
         f = lambda x: torch.exp(x / self.tau)
-        Az1 = torch.mm(adjacence, z1)
         nb_neight = adjacence.sum(1).unsqueeze(1)
+        Az1 = torch.mm(adjacence, z1)
         Az1_mean = Az1 / nb_neight
         Az2 = torch.mm(adjacence, z2)
         Az2_mean = Az2 / nb_neight
@@ -650,6 +653,73 @@ class BGRL(torch.nn.Module):
         loss = 2 - F.cosine_similarity(z1, y2.detach(), dim=-1).mean() - F.cosine_similarity(z2, y1.detach(), dim=-1).mean()
         return loss
 
+class ABGRL(torch.nn.Module):
+    r"""BGRL architecture for Graph representation learning.
+
+    Args:
+        encoder (torch.nn.Module): Encoder network to be duplicated and used in both online and target networks.
+        predictor (torch.nn.Module): Predictor network used to predict the target projection from the online projection.
+
+    .. note::
+        `encoder` must have a `reset_parameters` method, as the weights of the target network will be initialized
+        differently from the online network.
+    """
+    def __init__(self, encoder, predictor):
+        super().__init__()
+        # online network
+        self.online_encoder = encoder
+        self.predictor = predictor
+
+        # target network
+        self.target_encoder = copy.deepcopy(encoder)
+
+        # reinitialize weights
+        self.target_encoder.reset_parameters()
+        # stop gradient
+        for param in self.target_encoder.parameters():
+            param.requires_grad = False
+
+    def trainable_parameters(self):
+        r"""Returns the parameters that will be updated via an optimizer."""
+        return list(self.online_encoder.parameters()) + list(self.predictor.parameters())
+
+    @torch.no_grad()
+    def update_target_network(self, mm):
+        r"""Performs a momentum update of the target network's weights.
+
+        Args:
+            mm (float): Momentum used in moving average update.
+        """
+        assert 0.0 <= mm <= 1.0, "Momentum needs to be between 0.0 and 1.0, got %.5f" % mm
+        for param_q, param_k in zip(self.online_encoder.parameters(), self.target_encoder.parameters()):
+            param_k.data.mul_(mm).add_(param_q.data, alpha=1. - mm)
+            # mm c'est le poids de la target ~= param_k.data[i] = param_k.data[i] * mm + param_q.data[i] * (1 - mm)
+
+    def train_forward(self, online_x, target_x):
+        # forward online network
+        online_y = self.online_encoder(online_x[0], online_x[1])
+
+        # prediction
+        online_q = self.predictor(online_y)
+
+        # forward target network
+        with torch.no_grad():
+            target_y = self.target_encoder(target_x[0], target_x[1]).detach()
+        return online_q, target_y
+
+    def forward(self, x: torch.Tensor, edge_index: torch.Tensor):
+        # forward online network
+        online_y = self.online_encoder(x, edge_index)
+        return online_y
+
+    def loss(self, z1, z2, y1, y2, adjacence):
+        nb_neight = adjacence.sum(1).unsqueeze(1)
+        Ay1 = torch.mm(adjacence, y1)
+        Ay1_mean = Ay1 / nb_neight
+        Ay2 = torch.mm(adjacence, y2)
+        Ay2_mean = Ay2 / nb_neight
+        loss = 2 - F.cosine_similarity(z1, Ay1_mean.detach(), dim=-1).mean() - F.cosine_similarity(z2, Ay2_mean.detach(), dim=-1).mean()
+        return loss
 
 class CBGRL(torch.nn.Module):
     r"""BGRL architecture for Graph representation learning.

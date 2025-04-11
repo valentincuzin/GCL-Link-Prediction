@@ -153,6 +153,7 @@ def pretrain(model_name, model, aug, param):
               "cgrace": pretrain_cgrace,
               "csgcl": pretrain_csgcl,
               "bgrl": pretrain_bgrl,
+              "abgrl": pretrain_abgrl,
               "cbgrl": pretrain_cbgrl}
     return switch[model_name](model, aug, param)
 
@@ -239,13 +240,14 @@ def pretrain_agrace(model, aug, param):
         weight_decay=param['weight_decay']
     )
     A_hat = aug.data.adj_t.to_dense()+torch.eye(aug.data.x.shape[0]).to(aug.device) #augmenter le torch.eye augmente les perf sur cora
-    """G = to_networkx(aug.data, to_undirected=True)
+    """plus de distance, pas juste voisin
+    G = to_networkx(aug.data, to_undirected=True)
     distance_matrix = dict(nx.all_pairs_shortest_path_length(G))
     adj_matrix = np.zeros((len(G.nodes), len(G.nodes)))
     for source, distances in distance_matrix.items():
         for target, distance in distances.items():
             adj_matrix[source, target] = distance
-    adj_matrix[adj_matrix!=0] = 1/adj_matrix[adj_matrix!=0]**10
+    adj_matrix[adj_matrix!=0] = 1/adj_matrix[adj_matrix!=0]
     adj = torch.tensor(adj_matrix, dtype=torch.float).to(aug.device)
     adj += torch.eye(aug.data.x.shape[0]).to(aug.device)
     print(adj)
@@ -256,6 +258,9 @@ def pretrain_agrace(model, aug, param):
         model.train()
         optimizer.zero_grad()
         x_1, edge_index_1, x_2, edge_index_2 = aug()
+        adj_t = SparseTensor.from_edge_index(edge_index_1, sparse_sizes=(aug.data.num_nodes, aug.data.num_nodes))
+        adj_t = adj_t.to_symmetric().coalesce()
+        A_hat = adj_t.to_dense()+torch.eye(aug.data.x.shape[0]).to(aug.device)
         z1 = model(x_1, edge_index_1)
         z2 = model(x_2, edge_index_2)
 
@@ -345,6 +350,43 @@ def pretrain_bgrl(model, aug, param):
         z2, y1 = model.train_forward((x_2, edge_index_2), (x_1, edge_index_1))
 
         loss = model.loss(z1, z2, y1, y2)
+        loss.backward()
+        optimizer.step()
+        model.update_target_network(mm)
+        if epoch % 100 == 0:
+            loss_res.append(round(float(loss), 2))
+    print('pretrain loss: ', loss_res, ' s')
+    pre_time = time.time()-t1
+    print(f"pretrain time: {pre_time:.2f} s")
+    return pre_time
+
+def pretrain_abgrl(model, aug, param):
+    # optimizer
+    optimizer = torch.optim.AdamW(model.trainable_parameters(), lr=param['gnn_lr'], weight_decay=param['weight_decay'])
+
+    # scheduler
+    lr_scheduler = CosineDecayScheduler(param['gnn_lr'], 1000, param['ct_epochs'])
+    mm_scheduler = CosineDecayScheduler(1 - 0.99, 0, param['ct_epochs'])
+
+    t1 = time.time()
+    loss_res = []
+    for epoch in tqdm(range(1, param['ct_epochs'] + 1)):
+        model.train()
+
+        lr = lr_scheduler.get(epoch)
+        mm = 1 - mm_scheduler.get(epoch)
+
+
+        optimizer.zero_grad()
+        x_1, edge_index_1, x_2, edge_index_2 = aug()
+        adj_t = SparseTensor.from_edge_index(edge_index_1, sparse_sizes=(aug.data.num_nodes, aug.data.num_nodes))
+        adj_t = adj_t.to_symmetric().coalesce()
+        A_hat = adj_t.to_dense()+torch.eye(aug.data.x.shape[0]).to(aug.device)
+
+        z1, y2 = model.train_forward((x_1, edge_index_1), (x_2, edge_index_2))
+        z2, y1 = model.train_forward((x_2, edge_index_2), (x_1, edge_index_1))
+
+        loss = model.loss(z1, z2, y1, y2, A_hat)
         loss.backward()
         optimizer.step()
         model.update_target_network(mm)
