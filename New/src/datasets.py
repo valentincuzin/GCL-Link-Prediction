@@ -3,20 +3,20 @@ from tqdm import tqdm
 from copy import deepcopy
 import torch
 import numpy as np
-import copy
-import random
 import networkx as nx
 import matplotlib.pyplot as plt
-from torch_geometric.utils import from_networkx, to_networkx
 import torch.nn.functional as F
 from sklearn.metrics import average_precision_score
 from ogb.linkproppred import PygLinkPropPredDataset, Evaluator
 from torch_sparse import SparseTensor
 from sklearn.decomposition import PCA
+from networkx.generators.community import LFR_benchmark_graph
 from torch_geometric import seed_everything
 from torch_geometric.datasets import Planetoid
-from torch_geometric.utils import to_undirected, add_self_loops
+from torch_geometric.utils import to_undirected, add_self_loops, from_networkx, to_networkx
 from torch_geometric.transforms import RandomLinkSplit
+
+from src.utils import gen_sbm
 
 def randomsplit(dataset, val_ratio: float = 0.10, test_ratio: float = 0.2):
     def removerepeated(ei):
@@ -144,9 +144,60 @@ def reduce_node_features(data, nb_features):
     print('reduce node features: ',data.x.shape)
     return data
 
+def _LFR_gen(n, tau1, tau2, mu, average_degree, min_community, max_community = None):
+    G = LFR_benchmark_graph(n, tau1, tau2, mu, 
+                            average_degree=average_degree, min_community=min_community, 
+                            max_community=max_community, seed=10)
+    G.remove_edges_from(nx.selfloop_edges(G)) # remove self loops
+    data = from_networkx(G)
+    data.edge_index = to_undirected(data.edge_index)
+    communities = {frozenset(G.nodes[v]["community"]) for v in G}
+    data.community = communities
+    sizes, probs = _get_sizes_probs(data, G, communities)
+    data.sizes = sizes
+    data.probs = probs
+    data.num_features = data.num_nodes
+    data.x = F.one_hot(torch.arange(0, data.num_nodes)).float()
+    print(np.round(probs, 5))
+    return data
+
+def _get_sizes_probs(data, G, communities):
+    probs = np.zeros((len(communities), len(communities)))
+    sizes = []
+    for idx, c in enumerate(communities):
+        sizes.append(len(c))
+        for n in c:
+            G.nodes[n]["com"] = idx # get com label
+    for u, v in zip(data.edge_index[0], data.edge_index[1]): # count number of edge per com
+        u = float(u)
+        v = float(v)
+        probs[G.nodes[u]["com"], G.nodes[v]["com"]] += 1
+    for x in range(len(probs)): # make the probs
+        for y in range(len(probs)):
+            if x == y:
+                probs[x,x] /= (sizes[x]*(sizes[x]-1))/2
+            else:
+                probs[x,y] /= ((sizes[x]+sizes[y])*(sizes[x]+sizes[y]-1))/2
+    probs /= 2 # undirected graph
+    return sizes, probs
+
 class DataSplit:
     def __init__(self, dataset: str|list, device: str, runs: int, use_valedges_as_input: bool = False, reduce_feature: int|None = None, only_feature: bool = False):
         print(f"{runs} split from the dataset {dataset}")
+        if dataset in ["synthetic_1", "synthetic_2", "synthetic_3"]:
+            if dataset == "synthetic_1":
+                data = _LFR_gen(400, 4, 3, 0.2, average_degree=10, min_community=75)
+            elif dataset == "synthetic_2":
+                data = _LFR_gen(400, 2.5, 2.5, 0.2, average_degree=10, min_community=200, max_community=200)
+            elif dataset == "synthetic_3":
+                dataset = Planetoid(root="dataset", name="cora")
+                data = dataset[0]
+                data.edge_index = to_undirected(data.edge_index)
+                G = to_networkx(data, to_undirected=True)
+                data.communities = nx.community.louvain_communities(G, resolution=0.5)
+                data.sizes, data.probs = _get_sizes_probs(data, G, data.communities)
+            data = gen_sbm(data.sizes, data.probs)
+            dataset = [data]
         self.device = device
         self.runs = runs
         self.data_runs: dict[int, tuple[any, dict]] = {}
@@ -173,10 +224,10 @@ class DataSplit:
                 print(key1, key2, split_edge[key1][key2].shape[0])
 
 def get_evaluator(dataset: str = 'ogbl-ppa'):
-    if dataset in ["cora", "citeseer", "pubmed", 'ogbl-ppa']:
-        evaluator = Evaluator(name='ogbl-ppa')
-    else:
+    if dataset in ["collab", "citation2", "wikikg2", "ddi", "biokg", "vessel"]:
         evaluator = Evaluator(name=f'ogbl-{dataset}')
+    else:
+        evaluator = Evaluator(name='ogbl-ppa')
     return evaluator
 
 def full_eval(evaluator, pos_pred, neg_pred):

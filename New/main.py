@@ -12,9 +12,9 @@ from src.predictor import get_predictor
 from src.train import pretrain, pred_train, baseline_train, test, ncn_loss
 from src.utils import store_res, compute_table, full_output
 
-DATASETS = ["cora", "citeseer", "pubmed", "collab"]
+DATASETS = ["synthetic_1", "synthetic_2", "synthetic_3", "cora", "citeseer", "pubmed", "collab"]
 MODELS = ["baseline", "grace", "lgrace", "cgrace", "agrace", "csgcl", "bgrl", "abgrl", "cbgrl"]
-AUGMENTATIONS = ["random", "deg", "pr", "evc", "scom", "sbm"]
+AUGMENTATIONS = ["random", "deg", "pr", "evc", "scom", "sbm", "sbm2"]
 
 def arguments():
     def multiparse(input: str, choices: list):
@@ -31,7 +31,7 @@ def arguments():
     parser.add_argument('--only_feature', action='store_true', default=False, help='erase structure information')
     parser.add_argument('--model', type=str, default='grace')
     parser.add_argument('--augmentation', type=str, default='random')
-    parser.add_argument('--predictor', type=str, default='inner', choices=["inner", "mlp"])
+    parser.add_argument('--predictor', type=str, default='mlp', choices=["inner", "mlp"])
     parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--ct_epochs', type=int, default=500)
     parser.add_argument('--runs', type=int, default=10)
@@ -46,7 +46,10 @@ def arguments():
 
 def hp_load(dataset: str, args):
     print(f"....{dataset}....")
-    hp_files = os.path.join('params', dataset+'.json')
+    if "synthetic" in dataset:
+        hp_files = os.path.join('params','synthetic.json')
+    else:
+        hp_files = os.path.join('params', dataset+'.json')
     with open(hp_files) as json_file:
         hp = json.load(json_file)
         hp["model"]["epochs"] = args.epochs
@@ -89,7 +92,6 @@ if __name__ == "__main__":
                     for (key, v_res), t_res in zip(val_res.items(), test_res.values()):
                         print(f"{key}:  val: {100 * v_res:.2f}%, test: {100 * t_res:.2f}%")
                     res_dict = store_res(test_res, res_dict)
-                    print(res_dict)
                 save_name = f"{model_name}{'_'+augmentation if model_name != "baseline" else ""}"
                 df_res, res_latex = compute_table(res_dict, save_name)
                 full_res.append(df_res)

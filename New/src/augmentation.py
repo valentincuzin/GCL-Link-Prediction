@@ -1,13 +1,13 @@
+from opcode import hasjabs
 import torch
 import torch.nn.functional as F
 import numpy as np
 import networkx as nx
-from networkx.generators.community import stochastic_block_model
 from torch_geometric.utils import degree, to_undirected, to_networkx, dropout_adj, from_networkx
 from torch_scatter import scatter
 from functools import partial
 
-from src.utils import get_commu_strength
+from src.utils import get_commu_strength, gen_sbm
 
 
 class Aug:
@@ -25,7 +25,7 @@ class Aug:
             feature_weights, drop_weights = compute_weight[type]()
         elif type == 'scom':
             feature_weights, drop_weights = self.commu_strength()
-        elif type == 'sbm':
+        elif type in ['sbm', 'sbm2']:
             self.commu_repartition()
         self.types = {
             'random': self.random,
@@ -33,7 +33,8 @@ class Aug:
             'pr': partial(self.gca, feature_weights, drop_weights),
             'evc': partial(self.gca, feature_weights, drop_weights),
             'scom': partial(self.csgcl, feature_weights, drop_weights),
-            'sbm': self.sbm
+            'sbm': self.sbm,
+            'sbm2': self.sbm_2
         }
         self.param = param
         self.get = self.types[type]
@@ -182,6 +183,9 @@ class Aug:
         return x_1, edge_index_1, x_2, edge_index_2
 
     def commu_repartition(self):
+        if hasattr(self.data, "probs") and hasattr(self.data, "sizes"):
+            print("already communities")
+            return
         G = to_networkx(self.data)
         communities = nx.community.louvain_communities(G, resolution=0.5)
         probs = np.zeros((len(communities), len(communities)))
@@ -208,24 +212,24 @@ class Aug:
         print("sizes, ", sizes)
 
     def sbm(self):
-        def gen_sbm(sizes, probs):
-            G = stochastic_block_model(sizes, probs)
-            G.remove_edges_from(nx.selfloop_edges(G)) # remove self loops
-            data = from_networkx(G)
-            data.num_nodes = sum(sizes)
-            data.sizes = sizes
-            data.probs = probs
-            data.num_features = data.num_nodes
-            data.x = self.data.x # F.one_hot(torch.arange(0, data.num_nodes)).float()
-            data = data.to(self.device)
-            return data
-
         sizes, probs = self.data.sizes, self.data.probs
-        data_1 = gen_sbm(sizes, probs)
+        data_1 = gen_sbm(sizes, probs).to(self.device)
+        data_1.x = self.data.x
         data_1.x = _drop_feature(data_1.x, self.param['drop_feature_rate_1'])
-        data_2 = gen_sbm(sizes, probs)
+        data_2 = self.data
         data_2.x = _drop_feature(data_2.x, self.param['drop_feature_rate_2'])
         return data_1.x, data_1.edge_index, data_2.x, data_2.edge_index
+
+    def sbm_2(self):
+        sizes, probs = self.data.sizes, self.data.probs
+        data_1 = gen_sbm(sizes, probs).to(self.device)
+        data_1.x = self.data.x
+        data_1.x = _drop_feature(data_1.x, self.param['drop_feature_rate_1'])
+        data_2 = gen_sbm(sizes, probs).to(self.device)
+        data_2.x = self.data.x
+        data_2.x = _drop_feature(data_2.x, self.param['drop_feature_rate_2'])
+        return data_1.x, data_1.edge_index, data_2.x, data_2.edge_index
+
 
 
 def _drop_feature(x, drop_prob):

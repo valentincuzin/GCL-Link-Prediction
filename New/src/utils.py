@@ -1,9 +1,12 @@
 import numpy as np
 import pandas as pd
 import networkx as nx
+import torch
+import torch.nn.functional as F
 from cdlib import algorithms
 from cdlib.utils import convert_graph_formats
-from torch_geometric.utils import to_networkx
+from torch_geometric.utils import to_networkx, from_networkx
+from networkx.generators.community import stochastic_block_model
 
 def community_detection(name):
     algs = {
@@ -62,6 +65,17 @@ def get_commu_strength(data):
     communities = community_detection('leiden')(g).communities
     com_cs, node_cs = community_strength(g, communities)
     return communities, com_cs, node_cs
+
+def gen_sbm(sizes, probs):
+    G = stochastic_block_model(sizes, probs)
+    G.remove_edges_from(nx.selfloop_edges(G)) # remove self loops
+    data = from_networkx(G)
+    data.num_nodes = sum(sizes)
+    data.sizes = sizes
+    data.probs = probs
+    data.num_features = data.num_nodes
+    data.x = F.one_hot(torch.arange(0, data.num_nodes)).float()
+    return data
 
 class CosineDecayScheduler:
     def __init__(self, max_val, warmup_steps, total_steps):
