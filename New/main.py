@@ -13,7 +13,7 @@ from src.train import pretrain, pred_train, baseline_train, test, ncn_loss
 from src.utils import store_res, compute_table, full_output
 
 DATASETS = ["synthetic_1", "synthetic_2", "synthetic_3", "cora", "citeseer", "pubmed", "collab"]
-MODELS = ["baseline", "grace", "lgrace", "cgrace", "agrace", "csgcl", "bgrl", "abgrl", "cbgrl"]
+MODELS = ["baseline", "grace", "lgrace", "cgrace", "agrace", "csgcl", "bgrl", "a2bgrl", "asrcbgrl", "abgrl", "cbgrl"]
 AUGMENTATIONS = ["random", "deg", "pr", "evc", "scom", "sbm", "sbm2"]
 
 def arguments():
@@ -29,7 +29,7 @@ def arguments():
     parser.add_argument('--dataset', type=str, default='cora')
     parser.add_argument('--reduce_feature', type=int, default=None, help='0 for Identity matrix, >0 for PCA reduce')
     parser.add_argument('--only_feature', action='store_true', default=False, help='erase structure information')
-    parser.add_argument('--model', type=str, default='grace')
+    parser.add_argument('--model', type=str, default='baseline')
     parser.add_argument('--augmentation', type=str, default='random')
     parser.add_argument('--predictor', type=str, default='mlp', choices=["inner", "mlp"])
     parser.add_argument('--epochs', type=int, default=100)
