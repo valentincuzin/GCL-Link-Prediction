@@ -9,12 +9,13 @@ from src.augmentation import Aug
 from src.model import get_model
 from src.datasets import DataSplit, get_evaluator, full_eval
 from src.predictor import get_predictor
-from src.train import pretrain, pred_train, baseline_train, test, ncn_loss
+from src.train import pretrain, pred_train, baseline_train, test, get_loss
 from src.utils import store_res, compute_table, full_output
 
 DATASETS = ["synthetic_1", "synthetic_2", "synthetic_3", "cora", "citeseer", "pubmed", "collab"]
 MODELS = ["baseline", "grace", "lgrace", "cgrace", "agrace", "a2grace", "asrcgrace", "csgcl", "bgrl", "a2bgrl", "asrcbgrl", "abgrl", "cbgrl"]
 AUGMENTATIONS = ["random", "deg", "pr", "evc", "scom", "sbm", "sbm2"]
+LOSS = ["log_sig", "bce", "auc", "hinge_auc"]
 
 def arguments():
     def multiparse(input: str, choices: list):
@@ -32,6 +33,7 @@ def arguments():
     parser.add_argument('--model', type=str, default='baseline')
     parser.add_argument('--augmentation', type=str, default='random')
     parser.add_argument('--predictor', type=str, default='mlp', choices=["inner", "mlp"])
+    parser.add_argument('--loss', type=str, default='ncn_loss')
     parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--ct_epochs', type=int, default=500)
     parser.add_argument('--runs', type=int, default=10)
@@ -41,6 +43,7 @@ def arguments():
     args.dataset = multiparse(args.dataset, DATASETS)
     args.model = multiparse(args.model, MODELS)
     args.augmentation = multiparse(args.augmentation, AUGMENTATIONS)
+    args.loss = multiparse(args.loss, LOSS)
     print(args)
     return args
 
@@ -69,32 +72,34 @@ if __name__ == "__main__":
             print(f"...{model_name}...")
             for augmentation in args.augmentation:
                 res_dict = {"Hits@10": [], "Hits@20": [], "Hits@50": [], "Hits@100": [], 'ROCAUC': [], 'AP': [], 'pretrain_time': []}
-                for r in range(args.runs):
-                    seed_everything(r)
-                    data, split_edge = data_split.get(r)
-                    model = get_model(model_name, data, hp['model'])
-                    predictor = get_predictor(args.predictor, hp['model'])
-                    if model_name == "lgrace":
-                        model.predictor = predictor.to(device)
-                    if model_name != "baseline":
-                        print(f"..{augmentation}..")
-                        aug = Aug(data, hp['augmentation'], augmentation)
-                        pre_time = pretrain(model_name, model, aug, hp['model'])
-                        res_dict['pretrain_time'].append(pre_time)
-                        if isinstance(predictor, nn.Module):
-                            predictor = predictor.to(device)
-                            pred_train(model, predictor, data, split_edge, ncn_loss, hp['model'])
-                    else:
-                        baseline_train(model, predictor, data, split_edge, ncn_loss, hp['model'])
-                    pos_valid_pred, neg_valid_pred, pos_test_pred, neg_test_pred = test(model, predictor, data, split_edge, hp['model'])
-                    val_res = full_eval(evaluator, pos_valid_pred, neg_valid_pred)
-                    test_res = full_eval(evaluator, pos_test_pred, neg_test_pred)
-                    for (key, v_res), t_res in zip(val_res.items(), test_res.values()):
-                        print(f"{key}:  val: {100 * v_res:.2f}%, test: {100 * t_res:.2f}%")
-                    res_dict = store_res(test_res, res_dict)
-                save_name = f"{model_name}{'_'+augmentation if model_name != "baseline" else ""}"
-                df_res, res_latex = compute_table(res_dict, save_name)
-                full_res.append(df_res)
+                for loss_name in args.loss:
+                    print(f".{loss_name}.")
+                    for r in range(args.runs):
+                        seed_everything(r)
+                        data, split_edge = data_split.get(r)
+                        model = get_model(model_name, data, hp['model'])
+                        predictor = get_predictor(args.predictor, hp['model'])
+                        if model_name == "lgrace":
+                            model.predictor = predictor.to(device)
+                        if model_name != "baseline":
+                            print(f"..{augmentation}..")
+                            aug = Aug(data, hp['augmentation'], augmentation)
+                            pre_time = pretrain(model_name, model, aug, hp['model'])
+                            res_dict['pretrain_time'].append(pre_time)
+                            if isinstance(predictor, nn.Module):
+                                predictor = predictor.to(device)
+                                pred_train(model, predictor, data, split_edge, loss_name, hp['model'])
+                        else:
+                            baseline_train(model, predictor, data, split_edge, loss_name, hp['model'])
+                        pos_valid_pred, neg_valid_pred, pos_test_pred, neg_test_pred = test(model, predictor, data, split_edge, hp['model'])
+                        val_res = full_eval(evaluator, pos_valid_pred, neg_valid_pred)
+                        test_res = full_eval(evaluator, pos_test_pred, neg_test_pred)
+                        for (key, v_res), t_res in zip(val_res.items(), test_res.values()):
+                            print(f"{key}:  val: {100 * v_res:.2f}%, test: {100 * t_res:.2f}%")
+                        res_dict = store_res(test_res, res_dict)
+                    save_name = f"{model_name}'_'{loss_name}{'_'+augmentation if model_name != "baseline" else ""}"
+                    df_res, res_latex = compute_table(res_dict, save_name)
+                    full_res.append(df_res)
                 if model_name == "baseline":
                     break
         df, tex = full_output(full_res)

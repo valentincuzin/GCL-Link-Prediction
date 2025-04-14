@@ -1,3 +1,4 @@
+from functools import partial
 import time
 from tqdm import tqdm
 import torch
@@ -49,7 +50,7 @@ def pred_train(encoder: nn.Module,
           predictor: nn.Module,
           data,
           split_edge: dict,
-          loss_compute: callable,
+          loss_name: str,
           hp: dict):
     if not hp['freeze']:
         optimizer = torch.optim.Adam(
@@ -62,13 +63,13 @@ def pred_train(encoder: nn.Module,
         optimizer = torch.optim.Adam(params=predictor.parameters(), lr=hp["pre_lr"])
     encoder.train()
     predictor.train()
-    return _train(encoder, predictor, data, split_edge, optimizer, hp, loss_compute)
+    return _train(encoder, predictor, data, split_edge, optimizer, hp, loss_name)
 
 def baseline_train(encoder: nn.Module,
           predictor: nn.Module,
           data,
           split_edge: dict,
-          loss_compute: callable,
+          loss_name: str,
           hp: dict):
     if isinstance(predictor, nn.Module):
         predictor = predictor.to(data.x.device)
@@ -82,9 +83,9 @@ def baseline_train(encoder: nn.Module,
     else:
         optimizer = torch.optim.Adam(params=encoder.parameters(), lr=hp["gnn_lr"], weight_decay=hp['weight_decay'])
     encoder.train()
-    return _train(encoder, predictor, data, split_edge, optimizer, hp, loss_compute)
+    return _train(encoder, predictor, data, split_edge, optimizer, hp, loss_name)
 
-def _train(encoder, predictor, data, split_edge, optimizer, hp, loss_compute):
+def _train(encoder, predictor, data, split_edge, optimizer, hp, loss_name):
     loss_res = []
     t1 = time.time()
     device = data.adj_t.device()
@@ -114,7 +115,7 @@ def _train(encoder, predictor, data, split_edge, optimizer, hp, loss_compute):
 
             edge = negedge[:, perm]
             neg_outs = predictor(h, edge[0], edge[1])
-            loss = loss_compute(pos_outs, neg_outs)
+            loss = get_loss(loss_name, pos_outs, neg_outs)
             loss.backward()
             optimizer.step()
             total_loss.append(loss)
@@ -125,16 +126,34 @@ def _train(encoder, predictor, data, split_edge, optimizer, hp, loss_compute):
     print(f"train time: {time.time()-t1:.2f} s")
     return total_loss
 
-def ncn_loss(pos_outs, neg_outs):
+def get_loss(loss_name: str, pos_outs, neg_outs):
+    switch = {
+        'log_sig': partial(log_sig_loss, pos_outs, neg_outs),
+        'bce': partial(bce_loss, pos_outs, neg_outs),
+        'auc': partial(auc_loss, pos_outs, neg_outs),
+        'hinge_auc': partial(hinge_auc_loss, pos_outs, neg_outs),
+    }
+    return switch[loss_name]()
+
+def log_sig_loss(pos_outs, neg_outs):
     pos_losss = -F.logsigmoid(pos_outs).mean()
     neg_losss = -F.logsigmoid(-neg_outs).mean()
     return neg_losss + pos_losss
 
 def bce_loss(pos_out, neg_out):
-    out = torch.cat((pos_out, neg_out), dim=-1).to(pos_out.device())
-    label = torch.cat((torch.ones(pos_out.size()[1]), torch.zeros(neg_out.size()[1])), dim=0).to(pos_out.device())
+    out = torch.cat((pos_out, neg_out), dim=0).to(pos_out.device)
+    label = torch.cat((torch.ones(pos_out.size()), torch.zeros(neg_out.size())), dim=0).to(pos_out.device)
     return F.binary_cross_entropy_with_logits(out, label, reduction="mean")
 
+def auc_loss(pos_out, neg_out):
+    pos_out = torch.reshape(pos_out, (-1, 1))
+    neg_out = torch.reshape(neg_out, (-1, 1))
+    return torch.square(1 - (pos_out - neg_out)).sum()
+
+def hinge_auc_loss(pos_out, neg_out):
+    pos_out = torch.reshape(pos_out, (-1, 1))
+    neg_out = torch.reshape(neg_out, (-1, 1))
+    return (torch.square(torch.clamp(1 - (pos_out - neg_out), min=0))).sum()
 
 
 
@@ -224,7 +243,7 @@ def pretrain_lgrace(model, aug, param):
             neg_outs = model.predictor(h1, neg_edge[0], neg_edge[1])
 
             ct_loss = model.loss(h1, h2, edge, neg_edge)
-            pred_loss = ncn_loss(pos_outs, neg_outs)
+            pred_loss = log_sig_loss(pos_outs, neg_outs)
             loss = ct_loss # +0.1*pred_loss
             loss.backward()
             optimizer.step()
