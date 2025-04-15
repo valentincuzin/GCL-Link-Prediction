@@ -23,7 +23,7 @@ def arguments():
             return choices
         if ',' not in input and input in choices:
             return [input]
-        inputs: list = [i.strip() for i in input.split(',') if i.strip() in choices]
+        inputs: list = [i.strip() for i in input.split(',')]
         return inputs
 
     parser = argparse.ArgumentParser()
@@ -97,7 +97,7 @@ if __name__ == "__main__":
                         for (key, v_res), t_res in zip(val_res.items(), test_res.values()):
                             print(f"{key}:  val: {100 * v_res:.2f}%, test: {100 * t_res:.2f}%")
                         res_dict = store_res(test_res, res_dict)
-                    save_name = f"{model_name}'_'{loss_name}{'_'+augmentation if model_name != "baseline" else ""}"
+                    save_name = f"{model_name}{'_'+loss_name if loss_name != "log_sig" else ""}{'_'+augmentation if model_name != "baseline" else ""}"
                     df_res, res_latex = compute_table(res_dict, save_name)
                     full_res.append(df_res)
                 if model_name == "baseline":

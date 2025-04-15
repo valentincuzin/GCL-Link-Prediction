@@ -1,4 +1,5 @@
-from opcode import hasjabs
+import copy
+import random
 import torch
 import torch.nn.functional as F
 import numpy as np
@@ -27,6 +28,10 @@ class Aug:
             feature_weights, drop_weights = self.commu_strength()
         elif type in ['sbm', 'sbm2']:
             self.commu_repartition()
+        elif '_d' in type:
+            type, delta = type.split('_d')
+            print(type, " with variance: ", delta)
+            self.perturb_commu(delta)
         self.types = {
             'random': self.random,
             'deg': partial(self.gca, feature_weights, drop_weights),
@@ -211,6 +216,14 @@ class Aug:
         self.data.sizes = sizes
         print("sizes, ", sizes)
 
+    def perturb_commu(self, delta):
+        if not (hasattr(self.data, "probs") and hasattr(self.data, "sizes")):
+            print("no community...")
+            return
+        delta = float(delta)
+        self.data.sizes = _permute_nodes(self.data.sizes, delta)
+        self.data.probs = _perturb_matrix(self.data.probs, delta)
+
     def sbm(self):
         sizes, probs = self.data.sizes, self.data.probs
         data_1 = gen_sbm(sizes, probs).to(self.device)
@@ -231,6 +244,32 @@ class Aug:
         return data_1.x, data_1.edge_index, data_2.x, data_2.edge_index
 
 
+def _permute_nodes(sizes, perm_rate):
+        sizes = copy.copy(sizes)
+        total_nodes = sum(sizes)
+        num_nodes_to_permute = int(total_nodes * perm_rate) 
+        for _ in range(num_nodes_to_permute):
+            orig_community = random.randint(0, len(sizes) - 1)
+            dest_community = random.randint(0, len(sizes) - 1)
+            while dest_community == orig_community:
+                dest_community = random.randint(0, len(sizes) - 1)
+            sizes[orig_community] -= 1
+            sizes[dest_community] += 1
+        return sizes
+
+def _perturb_matrix(matrix, delta):
+    perturbed_matrix = matrix.copy()
+    difference = 0.0
+    while difference < delta:
+        i = np.random.randint(0, matrix.shape[0])
+        j = np.random.randint(i, matrix.shape[1])
+        epsilon = np.random.uniform(-0.1, 0.1)
+        perturbed_matrix[i, j] = np.clip(perturbed_matrix[i, j] + epsilon, 0, 1)
+        difference += np.abs(matrix[i, j] - perturbed_matrix[i, j])
+    upper_triangular = np.triu(perturbed_matrix)
+    perturbed_matrix = upper_triangular + upper_triangular.T - np.diag(np.diag(upper_triangular))
+    return symmetic_matrix
+    return perturbed_matrix
 
 def _drop_feature(x, drop_prob):
     drop_mask = torch.empty((x.size(1),), dtype=torch.float32, device=x.device).uniform_(0, 1) < drop_prob
