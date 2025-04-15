@@ -13,7 +13,7 @@ from src.train import pretrain, pred_train, baseline_train, test, get_loss
 from src.utils import store_res, compute_table, full_output
 
 DATASETS = ["synthetic_1", "synthetic_2", "synthetic_3", "cora", "citeseer", "pubmed", "collab"]
-MODELS = ["baseline", "grace", "lgrace", "cgrace", "agrace", "a2grace", "asrcgrace", "csgcl", "bgrl", "a2bgrl", "asrcbgrl", "abgrl", "cbgrl"]
+MODELS = ["baseline", "grace", "lgrace", "cgrace", "agrace", "extagrace", "a2grace", "asrcgrace", "csgcl", "bgrl", "extabgrl", "a2bgrl", "asrcbgrl", "abgrl", "cbgrl"]
 AUGMENTATIONS = ["random", "deg", "pr", "evc", "scom", "sbm", "sbm2"]
 LOSS = ["log_sig", "bce", "auc", "hinge_auc"]
 
@@ -33,7 +33,7 @@ def arguments():
     parser.add_argument('--model', type=str, default='baseline')
     parser.add_argument('--augmentation', type=str, default='random')
     parser.add_argument('--predictor', type=str, default='mlp', choices=["inner", "mlp"])
-    parser.add_argument('--loss', type=str, default='ncn_loss')
+    parser.add_argument('--loss', type=str, default='log_sig')
     parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--ct_epochs', type=int, default=500)
     parser.add_argument('--runs', type=int, default=10)
