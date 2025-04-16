@@ -268,7 +268,6 @@ def _perturb_matrix(matrix, delta):
         difference += np.abs(matrix[i, j] - perturbed_matrix[i, j])
     upper_triangular = np.triu(perturbed_matrix)
     perturbed_matrix = upper_triangular + upper_triangular.T - np.diag(np.diag(upper_triangular))
-    return symmetic_matrix
     return perturbed_matrix
 
 def _drop_feature(x, drop_prob):
