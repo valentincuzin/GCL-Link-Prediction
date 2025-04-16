@@ -245,9 +245,10 @@ def pretrain_lgrace(model, aug, param):
             pos_outs = model.predictor(h1, edge[0], edge[1])
             neg_outs = model.predictor(h1, neg_edge[0], neg_edge[1])
 
-            ct_loss = model.loss(h1, h2, edge, neg_edge)
+            ct_loss = model.loss(h1, h2, edge)
+            neg_ct_loss = model.loss(h1, h2, neg_edge)
             pred_loss = log_sig_loss(pos_outs, neg_outs)
-            loss = ct_loss # +0.1*pred_loss
+            loss = ct_loss - neg_ct_loss # +0.1*pred_loss
             loss.backward()
             optimizer.step()
             total_loss.append(loss)
