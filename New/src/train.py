@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
-from torch_geometric.utils import negative_sampling, to_networkx, degree
+from torch_geometric.utils import negative_sampling, to_networkx, degree, to_edge_index, to_dense_adj, add_self_loops, remove_self_loops
 from torch_geometric.data import Data
 from torch_sparse import SparseTensor
 import numpy as np
@@ -223,35 +223,23 @@ def pretrain_lgrace(model, aug, param):
         model.train()
         optimizer.zero_grad()
         x_1, edge_index_1, x_2, edge_index_2 = aug()
-        adjmask = torch.ones_like(edge_index_1[0], dtype=torch.bool)
-        negedge_1 = negative_sampling(edge_index_1.to(aug.device), aug.data.adj_t.sizes()[0])
-        negedge_2 = negative_sampling(edge_index_2.to(aug.device), aug.data.adj_t.sizes()[0])
-        for perm in DataLoader(range(adjmask.size(0)), param['batch_size'], shuffle=True):
-            optimizer.zero_grad()
-            if param['mask_input']:
-                adjmask[perm] = 0
-                tei = edge_index_1[:, adjmask]
-                adj = SparseTensor.from_edge_index(tei,
-                                sparse_sizes=(aug.data.num_nodes, aug.data.num_nodes)).to_device(
-                                    edge_index_1.device, non_blocking=True)
-                adjmask[perm] = 1
-                adj = adj.to_symmetric()
-            else:
-                adj = aug.data.adj_t
-            h1 = model(x_1, edge_index_1).to(aug.device)
-            h2 = model(x_2, edge_index_2).to(aug.device)
-            edge = edge_index_1[:, perm].to(aug.device)
-            neg_edge = negedge_1[:, perm].to(aug.device)
-            pos_outs = model.predictor(h1, edge[0], edge[1])
-            neg_outs = model.predictor(h1, neg_edge[0], neg_edge[1])
-
-            ct_loss = model.loss(h1, h2, edge)
-            neg_ct_loss = model.loss(h1, h2, neg_edge)
-            pred_loss = log_sig_loss(pos_outs, neg_outs)
-            loss = ct_loss - neg_ct_loss # +0.1*pred_loss
-            loss.backward()
-            optimizer.step()
-            total_loss.append(loss)
+        edge_index_1, _ = add_self_loops(edge_index_1, num_nodes=aug.data.num_nodes)
+        edge_index_2, _ = add_self_loops(edge_index_2, num_nodes=aug.data.num_nodes)
+        adj_1 = to_dense_adj(edge_index_1)
+        adj_2 = to_dense_adj(edge_index_2)
+        adj_or = (adj_1 + adj_2).squeeze()
+        adj_and = (adj_1 * adj_2).squeeze()
+        and_edge_index = to_edge_index(adj_and.to_sparse())[0].to(aug.device)
+        and_edge_index, _ = remove_self_loops(and_edge_index)
+        or_edge_index = to_edge_index(adj_or.to_sparse())[0].to(aug.device)
+        or_edge_index, _ = remove_self_loops(or_edge_index)
+        neg_edge = negative_sampling(or_edge_index, num_neg_samples=and_edge_index.size(1))
+        h1 = model(x_1, edge_index_1).to(aug.device)
+        h2 = model(x_2, edge_index_2).to(aug.device)
+        loss = model.loss(h1, h2, and_edge_index, neg_edge)
+        loss.backward()
+        optimizer.step()
+        total_loss.append(loss)
         if epoch % 10 == 0:
             _loss = np.average([_.item() for _ in total_loss])
             loss_res.append(round(float(_loss), 2))

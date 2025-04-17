@@ -79,8 +79,6 @@ if __name__ == "__main__":
                         data, split_edge = data_split.get(r)
                         model = get_model(model_name, data, hp['model'])
                         predictor = get_predictor(args.predictor, hp['model'])
-                        if model_name == "lgrace":
-                            model.predictor = predictor.to(device)
                         if model_name != "baseline":
                             print(f"..{augmentation}..")
                             aug = Aug(data, hp['augmentation'], augmentation)
