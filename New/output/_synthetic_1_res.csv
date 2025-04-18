@@ -1,8 +1,8 @@
-metrics;lgrace_sbm
-Hits@10;9.72$\pm$0.0
-Hits@20;22.22$\pm$0.0
-Hits@50;59.72$\pm$0.0
-Hits@100;90.62$\pm$0.0
-ROCAUC;80.71$\pm$0.0
-AP;74.59$\pm$0.0
-pretrain_time;75.62$\pm$0.0
+metrics;lgrace_random;lgrace_sbm;lnewgrace_random;lnewgrace_sbm
+Hits@10;8.33$\pm$0.0;17.36$\pm$0.0;12.5$\pm$0.0;7.99$\pm$0.0
+Hits@20;20.83$\pm$0.0;27.78$\pm$0.0;23.26$\pm$0.0;21.18$\pm$0.0
+Hits@50;60.07$\pm$0.0;70.49$\pm$0.0;62.15$\pm$0.0;65.97$\pm$0.0
+Hits@100;90.28$\pm$0.0;91.32$\pm$0.0;89.24$\pm$0.0;93.75$\pm$0.0
+ROCAUC;81.12$\pm$0.0;83.55$\pm$0.0;81.93$\pm$0.0;83.34$\pm$0.0
+AP;74.17$\pm$0.0;78.47$\pm$0.0;76.54$\pm$0.0;75.69$\pm$0.0
+pretrain_time;4.67$\pm$0.0;19.07$\pm$0.0;4.15$\pm$0.0;22.68$\pm$0.0
