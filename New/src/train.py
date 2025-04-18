@@ -169,6 +169,7 @@ def hinge_auc_loss(pos_out, neg_out):
 def pretrain(model_name, model, aug, param):
     switch = {"grace": pretrain_grace,
               "lgrace": pretrain_lgrace,
+              "lnewgrace": pretrain_lgrace,
               "agrace": pretrain_agrace,
               "extagrace": pretrain_extend_agrace,
               "a2grace": pretrain_a2grace,

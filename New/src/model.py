@@ -14,6 +14,8 @@ def get_model(model_name: str, data, hp: dict):
         model = GRACE(_encoder, hp['hidden'], hp['proj_hidden']).to(device)
     elif model_name == "lgrace":
         model = LGRACE(_encoder, hp['hidden'], hp['hidden']).to(device)
+    elif model_name == "lnewgrace":
+        model = LnewGRACE(_encoder, hp['hidden'], hp['hidden']).to(device)
     elif model_name == "cgrace":
         model = CGRACE(_encoder, hp['hidden'], hp['proj_hidden']).to(device)
     elif model_name in  ["agrace", "asrcgrace", "extagrace"]:
@@ -206,6 +208,56 @@ class LGRACE(nn.Module):
 
         return ret
 
+class LnewGRACE(nn.Module):
+    def __init__(self, encoder: ENCODER_GRACE, hidden: int, proj_hidden: int, tau: float = 0.5):
+        super(LnewGRACE, self).__init__()
+        self.encoder: ENCODER_GRACE = encoder
+        self.tau: float = tau
+
+        self.fc1 = nn.Linear(hidden, proj_hidden)
+        self.fc2 = nn.Linear(proj_hidden, hidden)
+
+        self.hidden = hidden
+
+    def forward(self, x: torch.Tensor, edge_index: torch.Tensor) -> torch.Tensor:
+        return self.encoder(x, edge_index)
+
+    def projection(self, z: torch.Tensor) -> torch.Tensor:
+        z = F.elu(self.fc1(z))
+        return self.fc2(z)
+
+    def sim(self, z1: torch.Tensor, z2: torch.Tensor):
+        z1 = F.normalize(z1)
+        z2 = F.normalize(z2)
+        return torch.mm(z1, z2.t())
+
+    def semi_loss(self, z1_uv, neg_z1_uv, z2_uv, neg_z2_uv):
+        f = lambda x: torch.exp(x / self.tau)
+
+        pos_refl_sim = f(self.sim(z1_uv, z1_uv))
+        pos_between_sim = f(self.sim(z1_uv, z2_uv))
+
+        neg_refl_sim = f(self.sim(neg_z1_uv, neg_z1_uv))
+        neg_between_sim = f(self.sim(neg_z1_uv, neg_z2_uv))
+
+        loss = -torch.log((pos_between_sim.diag())/(neg_refl_sim.sum(1) + neg_between_sim.sum(1) - neg_refl_sim.diag()))
+        # loss = -torch.log((pos_refl_sim.sum(1)+pos_between_sim.sum(1))/(neg_refl_sim.sum(1)+neg_between_sim.sum(1)))
+        return loss
+
+    def loss(self, z1: torch.Tensor, z2: torch.Tensor, edge, neg_edge, mean: bool = True, batch_size: int = None):
+        z1_uv = self.projection(z1[edge[0]] * z1[edge[1]])
+        neg_z1_uv = self.projection(z1[neg_edge[0]] * z1[neg_edge[1]])
+        z2_uv = self.projection(z2[edge[0]] * z2[edge[1]])
+        neg_z2_uv = self.projection(z2[neg_edge[0]] * z2[neg_edge[1]])
+
+        if batch_size is None:
+            l1 = self.semi_loss(z1_uv, neg_z1_uv, z2_uv, neg_z2_uv)
+            l2 = self.semi_loss(z2_uv, neg_z2_uv, z1_uv, neg_z1_uv)
+
+        ret = (l1 + l2) * 0.5
+        ret = ret.mean() if mean else ret.sum()
+
+        return ret
 
 class AGRACE(nn.Module):
     def __init__(self, encoder: ENCODER_GRACE, hidden: int, proj_hidden: int, tau: float = 0.5):
