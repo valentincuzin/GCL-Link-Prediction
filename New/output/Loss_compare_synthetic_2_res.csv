@@ -1,8 +1,0 @@
-metrics;baseline
-Hits@10;3.94$\pm$1.26
-Hits@20;7.83$\pm$1.77
-Hits@50;20.34$\pm$3.51
-Hits@100;40.05$\pm$3.37
-ROCAUC;66.84$\pm$1.91
-AP;62.19$\pm$1.97
-pretrain_time;nan$\pm$nan
