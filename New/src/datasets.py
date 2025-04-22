@@ -3,6 +3,7 @@ from tqdm import tqdm
 from copy import deepcopy
 import torch
 import numpy as np
+import igraph as ig
 import networkx as nx
 import matplotlib.pyplot as plt
 import torch.nn.functional as F
@@ -86,7 +87,18 @@ def loaddataset(name: str|list, use_valedges_as_input: bool, reduce_feature: int
 
         if data.edge_index.max().item() + 1 < data.num_nodes:
             data.edge_index = add_self_loops(data.edge_index, num_nodes=data.num_nodes)[0]
+    elif name in ["facebook_friends", "wiki_science", "crime"]:
+        igG = ig.Graph.Read_GML(f'./small_gml/{name}.gml')
+        G = igG.to_networkx()
+        data = from_networkx(G)
+        data.x = F.one_hot(torch.arange(0, len(G.nodes))).float()
+        split_edge = randomsplit([data])
+        data.edge_index = to_undirected(split_edge["train"]["edge"].t())
+        edge_index = data.edge_index
+        data.num_nodes = data.x.shape[0]
 
+        if data.edge_index.max().item() + 1 < data.num_nodes:
+            data.edge_index = add_self_loops(data.edge_index, num_nodes=data.num_nodes)[0]
     else:
         dataset = PygLinkPropPredDataset(name=f'ogbl-{name}')
         split_edge = dataset.get_edge_split()
@@ -105,7 +117,6 @@ def loaddataset(name: str|list, use_valedges_as_input: bool, reduce_feature: int
             data.edge_index = add_self_loops(data.edge_index, num_nodes=data.num_nodes)[0]
 
     data.edge_weight = None 
-    #print(data.num_nodes, edge_index.max())
     data.adj_t = SparseTensor.from_edge_index(edge_index, sparse_sizes=(data.num_nodes, data.num_nodes))
     data.adj_t = data.adj_t.to_symmetric().coalesce()
     data.max_x = -1
@@ -118,12 +129,6 @@ def loaddataset(name: str|list, use_valedges_as_input: bool, reduce_feature: int
     if load is not None:
         data.x = torch.load(load, map_location="cpu")
         data.max_x = -1
-
-    # print("dataset split ")
-    # for key1 in split_edge:
-    #     for key2  in split_edge[key1]:
-    #         print(key1, key2, split_edge[key1][key2].shape[0])
-
 
     # Use training + validation edges for inference on test set.
     if use_valedges_as_input:

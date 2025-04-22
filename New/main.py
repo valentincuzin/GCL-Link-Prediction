@@ -12,7 +12,7 @@ from src.predictor import get_predictor
 from src.train import pretrain, pred_train, baseline_train, test, get_loss
 from src.utils import store_res, compute_table, full_output
 
-DATASETS = ["synthetic_1", "synthetic_2", "synthetic_3", "cora", "citeseer", "pubmed", "collab"]
+DATASETS = ["synthetic_1", "synthetic_2", "synthetic_3", "facebook_friends", "wiki_science", "crime", "cora", "citeseer", "pubmed", "collab"]
 MODELS = ["baseline", "grace", "lgrace", "cgrace", "agrace", "extagrace", "a2grace", "asrcgrace", "csgcl", "bgrl", "extabgrl", "a2bgrl", "asrcbgrl", "abgrl", "cbgrl"]
 AUGMENTATIONS = ["random", "deg", "pr", "evc", "scom", "sbm", "sbm2"]
 LOSS = ["log_sig", "bce", "auc", "hinge_auc"]
@@ -73,7 +73,7 @@ if __name__ == "__main__":
             for augmentation in args.augmentation:
                 res_dict = {"Hits@10": [], "Hits@20": [], "Hits@50": [], "Hits@100": [], 'ROCAUC': [], 'AP': [], 'pretrain_time': []}
                 for loss_name in args.loss:
-                    print(f".{loss_name}.")
+                    # print(f".{loss_name}.")
                     for r in range(args.runs):
                         seed_everything(r)
                         data, split_edge = data_split.get(r)

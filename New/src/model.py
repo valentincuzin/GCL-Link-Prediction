@@ -45,7 +45,7 @@ def get_model(model_name: str, data, hp: dict):
 # Code from GRACE
 
 class ENCODER_GRACE(nn.Module):
-    def __init__(self, in_channels: int, out_channels: int, activation, base_model=GCNConv, k: int = 2, skip=False):
+    def __init__(self, in_channels: int, out_channels: int, activation, base_model=GCNConv, k: int = 3, skip=False):
         super(ENCODER_GRACE, self).__init__()
         self.base_model = base_model
         self.out_channels = out_channels
