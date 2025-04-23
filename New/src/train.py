@@ -489,9 +489,11 @@ def pretrain_and_bgrl(model, aug, param):
 
         optimizer.zero_grad()
         x_1, edge_index_1, x_2, edge_index_2 = aug()
-        adj_t = SparseTensor.from_edge_index(edge_index_1, sparse_sizes=(aug.data.num_nodes, aug.data.num_nodes))
-        adj_t = adj_t.to_symmetric().coalesce()
-        A_hat = adj_t.to_dense()+torch.eye(aug.data.x.shape[0]).to(aug.device)
+        adj_1 = SparseTensor.from_edge_index(edge_index_1, sparse_sizes=(aug.data.num_nodes, aug.data.num_nodes))
+        adj_1 = adj_1.to_symmetric().coalesce().to_torch_sparse_csr_tensor()
+        adj_2 = SparseTensor.from_edge_index(edge_index_2, sparse_sizes=(aug.data.num_nodes, aug.data.num_nodes))
+        adj_2 = adj_2.to_symmetric().coalesce().to_torch_sparse_csr_tensor()
+        A_hat = torch.sparse.mm(adj_1, adj_2)+torch.eye(aug.data.x.shape[0]).to_sparse_csr().to(aug.device)
 
         z1, y2 = model.train_forward((x_1, edge_index_1), (x_2, edge_index_2))
         z2, y1 = model.train_forward((x_2, edge_index_2), (x_1, edge_index_1))
