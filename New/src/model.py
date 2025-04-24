@@ -14,7 +14,7 @@ def get_model(model_name: str, data, hp: dict):
         model = GRACE(_encoder, hp['hidden'], hp['proj_hidden']).to(device)
     elif model_name == "lgrace":
         model = LinkGRACE(_encoder, hp['hidden'], hp['hidden']).to(device)
-    elif model_name in  ["agrace", "ândgrace", "extagrace"]:
+    elif model_name in  ["agrace", "ândgrace", "âorgrace",   "extagrace"]:
         model = AGRACE(_encoder, hp['hidden'], hp['proj_hidden']).to(device)
     elif model_name in  "a2grace":
         model = A2GRACE(_encoder, hp['hidden'], hp['proj_hidden']).to(device)
@@ -26,7 +26,7 @@ def get_model(model_name: str, data, hp: dict):
     elif model_name in "bgrl":
         _predictor = MLP_Head_BGRL(hp['hidden'], hp['hidden']).to(device)
         model = BGRL(_encoder, _predictor).to(device)
-    elif model_name in ["abgrl", "extabgrl"]:
+    elif model_name in ["abgrl", "âorbgrl", "extabgrl"]:
         _predictor = MLP_Head_BGRL(hp['hidden'], hp['hidden']).to(device)
         model = ABGRL(_encoder, _predictor).to(device)
     elif model_name in "a2bgrl":

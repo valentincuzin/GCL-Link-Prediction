@@ -1,0 +1,8 @@
+metrics;synthetic_prob_pred;baseline
+Hits@10;0.0$\pm$0.0;4.51$\pm$1.09
+Hits@20;0.0$\pm$0.0;8.31$\pm$1.4
+Hits@50;0.0$\pm$0.0;20.95$\pm$3.14
+Hits@100;4.73$\pm$14.19;41.5$\pm$4.31
+ROCAUC;72.1$\pm$1.91;69.0$\pm$1.94
+AP;64.64$\pm$1.72;64.3$\pm$1.86
+pretrain_time;nan$\pm$nan;nan$\pm$nan

@@ -6,8 +6,6 @@ def get_predictor(predictor_name: str, hp):
         predictor = InnerProd()
     elif predictor_name == "mlp":
         predictor = MlpProdDecoder(hp['hidden'], hp['hidden'])
-    elif predictor_name == "prob":
-        predictor = ProbDecoder(hp['probs'], hp['block'])
     return predictor
 
 class InnerProd:
@@ -37,7 +35,8 @@ class MlpProdDecoder(nn.Module):
 
     def predict(self, h, u, v):
         forward_res = self.forward(h, u, v)
-        return torch.cat([torch.sigmoid(forward_res)], dim=-1)
+        res = torch.cat([torch.sigmoid(forward_res)], dim=-1)
+        return res
 
 class ProbDecoder:
     def __init__(self, probs, block):
@@ -45,6 +44,16 @@ class ProbDecoder:
         self.block = block
 
     def __call__(self, u, v):
-        b1 = self.block[u]
-        b2 = self.block[v]
-        return torch.tensor(self.probs[b1][b2]).unsqueeze(0)
+        b1 = self.block[u].cpu()
+        b2 = self.block[v].cpu()
+        # print("b1, b2:",b1, b2)
+        res = []
+        for x,y in zip(b1, b2):
+            res.append(self.probs[x, y])
+        res = torch.tensor(res)
+        if res.numel() <= 1:
+            res = res.unsqueeze()
+        return res
+
+    def predict(self, h, u, v):
+        return self.__call__(u, v)

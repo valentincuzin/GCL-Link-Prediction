@@ -8,12 +8,12 @@ from torch_geometric import seed_everything
 from src.augmentation import Aug
 from src.model import get_model
 from src.datasets import DataSplit, get_evaluator, full_eval
-from src.predictor import get_predictor
+from src.predictor import get_predictor, ProbDecoder
 from src.train import pretrain, pred_train, baseline_train, test, get_loss
 from src.utils import store_res, compute_table, full_output
 
 DATASETS = ["synthetic_1", "synthetic_2", "synthetic_3", "facebook_friends", "wiki_science", "crime", "cora", "citeseer", "pubmed", "collab"]
-MODELS = ["baseline", "grace", "lgrace", "agrace", "ândgrace", "extagrace", "a2grace", "csgcl", "bgrl", "extabgrl", "a2bgrl", "abgrl"]
+MODELS = ["baseline", "grace", "lgrace", "agrace", "ândgrace", "âorgrace", "extagrace", "a2grace", "csgcl", "bgrl", "âorbgrl", "extabgrl", "a2bgrl", "abgrl"]
 AUGMENTATIONS = ["random", "deg", "pr", "evc", "scom", "sbm", "sbm2"]
 LOSS = ["log_sig", "bce", "auc", "hinge_auc"]
 
@@ -32,7 +32,7 @@ def arguments():
     parser.add_argument('--only_feature', action='store_true', default=False, help='erase structure information')
     parser.add_argument('--model', type=str, default='baseline')
     parser.add_argument('--augmentation', type=str, default='random')
-    parser.add_argument('--predictor', type=str, default='mlp', choices=["inner", "mlp"])
+    parser.add_argument('--predictor', type=str, default='mlp', choices=["inner", "mlp", "prob"])
     parser.add_argument('--loss', type=str, default='log_sig')
     parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--ct_epochs', type=int, default=500)
@@ -47,6 +47,21 @@ def arguments():
     print(args)
     return args
 
+def synthetic_pred(data_split, evaluator, hp):
+    res_dict = {"Hits@10": [], "Hits@20": [], "Hits@50": [], "Hits@100": [], 'ROCAUC': [], 'AP': [], 'pretrain_time': []}
+    for r in range(data_split.runs):
+        seed_everything(r)
+        data, split_edge = data_split.get(r)
+        predictor = ProbDecoder(data.probs, data.block)
+        _, _, pos_test_pred, neg_test_pred = test(None, predictor, data, split_edge, hp['model'])
+        test_res = full_eval(evaluator, pos_test_pred, neg_test_pred)
+        res_dict = store_res(test_res, res_dict)
+    save_name = "synthetic_prob_pred"
+    df_res, res_latex = compute_table(res_dict, save_name)
+    print(df_res)
+    return df_res
+        
+        
 def hp_load(dataset: str, args):
     print(f"....{dataset}....")
     if "synthetic" in dataset:
@@ -68,6 +83,8 @@ if __name__ == "__main__":
         data_split = DataSplit(dataset, device, args.runs, args.use_valedges_as_input, args.reduce_feature, args.only_feature)
         evaluator = get_evaluator(dataset)
         full_res = []
+        if "synthetic" in dataset:
+            full_res.append(synthetic_pred(data_split, evaluator, hp))
         for model_name in args.model:
             print(f"...{model_name}...")
             for augmentation in args.augmentation:
@@ -97,6 +114,7 @@ if __name__ == "__main__":
                         res_dict = store_res(test_res, res_dict)
                     save_name = f"{model_name}{'_'+loss_name if loss_name != "log_sig" else ""}{'_'+augmentation if model_name != "baseline" else ""}"
                     df_res, res_latex = compute_table(res_dict, save_name)
+                    print(df_res)
                     full_res.append(df_res)
                 if model_name == "baseline":
                     break

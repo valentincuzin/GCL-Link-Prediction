@@ -8,6 +8,7 @@ from torch.utils.data import DataLoader
 from torch_geometric.utils import negative_sampling, to_networkx, degree, to_edge_index, to_dense_adj, add_self_loops, remove_self_loops
 from torch_geometric.data import Data
 from torch_sparse import SparseTensor
+import torch_sparse as spar
 import numpy as np
 import networkx as nx
 from src.utils import CosineDecayScheduler
@@ -21,16 +22,19 @@ def test(encoder: nn.Module, predictor: nn.Module, data, split_edge: dict, hp: d
         predictor.eval()
     device = data.adj_t.device()
     adj_t = data.adj_t
-    h = encoder(data.x, adj_t)
+    h = None if encoder is None else encoder(data.x, adj_t)
     def test_split(split):
         # pred positive edges and negatives edges for nodes in the split
         pos_test_edge = split_edge[split]['edge'].to(device)
         neg_test_edge = split_edge[split]['edge_neg'].to(device)
         pos_test_preds = []
         for perm in DataLoader(range(pos_test_edge.size(0)), hp['batch_size']):
+            # print('perm', perm)
             edge = pos_test_edge[perm].t()
+            # print('edge', edge)
             out = predictor.predict(h, edge[0], edge[1])
             pos_test_preds += [out.squeeze().cpu()]
+        # print(pos_test_preds)
         pos_test_pred = torch.cat(pos_test_preds, dim=0)
         neg_test_preds = []
         for perm in DataLoader(range(neg_test_edge.size(0)), hp['batch_size']):
@@ -43,8 +47,9 @@ def test(encoder: nn.Module, predictor: nn.Module, data, split_edge: dict, hp: d
     pos_valid_pred, neg_valid_pred = test_split('valid')
     if hp['use_valedges_as_input']:
         adj_t = data.full_adj_t
-        h = encoder(data.x, adj_t)
+        h = None if encoder is None else encoder(data.x, adj_t)
     pos_test_pred, neg_test_pred = test_split('test')
+    # print("pos_test_pred", pos_test_pred)
     return pos_valid_pred, neg_valid_pred, pos_test_pred, neg_test_pred
 
 def pred_train(encoder: nn.Module,
@@ -171,12 +176,13 @@ def pretrain(model_name, model, aug, param):
               "lgrace": pretrain_lgrace,
               "agrace": pretrain_agrace,
               "ândgrace":pretrain_and_grace,
+              "âorgrace": pretrain_aor_grace,
               "extagrace": pretrain_extend_agrace,
               "a2grace": pretrain_a2grace,
               "csgcl": pretrain_csgcl,
               "bgrl": pretrain_bgrl,
               "abgrl": pretrain_abgrl,
-              "ândbgrl": pretrain_and_bgrl,
+              "âorbgrl": pretrain_or_bgrl,
               "extabgrl": pretrain_extend_abgrl,
               "a2bgrl": pretrain_a2bgrl,
               }
@@ -275,6 +281,37 @@ def pretrain_agrace(model, aug, param):
     print(f"pretrain time: {pre_time:.2f} s")
     return pre_time
 
+def pretrain_aor_grace(model, aug, param):
+    optimizer = torch.optim.Adam(
+        model.parameters(),
+        lr=param['gnn_lr'],
+        weight_decay=param['weight_decay']
+    )
+    t1 = time.time()
+    loss_res = []
+    for epoch in tqdm(range(1, param['ct_epochs'] + 1)):
+        model.train()
+        optimizer.zero_grad()
+        x_1, edge_index_1, x_2, edge_index_2 = aug()
+        adj_1 = SparseTensor.from_edge_index(edge_index_1, sparse_sizes=(aug.data.num_nodes, aug.data.num_nodes)).to_torch_sparse_coo_tensor().coalesce()
+        adj_2 = SparseTensor.from_edge_index(edge_index_2, sparse_sizes=(aug.data.num_nodes, aug.data.num_nodes)).to_torch_sparse_coo_tensor().coalesce()
+        hat_indices, hat_values = spar.eye(aug.data.x.shape[0])
+        A_indices = torch.cat([adj_1.indices(), adj_2.indices(), hat_indices.to(aug.device)], dim=-1)
+        A_value = torch.cat([adj_1.values(), adj_2.values(), hat_values.to(aug.device)])
+        A_hat = torch.sparse_coo_tensor(A_indices, A_value).coalesce()
+        z1 = model(x_1, edge_index_1)
+        z2 = model(x_2, edge_index_2)
+
+        loss = model.loss(z1, z2, A_hat)
+        loss.backward()
+        optimizer.step()
+        if epoch % 100 == 0:
+            loss_res.append(round(float(loss), 2))
+    print('pretrain loss: ', loss_res)
+    pre_time = time.time()-t1
+    print(f"pretrain time: {pre_time:.2f} s")
+    return pre_time
+
 def pretrain_and_grace(model, aug, param):
     optimizer = torch.optim.Adam(
         model.parameters(),
@@ -291,7 +328,8 @@ def pretrain_and_grace(model, aug, param):
         adj_1 = adj_1.to_symmetric().coalesce().to_torch_sparse_csr_tensor()
         adj_2 = SparseTensor.from_edge_index(edge_index_2, sparse_sizes=(aug.data.num_nodes, aug.data.num_nodes))
         adj_2 = adj_2.to_symmetric().coalesce().to_torch_sparse_csr_tensor()
-        A_hat = torch.sparse.mm(adj_1, adj_2)+torch.eye(aug.data.x.shape[0]).to_sparse_csr().to(aug.device)
+        hat = torch.eye(aug.data.x.shape[0]).to_sparse().to(aug.device)
+        A_hat = torch.sparse.mm(adj_1, adj_2)+hat
         z1 = model(x_1, edge_index_1)
         z2 = model(x_2, edge_index_2)
 
@@ -470,7 +508,7 @@ def pretrain_abgrl(model, aug, param):
     print(f"pretrain time: {pre_time:.2f} s")
     return pre_time
 
-def pretrain_and_bgrl(model, aug, param):
+def pretrain_or_bgrl(model, aug, param):
     # optimizer
     optimizer = torch.optim.AdamW(model.trainable_parameters(), lr=param['gnn_lr'], weight_decay=param['weight_decay'])
 
@@ -489,11 +527,12 @@ def pretrain_and_bgrl(model, aug, param):
 
         optimizer.zero_grad()
         x_1, edge_index_1, x_2, edge_index_2 = aug()
-        adj_1 = SparseTensor.from_edge_index(edge_index_1, sparse_sizes=(aug.data.num_nodes, aug.data.num_nodes))
-        adj_1 = adj_1.to_symmetric().coalesce().to_torch_sparse_csr_tensor()
-        adj_2 = SparseTensor.from_edge_index(edge_index_2, sparse_sizes=(aug.data.num_nodes, aug.data.num_nodes))
-        adj_2 = adj_2.to_symmetric().coalesce().to_torch_sparse_csr_tensor()
-        A_hat = torch.sparse.mm(adj_1, adj_2)+torch.eye(aug.data.x.shape[0]).to_sparse_csr().to(aug.device)
+        adj_1 = SparseTensor.from_edge_index(edge_index_1, sparse_sizes=(aug.data.num_nodes, aug.data.num_nodes)).to_torch_sparse_coo_tensor().coalesce()
+        adj_2 = SparseTensor.from_edge_index(edge_index_2, sparse_sizes=(aug.data.num_nodes, aug.data.num_nodes)).to_torch_sparse_coo_tensor().coalesce()
+        hat_indices, hat_values = spar.eye(aug.data.x.shape[0])
+        A_indices = torch.cat([adj_1.indices(), adj_2.indices(), hat_indices.to(aug.device)], dim=-1)
+        A_value = torch.cat([adj_1.values(), adj_2.values(), hat_values.to(aug.device)])
+        A_hat = torch.sparse_coo_tensor(A_indices, A_value).coalesce()
 
         z1, y2 = model.train_forward((x_1, edge_index_1), (x_2, edge_index_2))
         z2, y1 = model.train_forward((x_2, edge_index_2), (x_1, edge_index_1))
