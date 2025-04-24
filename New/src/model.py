@@ -683,7 +683,7 @@ class ABGRL(torch.nn.Module):
         return online_y
 
     def loss(self, z1, z2, y1, y2, adjacence):
-        nb_neight = adjacence.sum(1).unsqueeze(1)
+        nb_neight = adjacence.to_dense().sum(1).unsqueeze(1)
         Ay1 = torch.mm(adjacence, y1)
         Ay1_mean = Ay1 / nb_neight
         Ay2 = torch.mm(adjacence, y2)

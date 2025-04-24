@@ -1,6 +1,7 @@
 import argparse
 import json
 import os
+import numpy as np
 import torch
 import torch.nn as nn
 from torch_geometric import seed_everything
@@ -9,11 +10,16 @@ from src.augmentation import Aug
 from src.model import get_model
 from src.datasets import DataSplit, get_evaluator, full_eval
 from src.predictor import get_predictor, ProbDecoder
-from src.train import pretrain, pred_train, baseline_train, test, get_loss
+from src.train import pred_train, baseline_train, test
+from src.ctrain import pretrain
 from src.utils import store_res, compute_table, full_output
 
-DATASETS = ["synthetic_1", "synthetic_2", "synthetic_3", "facebook_friends", "wiki_science", "crime", "cora", "citeseer", "pubmed", "collab"]
-MODELS = ["baseline", "grace", "lgrace", "agrace", "ândgrace", "âorgrace", "extagrace", "a2grace", "csgcl", "bgrl", "âorbgrl", "extabgrl", "a2bgrl", "abgrl"]
+DATASETS = ["synthetic_1", "synthetic_2", "synthetic_3", 
+            "facebook_friends", "wiki_science", "crime", 
+            "cora", "citeseer", "pubmed", "collab"]
+MODELS = ["baseline", 
+          "grace", "lgrace", "agrace", "ândgrace", "âorgrace", "extagrace", "a2grace", "csgcl", 
+          "bgrl", "âorbgrl", "extabgrl", "a2bgrl", "abgrl"]
 AUGMENTATIONS = ["random", "deg", "pr", "evc", "scom", "sbm", "sbm2"]
 LOSS = ["log_sig", "bce", "auc", "hinge_auc"]
 
@@ -48,12 +54,14 @@ def arguments():
     return args
 
 def synthetic_pred(data_split, evaluator, hp):
-    res_dict = {"Hits@10": [], "Hits@20": [], "Hits@50": [], "Hits@100": [], 'ROCAUC': [], 'AP': [], 'pretrain_time': []}
+    res_dict = {"Hits@10": [], "Hits@20": [], "Hits@50": [], "Hits@100": [], 
+                "ROCAUC": [], "AP": [], "pretrain_time": []}
     for r in range(data_split.runs):
         seed_everything(r)
         data, split_edge = data_split.get(r)
         predictor = ProbDecoder(data.probs, data.block)
         _, _, pos_test_pred, neg_test_pred = test(None, predictor, data, split_edge, hp['model'])
+        neg_test_pred += np.random.normal(0, 0.0001, neg_test_pred.shape)
         test_res = full_eval(evaluator, pos_test_pred, neg_test_pred)
         res_dict = store_res(test_res, res_dict)
     save_name = "synthetic_prob_pred"
@@ -88,7 +96,9 @@ if __name__ == "__main__":
         for model_name in args.model:
             print(f"...{model_name}...")
             for augmentation in args.augmentation:
-                res_dict = {"Hits@10": [], "Hits@20": [], "Hits@50": [], "Hits@100": [], 'ROCAUC': [], 'AP': [], 'pretrain_time': []}
+                # , "PHits@10": [], "PHits@20": [], "PHits@50": [], "PHits@100": [], similar
+                res_dict = {"Hits@10": [], "Hits@20": [], "Hits@50": [], "Hits@100": [], 
+                            "ROCAUC": [], "AP": [], "pretrain_time": []}
                 for loss_name in args.loss:
                     # print(f".{loss_name}.")
                     for r in range(args.runs):

@@ -192,7 +192,7 @@ class Aug:
             print("already communities")
             return
         G = to_networkx(self.data)
-        communities = nx.community.louvain_communities(G, resolution=0.5)
+        communities = nx.community.louvain_communities(G)
         probs = np.zeros((len(communities), len(communities)))
         sizes = []
         for idx, c in enumerate(communities):

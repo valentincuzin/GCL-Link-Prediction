@@ -245,8 +245,6 @@ def full_eval(evaluator, pos_pred, neg_pred):
             'y_pred_neg': neg_pred,
         })[f'hits@{K}']
         results[f'Hits@{K}'] = hits
-    pos_pred = pos_pred[:neg_pred.shape[0]]
-    
     evaluator.eval_metric = 'rocauc'
     auc = evaluator.eval({
         'y_pred_pos': pos_pred,
@@ -256,14 +254,14 @@ def full_eval(evaluator, pos_pred, neg_pred):
     
     def average_precision(y_pred_pos, y_pred_neg):
         if isinstance(y_pred_pos, torch.Tensor):
-                y_pred_pos_numpy = y_pred_pos.cpu().numpy()
-                y_pred_neg_numpy = y_pred_neg.cpu().numpy()
+                y_pred_pos_np = y_pred_pos.cpu().numpy()
+                y_pred_neg_np = y_pred_neg.cpu().numpy()
         else:
-            y_pred_pos_numpy = y_pred_pos
-            y_pred_neg_numpy = y_pred_neg
-            
-        y_true = np.concatenate([np.ones(len(y_pred_pos_numpy)), np.zeros(len(y_pred_neg_numpy))]).astype(np.int32)
-        y_pred = np.concatenate([y_pred_pos_numpy, y_pred_neg_numpy])
+            y_pred_pos_np = y_pred_pos
+            y_pred_neg_np = y_pred_neg
+
+        y_true = np.concatenate([np.ones(len(y_pred_pos_np)), np.zeros(len(y_pred_neg_np))]).astype(np.int32)
+        y_pred = np.concatenate([y_pred_pos_np, y_pred_neg_np])
         return average_precision_score(y_true, y_pred)
     
     results['AP'] = average_precision(pos_pred, neg_pred)
