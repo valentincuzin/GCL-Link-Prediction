@@ -22,6 +22,7 @@ def pretrain(model_name, model, aug, param):
               "a2grace": pretrain_a2grace,
               "csgcl": pretrain_csgcl,
               "bgrl": pretrain_bgrl,
+              "lbgrl": pretrain_lbgrl,
               "abgrl": pretrain_abgrl,
               "âorbgrl": pretrain_or_bgrl,
               "extabgrl": pretrain_extend_abgrl,
@@ -302,6 +303,50 @@ def pretrain_bgrl(model, aug, param):
         x_1, edge_index_1, x_2, edge_index_2 = aug()
         z1, y2 = model.train_forward((x_1, edge_index_1), (x_2, edge_index_2))
         z2, y1 = model.train_forward((x_2, edge_index_2), (x_1, edge_index_1))
+
+        loss = model.loss(z1, z2, y1, y2)
+        loss.backward()
+        optimizer.step()
+        model.update_target_network(mm)
+        if epoch % 100 == 0:
+            loss_res.append(round(float(loss), 2))
+    print('pretrain loss: ', loss_res, ' s')
+    pre_time = time.time()-t1
+    print(f"pretrain time: {pre_time:.2f} s")
+    return pre_time
+
+def pretrain_lbgrl(model, aug, param):
+    # optimizer
+    optimizer = torch.optim.AdamW(model.trainable_parameters(), lr=param['gnn_lr'], weight_decay=param['weight_decay'])
+
+    # scheduler
+    lr_scheduler = CosineDecayScheduler(param['gnn_lr'], 1000, param['ct_epochs'])
+    mm_scheduler = CosineDecayScheduler(1 - 0.99, 0, param['ct_epochs'])
+
+    t1 = time.time()
+    loss_res = []
+    for epoch in tqdm(range(1, param['ct_epochs'] + 1)):
+        model.train()
+
+        lr = lr_scheduler.get(epoch)
+        mm = 1 - mm_scheduler.get(epoch)
+
+
+        optimizer.zero_grad()
+        x_1, edge_index_1, x_2, edge_index_2 = aug()
+        edge_index_1, _ = add_self_loops(edge_index_1, num_nodes=aug.data.num_nodes)
+        edge_index_2, _ = add_self_loops(edge_index_2, num_nodes=aug.data.num_nodes)
+        a_index_set = {tuple(edge_index_1[:, i].tolist()) for i in range(edge_index_1.size(1))}
+        b_index_set = {tuple(edge_index_2[:, i].tolist()) for i in range(edge_index_2.size(1))}
+        common = list(a_index_set.intersection(b_index_set))
+        and_edge_index = torch.tensor(common, device=aug.device).t()
+        and_edge_index, _ = remove_self_loops(and_edge_index)
+        if and_edge_index.size(1) == 0:
+            print()
+            continue
+
+        z1, y2 = model.train_forward((x_1, edge_index_1), (x_2, edge_index_2), and_edge_index)
+        z2, y1 = model.train_forward((x_2, edge_index_2), (x_1, edge_index_1), and_edge_index)
 
         loss = model.loss(z1, z2, y1, y2)
         loss.backward()

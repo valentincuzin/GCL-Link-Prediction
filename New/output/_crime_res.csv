@@ -1,8 +1,8 @@
-metrics;ândgrace_random;agrace_random
-Hits@10;11.53$\pm$0.0;11.86$\pm$0.0
-Hits@20;13.56$\pm$0.0;15.25$\pm$0.0
-Hits@50;19.32$\pm$0.0;22.37$\pm$0.0
-Hits@100;26.44$\pm$0.0;32.2$\pm$0.0
-ROCAUC;40.8$\pm$0.0;44.22$\pm$0.0
-AP;51.77$\pm$0.0;54.16$\pm$0.0
-pretrain_time;46.77$\pm$0.0;6.54$\pm$0.0
+metrics;lgrace_sbm2;lbgrl_sbm2
+Hits@10;14.92$\pm$0.0;15.59$\pm$0.0
+Hits@20;25.76$\pm$0.0;26.44$\pm$0.0
+Hits@50;40.68$\pm$0.0;45.76$\pm$0.0
+Hits@100;59.66$\pm$0.0;60.34$\pm$0.0
+ROCAUC;66.67$\pm$0.0;65.04$\pm$0.0
+AP;68.15$\pm$0.0;68.95$\pm$0.0
+pretrain_time;148.94$\pm$0.0;146.06$\pm$0.0

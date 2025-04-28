@@ -26,6 +26,9 @@ def get_model(model_name: str, data, hp: dict):
     elif model_name in "bgrl":
         _predictor = MLP_Head_BGRL(hp['hidden'], hp['hidden']).to(device)
         model = BGRL(_encoder, _predictor).to(device)
+    elif model_name in "lbgrl":
+        _predictor = MLP_Head_BGRL(hp['hidden'], hp['hidden']).to(device)
+        model = LinkBGRL(_encoder, _predictor).to(device)
     elif model_name in ["abgrl", "âorbgrl", "extabgrl"]:
         _predictor = MLP_Head_BGRL(hp['hidden'], hp['hidden']).to(device)
         model = ABGRL(_encoder, _predictor).to(device)
@@ -622,6 +625,85 @@ class BGRL(torch.nn.Module):
         loss = 2 - F.cosine_similarity(z1, y2.detach(), dim=-1).mean() - F.cosine_similarity(z2, y1.detach(), dim=-1).mean()
         return loss
 
+class LinkBGRL(torch.nn.Module):
+    def __init__(self, encoder, predictor):
+        super().__init__()
+        # online network
+        self.online_encoder = encoder
+        self.predictor = predictor
+
+        # target network
+        self.target_encoder = copy.deepcopy(encoder)
+
+        # reinitialize weights
+        self.target_encoder.reset_parameters()
+        # stop gradient
+        for param in self.target_encoder.parameters():
+            param.requires_grad = False
+
+    def trainable_parameters(self):
+        r"""Returns the parameters that will be updated via an optimizer."""
+        return list(self.online_encoder.parameters()) + list(self.predictor.parameters())
+
+    @torch.no_grad()
+    def update_target_network(self, mm):
+        r"""Performs a momentum update of the target network's weights.
+
+        Args:
+            mm (float): Momentum used in moving average update.
+        """
+        assert 0.0 <= mm <= 1.0, "Momentum needs to be between 0.0 and 1.0, got %.5f" % mm
+        for param_q, param_k in zip(self.online_encoder.parameters(), self.target_encoder.parameters()):
+            param_k.data.mul_(mm).add_(param_q.data, alpha=1. - mm)
+            # mm c'est le poids de la target ~= param_k.data[i] = param_k.data[i] * mm + param_q.data[i] * (1 - mm)
+
+    def train_forward(self, online_x, target_x, edge):
+        # forward online network
+        online_y = self.online_encoder(online_x[0], online_x[1])
+
+        # prediction
+        online_q = self.predictor(online_y[edge[0]] * online_y[edge[1]])
+        # forward target network
+        with torch.no_grad():
+            target_y = self.target_encoder(target_x[0], target_x[1]).detach()
+            target_y = target_y[edge[0]] * target_y[edge[1]]
+        return online_q, target_y
+
+    def forward(self, x: torch.Tensor, edge_index: torch.Tensor):
+        # forward online network
+        online_y = self.online_encoder(x, edge_index)
+        return online_y
+
+    def loss(self, z1, z2, y1, y2):
+        loss = 2 - F.cosine_similarity(z1, y2.detach(), dim=-1).mean() - F.cosine_similarity(z2, y1.detach(), dim=-1).mean()
+        return loss
+    
+    # def semi_loss(self, z1_uv, neg_z1_uv, z2_uv, neg_z2_uv):
+    #     f = lambda x: torch.exp(x / self.tau)
+
+    #     pos_refl_sim = f(self.sim(z1_uv, z1_uv))
+    #     pos_between_sim = f(self.sim(z1_uv, z2_uv))
+
+    #     neg_refl_sim = f(self.sim(neg_z1_uv, neg_z1_uv))
+    #     neg_between_sim = f(self.sim(neg_z1_uv, neg_z2_uv))
+
+    #     loss = -torch.log((pos_between_sim.diag())/(neg_refl_sim.sum(1) + neg_between_sim.sum(1) - neg_refl_sim.diag()))
+    #     return loss
+
+    # def loss(self, z1: torch.Tensor, z2: torch.Tensor, edge, neg_edge, mean: bool = True, batch_size: int = None):
+    #     z1_uv = self.projection(z1[edge[0]] * z1[edge[1]])
+    #     neg_z1_uv = self.projection(z1[neg_edge[0]] * z1[neg_edge[1]])
+    #     z2_uv = self.projection(z2[edge[0]] * z2[edge[1]])
+    #     neg_z2_uv = self.projection(z2[neg_edge[0]] * z2[neg_edge[1]])
+
+    #     if batch_size is None:
+    #         l1 = self.semi_loss(z1_uv, neg_z1_uv, z2_uv, neg_z2_uv)
+    #         l2 = self.semi_loss(z2_uv, neg_z2_uv, z1_uv, neg_z1_uv)
+
+    #     ret = (l1 + l2) * 0.5
+    #     ret = ret.mean() if mean else ret.sum()
+
+    #     return ret
 
 class ABGRL(torch.nn.Module):
     r"""BGRL architecture for Graph representation learning.

@@ -19,7 +19,7 @@ DATASETS = ["synthetic_1", "synthetic_2", "synthetic_3",
             "cora", "citeseer", "pubmed", "collab"]
 MODELS = ["baseline", 
           "grace", "lgrace", "agrace", "ândgrace", "âorgrace", "extagrace", "a2grace", "csgcl", 
-          "bgrl", "âorbgrl", "extabgrl", "a2bgrl", "abgrl"]
+          "bgrl", "lbgrl", "âorbgrl", "extabgrl", "a2bgrl", "abgrl"]
 AUGMENTATIONS = ["random", "deg", "pr", "evc", "scom", "sbm", "sbm2"]
 LOSS = ["log_sig", "bce", "auc", "hinge_auc"]
 
