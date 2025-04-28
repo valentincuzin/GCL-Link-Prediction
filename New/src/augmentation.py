@@ -9,7 +9,7 @@ from torch_geometric.utils import degree, to_undirected, to_networkx, dropout_ad
 from torch_scatter import scatter
 from functools import partial
 
-from src.utils import get_commu_strength, gen_sbm
+from src.utils import get_commu_strength, gen_sbm, community_detection
 
 
 class Aug:
@@ -27,8 +27,12 @@ class Aug:
             feature_weights, drop_weights = compute_weight[type]()
         elif type == 'scom':
             feature_weights, drop_weights = self.commu_strength()
-        elif type in ['sbm', 'sbm2']:
-            self.commu_repartition()
+        elif 'sbm' in type:
+            cd_algo = None
+            if '_' in type:
+                type, cd_algo = type.split('_')
+            print(cd_algo, 'detection...')
+            self.commu_repartition(cd_algo)
         elif '_d' in type:
             type, delta = type.split('_d')
             print(type, " with variance: ", delta)
@@ -105,7 +109,7 @@ class Aug:
 
     def eigenvector(self):
         def eigenvector_centrality(data):
-            graph = to_networkx(data)
+            graph = to_networkx(data, to_undirected=True)
             x = nx.eigenvector_centrality(graph, max_iter=200)
             x = [x[i] for i in range(data.num_nodes)]
             return torch.tensor(x, dtype=torch.float32).to(data.edge_index.device)
@@ -188,12 +192,12 @@ class Aug:
         x_2 = cav(self.data.x, feature_weights, self.param['drop_feature_rate_2'])
         return x_1, edge_index_1, x_2, edge_index_2
 
-    def commu_repartition(self):
-        if hasattr(self.data, "probs") and hasattr(self.data, "sizes"):
+    def commu_repartition(self, cd_algo: str = None):
+        if hasattr(self.data, "probs") and hasattr(self.data, "sizes") and cd_algo is None:
             print("already communities")
             return
-        G = to_networkx(self.data)
-        communities = nx.community.louvain_communities(G)
+        G = to_networkx(self.data, to_undirected=True)
+        communities = community_detection(cd_algo)(G).communities
         probs = np.zeros((len(communities), len(communities)))
         sizes = []
         for idx, c in enumerate(communities):
