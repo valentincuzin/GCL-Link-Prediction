@@ -5,7 +5,7 @@ import torch
 import torch.nn.functional as F
 from cdlib import algorithms
 from cdlib.utils import convert_graph_formats
-from torch_geometric.utils import to_networkx, from_networkx
+from torch_geometric.utils import to_networkx, from_networkx, to_undirected
 from networkx.generators.community import stochastic_block_model
 
 def community_detection(name):
@@ -70,6 +70,7 @@ def gen_sbm(sizes, probs):
     G = stochastic_block_model(sizes, probs)
     G.remove_edges_from(nx.selfloop_edges(G)) # remove self loops
     data = from_networkx(G)
+    data.edge_index = to_undirected(data.edge_index)
     data.num_nodes = sum(sizes)
     data.sizes = sizes
     data.probs = probs

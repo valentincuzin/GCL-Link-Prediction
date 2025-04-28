@@ -71,14 +71,17 @@ def pretrain_lgrace(model, aug, param):
         x_1, edge_index_1, x_2, edge_index_2 = aug()
         edge_index_1, _ = add_self_loops(edge_index_1, num_nodes=aug.data.num_nodes)
         edge_index_2, _ = add_self_loops(edge_index_2, num_nodes=aug.data.num_nodes)
-        adj_1 = to_dense_adj(edge_index_1)
-        adj_2 = to_dense_adj(edge_index_2)
-        adj_or = (adj_1 + adj_2).squeeze()
-        adj_and = (adj_1 * adj_2).squeeze()
-        and_edge_index = to_edge_index(adj_and.to_sparse())[0].to(aug.device)
+        a_index_set = {tuple(edge_index_1[:, i].tolist()) for i in range(edge_index_1.size(1))}
+        b_index_set = {tuple(edge_index_2[:, i].tolist()) for i in range(edge_index_2.size(1))}
+        common = list(a_index_set.intersection(b_index_set))
+        union = list(a_index_set.union(b_index_set))
+        and_edge_index = torch.tensor(common, device=aug.device).t()
         and_edge_index, _ = remove_self_loops(and_edge_index)
-        or_edge_index = to_edge_index(adj_or.to_sparse())[0].to(aug.device)
+        or_edge_index =  torch.tensor(union, device=aug.device).t()
         or_edge_index, _ = remove_self_loops(or_edge_index)
+        if and_edge_index.size(1) == 0:
+            print()
+            continue
         neg_edge = negative_sampling(or_edge_index, num_neg_samples=and_edge_index.size(1))
         h1 = model(x_1, edge_index_1).to(aug.device)
         h2 = model(x_2, edge_index_2).to(aug.device)
