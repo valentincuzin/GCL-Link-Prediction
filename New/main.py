@@ -20,7 +20,7 @@ DATASETS = ["synthetic_1", "synthetic_2", "synthetic_3",
 MODELS = ["baseline", 
           "grace", "lgrace", "agrace", "ândgrace", "âorgrace", "extagrace", "a2grace", "csgcl", 
           "bgrl", "lbgrl", "âorbgrl", "extabgrl", "a2bgrl", "abgrl"]
-AUGMENTATIONS = ["random", "deg", "pr", "evc", "scom", "sbm", "sbm2"]
+AUGMENTATIONS = ["random", "rjc", "raa", "rra", "deg", "pr", "evc", "scom", "sbm", "sbm2"]
 LOSS = ["log_sig", "bce", "auc", "hinge_auc"]
 
 def arguments():

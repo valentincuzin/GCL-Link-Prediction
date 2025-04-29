@@ -5,7 +5,8 @@ import torch.nn.functional as F
 import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
-from torch_geometric.utils import degree, to_undirected, to_networkx, dropout_adj, from_networkx
+from torch_geometric.data import Data
+from torch_geometric.utils import degree, to_undirected, to_networkx, dropout_adj, from_networkx, negative_sampling
 from torch_scatter import scatter
 from functools import partial
 
@@ -39,6 +40,9 @@ class Aug:
             self.perturb_commu(delta)
         self.types = {
             'random': self.random,
+            'rjc': self.rjc,
+            'raa': self.raa,
+            'rra': self.rra,
             'deg': partial(self.gca, feature_weights, drop_weights),
             'pr': partial(self.gca, feature_weights, drop_weights),
             'evc': partial(self.gca, feature_weights, drop_weights),
@@ -247,7 +251,62 @@ class Aug:
         data_2.x = self.data.x
         data_2.x = _drop_feature(data_2.x, self.param['drop_feature_rate_2'])
         return data_1.x, data_1.edge_index, data_2.x, data_2.edge_index
+    
+    def rjc(self):
+        x_1, edge_index_1, x_2, edge_index_2 = self.random()
+        neg_edge_1 = negative_sampling(edge_index_1).T.tolist()
+        data_1 = Data(x=x_1, edge_index=edge_index_1)
+        G1 = to_networkx(data_1, to_undirected=True)
+        G1 = _reconstruction(G1, nx.jaccard_coefficient, 0.9, neg_edge_1)
+        neg_edge_2 = negative_sampling(edge_index_1).T.tolist()
+        data_2 = Data(x=x_2, edge_index=edge_index_2)
+        G2 = to_networkx(data_2, to_undirected=True)
+        G2 = _reconstruction(G2, nx.jaccard_coefficient, 0.9, neg_edge_2)
 
+        data_1 = from_networkx(G1).to(self.device)
+        data_2 = from_networkx(G2).to(self.device)
+        return x_1, data_1.edge_index, x_2, data_2.edge_index
+
+    def raa(self):
+        x_1, edge_index_1, x_2, edge_index_2 = self.random()
+        data_1 = Data(x=x_1, edge_index=edge_index_1)
+        G1 = to_networkx(data_1, to_undirected=True)
+        neg_edge_1 = negative_sampling(edge_index_1).T.tolist()
+        G1 = _reconstruction(G1, nx.adamic_adar_index, 0.9, neg_edge_1)
+        data_2 = Data(x=x_2, edge_index=edge_index_2)
+        G2 = to_networkx(data_2, to_undirected=True)
+        neg_edge_2 = negative_sampling(edge_index_1).T.tolist()
+        G2 = _reconstruction(G2, nx.adamic_adar_index, 0.9, neg_edge_2)
+
+        data_1 = from_networkx(G1).to(self.device)
+        data_2 = from_networkx(G2).to(self.device)
+        return x_1, data_1.edge_index, x_2, data_2.edge_index
+
+    def rra(self):
+        x_1, edge_index_1, x_2, edge_index_2 = self.random()
+        data_1 = Data(x=x_1, edge_index=edge_index_1)
+        G1 = to_networkx(data_1, to_undirected=True)
+        neg_edge_1 = negative_sampling(edge_index_1).T.tolist()
+        G1 = _reconstruction(G1, nx.resource_allocation_index, 0.9, neg_edge_1)    
+        data_2 = Data(x=x_2, edge_index=edge_index_2)
+        G2 = to_networkx(data_2, to_undirected=True)
+        neg_edge_2 = negative_sampling(edge_index_1).T.tolist()
+        G2 = _reconstruction(G2, nx.resource_allocation_index, 0.9, neg_edge_2)
+
+        data_1 = from_networkx(G1).to(self.device)
+        data_2 = from_networkx(G2).to(self.device)
+        return x_1, data_1.edge_index, x_2, data_2.edge_index
+
+def _reconstruction(G, algo: callable, threshold, edge_list = None):
+    new_G = nx.Graph()
+    new_G.add_node(G)
+    preds = algo(G, [tuple(pair) for pair in edge_list])
+    retains = []
+    for u, v, p in preds:
+        if p >= threshold:
+            retains.append((u, v))
+    G.add_edges_from(retains)
+    return G
 
 def _permute_nodes(sizes, perm_rate):
         sizes = copy.copy(sizes)
