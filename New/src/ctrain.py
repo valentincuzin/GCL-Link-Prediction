@@ -61,7 +61,7 @@ def pretrain_grace(model, aug, param):
             z1 = model(x_1, edge_index_1)
             z2 = model(x_2, edge_index_2)
             val_loss = model.loss(z1, z2)
-        writer.add_scalars("Loss/grace", {'train':loss, 'val': val_loss}, epoch)
+        writer.add_scalars("grace", {'train':loss, 'val': val_loss}, epoch)
     print('pretrain loss: ', loss_res)
     pre_time = time.time()-t1
     print(f"pretrain time: {pre_time:.2f} s")
@@ -127,7 +127,7 @@ def pretrain_lgrace(model, aug, param):
             h1 = model(x_1, edge_index_1).to(aug.device)
             h2 = model(x_2, edge_index_2).to(aug.device)
             val_loss = model.loss(h1, h2, and_edge_index, neg_edge)
-        writer.add_scalars("Loss/lgrace", {'train':loss, 'val': val_loss}, epoch)
+        writer.add_scalars("lgrace", {'train':loss, 'val': val_loss}, epoch)
     print('real epochs: ', param['ct_epochs']-nb_jump)
     print('pretrain loss: ', loss_res)
     pre_time = time.time()-t1
@@ -376,7 +376,7 @@ def pretrain_bgrl(model, aug, param):
             z2, y1 = model.train_forward((x_2, edge_index_2), (x_1, edge_index_1))
 
             val_loss = model.loss(z1, z2, y1, y2)
-        writer.add_scalars("Loss/grace", {'train':loss, 'val': val_loss}, epoch)
+        writer.add_scalars("bgrl", {'train':loss, 'val': val_loss}, epoch)
     print('pretrain loss: ', loss_res, ' s')
     pre_time = time.time()-t1
     print(f"pretrain time: {pre_time:.2f} s")
@@ -444,7 +444,7 @@ def pretrain_lbgrl(model, aug, param):
             z2, y1 = model.train_forward((x_2, edge_index_2), (x_1, edge_index_1), and_edge_index)
 
             val_loss = model.loss(z1, z2, y1, y2)
-        writer.add_scalars("Loss/lbgrl", {'train':loss, 'val': val_loss}, epoch)
+        writer.add_scalars("lbgrl", {'train':loss, 'val': val_loss}, epoch)
     print('real epochs: ', param['ct_epochs']-nb_jump)
     print('pretrain loss: ', loss_res, ' s')
     pre_time = time.time()-t1
