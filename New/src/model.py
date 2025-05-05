@@ -3,25 +3,28 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch_geometric.nn import GCNConv, BatchNorm, LayerNorm, Sequential
+from torch_geometric.nn import GCNConv, SAGEConv, GATConv, BatchNorm, LayerNorm, Sequential
 
 def get_model(model_name: str, data, hp: dict):
     device = data.x.device
-    _encoder = ENCODER_GRACE(data.num_features, hp['hidden'], nn.Identity()).to(device)
+    if hp['hp_search']:
+        _encoder = ENCODER_GRACE(data.num_features, hp['hidden'], hp['activation_layer'], hp['conv_layer'],k=hp['n_layers'], skip=hp['skip']).to(device)
+    else:
+        _encoder = ENCODER_GRACE(data.num_features, hp['hidden'], nn.Identity()).to(device)
     if model_name == "baseline":
         return _encoder
     elif model_name == "grace":
-        model = GRACE(_encoder, hp['hidden'], hp['proj_hidden']).to(device)
+        model = GRACE(_encoder, hp['hidden'], hp['hidden']).to(device)
     elif model_name == "lgrace":
         model = LinkGRACE(_encoder, hp['hidden'], hp['hidden']).to(device)
     elif model_name in  ["agrace", "ândgrace", "âorgrace", "extagrace"]:
-        model = AGRACE(_encoder, hp['hidden'], hp['proj_hidden']).to(device)
+        model = AGRACE(_encoder, hp['hidden'], hp['hidden']).to(device)
     elif model_name in  "a2grace":
-        model = A2GRACE(_encoder, hp['hidden'], hp['proj_hidden']).to(device)
+        model = A2GRACE(_encoder, hp['hidden'], hp['hidden']).to(device)
     elif model_name == "csgcl":
         model = CSGCL(_encoder,
                         hp['hidden'],
-                        hp['proj_hidden'],
+                        hp['hidden'],
                         hp['tau']).to(device)
     elif model_name in "bgrl":
         _predictor = MLP_Head_BGRL(hp['hidden'], hp['hidden']).to(device)
@@ -36,6 +39,15 @@ def get_model(model_name: str, data, hp: dict):
         _predictor = MLP_Head_BGRL(hp['hidden'], hp['hidden']).to(device)
         model = A2BGRL(_encoder, _predictor).to(device)
     return model
+
+def define_model(trial, model_name, data, hp):
+    hp['n_layers'] = trial.suggest_int("n_layers", 2, 10)
+    hp['hidden'] = trial.suggest_int("hidden", 32, 1024, 16)
+    hp['conv_layer'] = GCNConv # trial.suggest_categorical("conv_layer", [GCNConv, SAGEConv, GATConv])
+    hp['activation_layer'] = nn.Identity() # trial.suggest_categorical("activation_layer", [nn.Identity, nn.PReLU, nn.LeakyReLU])()
+    hp['skip'] = trial.suggest_categorical("skip", [True, False])
+    return get_model(model_name, data, hp)
+
 
 ###############################################
 # Code from GRACE
@@ -199,7 +211,7 @@ class LinkGRACE(nn.Module):
 
         ret = (l1 + l2) * 0.5
         ret = ret.mean() if mean else ret.sum()
-
+        
         return ret
 
 class AGRACE(nn.Module):

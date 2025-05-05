@@ -1,13 +1,16 @@
 import argparse
 import json
 import os
+import random
+import optuna
+from optuna.trial import TrialState
 import numpy as np
 import torch
 import torch.nn as nn
 from torch_geometric import seed_everything
 
 from src.augmentation import Aug
-from src.model import get_model
+from src.model import get_model, define_model
 from src.datasets import DataSplit, get_evaluator, full_eval
 from src.predictor import get_predictor, ProbDecoder
 from src.train import pred_train, baseline_train, test
@@ -20,7 +23,7 @@ DATASETS = ["synthetic_1", "synthetic_2", "synthetic_3",
 MODELS = ["baseline", 
           "grace", "lgrace", "agrace", "ândgrace", "âorgrace", "extagrace", "a2grace", "csgcl", 
           "bgrl", "lbgrl", "âorbgrl", "extabgrl", "a2bgrl", "abgrl"]
-AUGMENTATIONS = ["random", "rjc", "raa", "rra", "deg", "pr", "evc", "scom", "sbm", "sbm2"]
+AUGMENTATIONS = ["random", "rjc", "rjc2", "raa", "rra", "deg", "pr", "evc", "scom", "sbm", "sbm2"]
 LOSS = ["log_sig", "bce", "auc", "hinge_auc"]
 
 def arguments():
@@ -45,6 +48,7 @@ def arguments():
     parser.add_argument('--runs', type=int, default=10)
     parser.add_argument('--name', type=str, default="")
     parser.add_argument('--use_valedges_as_input', action='store_true', default=True, help="add validation edges to the input adjacency matrix of gnn")
+    parser.add_argument('--hp_search', type=int, default=0, help="enter the number of trials, for the search")
     args = parser.parse_args()
     args.dataset = multiparse(args.dataset, DATASETS)
     args.model = multiparse(args.model, MODELS)
@@ -61,7 +65,7 @@ def synthetic_pred(data_split, evaluator, hp):
         data, split_edge = data_split.get(r)
         predictor = ProbDecoder(data.probs, data.block)
         _, _, pos_test_pred, neg_test_pred = test(None, predictor, data, split_edge, hp['model'])
-        neg_test_pred += np.random.normal(0, 0.0001, neg_test_pred.shape)
+        neg_test_pred += np.random.normal(0, 0.001, neg_test_pred.shape)
         test_res = full_eval(evaluator, pos_test_pred, neg_test_pred)
         res_dict = store_res(test_res, res_dict)
     save_name = "synthetic_prob_pred"
@@ -78,10 +82,49 @@ def hp_load(dataset: str, args):
         hp_files = os.path.join('params', dataset+'.json')
     with open(hp_files) as json_file:
         hp = json.load(json_file)
+        hp["model"]["hp_search"] = args.hp_search != 0
         hp["model"]["epochs"] = args.epochs
         hp["model"]["ct_epochs"] = args.ct_epochs
         hp["model"]["use_valedges_as_input"] = args.use_valedges_as_input
     return hp
+
+def update_hp(study, hp):
+    pruned_trials = study.get_trials(deepcopy=False, states=[TrialState.PRUNED])
+    complete_trials = study.get_trials(deepcopy=False, states=[TrialState.COMPLETE])
+
+    print("Study statistics: ")
+    print("  Number of finished trials: ", len(study.trials))
+    print("  Number of pruned trials: ", len(pruned_trials))
+    print("  Number of complete trials: ", len(complete_trials))
+
+    print("Best trial:")
+    trial = study.best_trial
+
+    print("  Value: ", trial.value)
+
+    print("  Params: ")
+    for key, value in trial.params.items():
+        print("    {}: {}".format(key, value))
+        hp[key] = value
+    return hp
+
+def train_test_run(model, predictor, data, split_edge, model_name, augmentation, loss_name, evaluator, args, hp, res_dict):
+    if model_name != "baseline":
+        print(f"..{augmentation}..")
+        aug = Aug(data, split_edge, hp['augmentation'], augmentation)
+        pre_time = pretrain(model_name, model, aug, hp['model'])
+        res_dict['pretrain_time'].append(pre_time)
+        if isinstance(predictor, nn.Module):
+            predictor = predictor.to(device)
+            pred_train(model, predictor, data, split_edge, loss_name, hp['model'])
+    else:
+        baseline_train(model, predictor, data, split_edge, loss_name, hp['model'])
+    pos_valid_pred, neg_valid_pred, pos_test_pred, neg_test_pred = test(model, predictor, data, split_edge, hp['model'])
+    val_res = full_eval(evaluator, pos_valid_pred, neg_valid_pred)
+    test_res = full_eval(evaluator, pos_test_pred, neg_test_pred)
+    for (key, v_res), t_res in zip(val_res.items(), test_res.values()):
+        print(f"{key}:  val: {100 * v_res:.2f}%, test: {100 * t_res:.2f}%")
+    return store_res(test_res, res_dict)
 
 if __name__ == "__main__":
     args = arguments()
@@ -96,32 +139,37 @@ if __name__ == "__main__":
         for model_name in args.model:
             print(f"...{model_name}...")
             for augmentation in args.augmentation:
-                # , "PHits@10": [], "PHits@20": [], "PHits@50": [], "PHits@100": [], similar
-                res_dict = {"Hits@10": [], "Hits@20": [], "Hits@50": [], "Hits@100": [], 
-                            "ROCAUC": [], "AP": [], "pretrain_time": []}
                 for loss_name in args.loss:
                     # print(f".{loss_name}.")
+                    # , "PHits@10": [], "PHits@20": [], "PHits@50": [], "PHits@100": [], similar
+                    res_dict = {"Hits@10": [], "Hits@20": [], "Hits@50": [], "Hits@100": [], 
+                            "ROCAUC": [], "AP": [], "pretrain_time": []}
+                    # hyperparameter search then classic runs
+                    def _objective(trial):
+                        res_dict = {"Hits@10": [], "Hits@20": [], "Hits@50": [], "Hits@100": [], "ROCAUC": [], "AP": [], "pretrain_time": []}
+                        r = 0
+                        hp['model']['ct_epochs'] = trial.suggest_int('ct_epochs', 100, 2000, 200)
+                        seed_everything(r)
+                        data, split_edge = data_split.get(r)
+                        model = define_model(trial, model_name, data, hp['model'])
+                        predictor = get_predictor(args.predictor, hp['model'])
+                        res_dict = train_test_run(model, predictor, data, split_edge, model_name, augmentation, loss_name, evaluator, args, hp, res_dict)
+                        hit50 = res_dict.pop("Hits@50")[0]
+                        trial.report(hit50, hp['model']['ct_epochs'])
+                        # # Handle pruning based on the intermediate value.
+                        # if trial.should_prune():
+                        #     raise optuna.exceptions.TrialPruned()
+                        return hit50
+                    if args.hp_search != 0:
+                        study = optuna.create_study(direction='maximize')
+                        study.optimize(_objective, n_trials=args.hp_search)
+                        hp['model'] = update_hp(study, hp['model'])
                     for r in range(args.runs):
                         seed_everything(r)
                         data, split_edge = data_split.get(r)
                         model = get_model(model_name, data, hp['model'])
                         predictor = get_predictor(args.predictor, hp['model'])
-                        if model_name != "baseline":
-                            print(f"..{augmentation}..")
-                            aug = Aug(data, hp['augmentation'], augmentation)
-                            pre_time = pretrain(model_name, model, aug, hp['model'])
-                            res_dict['pretrain_time'].append(pre_time)
-                            if isinstance(predictor, nn.Module):
-                                predictor = predictor.to(device)
-                                pred_train(model, predictor, data, split_edge, loss_name, hp['model'])
-                        else:
-                            baseline_train(model, predictor, data, split_edge, loss_name, hp['model'])
-                        pos_valid_pred, neg_valid_pred, pos_test_pred, neg_test_pred = test(model, predictor, data, split_edge, hp['model'])
-                        val_res = full_eval(evaluator, pos_valid_pred, neg_valid_pred)
-                        test_res = full_eval(evaluator, pos_test_pred, neg_test_pred)
-                        for (key, v_res), t_res in zip(val_res.items(), test_res.values()):
-                            print(f"{key}:  val: {100 * v_res:.2f}%, test: {100 * t_res:.2f}%")
-                        res_dict = store_res(test_res, res_dict)
+                        res_dict = train_test_run(model, predictor, data, split_edge, model_name,augmentation, loss_name, evaluator, args, hp, res_dict)
                     save_name = f"{model_name}{'_'+loss_name if loss_name != "log_sig" else ""}{'_'+augmentation if model_name != "baseline" else ""}"
                     df_res, res_latex = compute_table(res_dict, save_name)
                     print(df_res)

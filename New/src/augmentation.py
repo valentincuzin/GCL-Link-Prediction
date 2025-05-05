@@ -1,12 +1,14 @@
 import copy
 import random
+
+from networkx import subgraph
 import torch
 import torch.nn.functional as F
 import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
 from torch_geometric.data import Data
-from torch_geometric.utils import degree, to_undirected, to_networkx, dropout_adj, from_networkx, negative_sampling
+from torch_geometric.utils import degree, to_undirected, to_networkx, dropout_adj, from_networkx, negative_sampling, k_hop_subgraph, to_dense_adj
 from torch_scatter import scatter
 from functools import partial
 
@@ -14,9 +16,11 @@ from src.utils import get_commu_strength, gen_sbm, community_detection
 
 
 class Aug:
-    def __init__(self, data, param, type: str = 'random'):
-        self.data = data
+    def __init__(self, data, split_edge, param, type: str = 'random'):
+        self.data = copy.deepcopy(data)
+        self.split_edge = split_edge
         self.device = self.data.x.device
+        self.train_mode = True
         feature_weights = None
         drop_weights = None
         if type in ['deg', 'pr', 'evc']:
@@ -38,9 +42,28 @@ class Aug:
             type, delta = type.split('_d')
             print(type, " with variance: ", delta)
             self.perturb_commu(delta)
+        elif type == 'rjc2':
+            G = to_networkx(self.data, to_undirected=True)
+            preds = nx.jaccard_coefficient(G)
+            for u, v in G.edges():
+                G[u][v]['weight'] = 1
+            nb_add = 0
+            for u, v, p in preds:
+                if p >= 0.5:
+                    nb_add += 1
+                    G.add_edge(u, v, weight=0.75+p)
+                    G.add_edge(v, u, weight=0.75+p)
+            print('add', nb_add, 'edges')
+            tmp = from_networkx(G).to(self.device)
+            self.data.edge_index = tmp.edge_index
+            self.data.weight = tmp.weight
+        elif type == 'ctri':
+            self.data.edge_index = _close_triangle(self.data.edge_index)
         self.types = {
             'random': self.random,
             'rjc': self.rjc,
+            'rjc2': self.rjc2,
+            'ctri': self.random,
             'raa': self.raa,
             'rra': self.rra,
             'deg': partial(self.gca, feature_weights, drop_weights),
@@ -54,12 +77,23 @@ class Aug:
         self.get = self.types[type]
         self.type = type
 
+    def train(self):
+        if not self.train_mode:
+            self.data.edge_index = to_undirected(self.split_edge["train"]["edge"].t())
+            self.train_mode = True
+
+    def eval(self):
+        if self.train_mode:
+            self.data.edge_index = to_undirected(self.split_edge["valid"]["edge"].t())
+            self.train_mode = False
+
     def __call__(self):
         return self.get()
 
     def random(self):
-        edge_index_1 = dropout_adj(self.data.edge_index, p=self.param[f'drop_edge_rate_{1}'])[0]
-        edge_index_2 = dropout_adj(self.data.edge_index, p=self.param[f'drop_edge_rate_{2}'])[0]
+        edge_attr = self.data.edge_attr if 'edge_attr' in self.data else None
+        edge_index_1 = dropout_adj(self.data.edge_index, edge_attr, p=self.param[f'drop_edge_rate_{1}'], force_undirected=True)[0]
+        edge_index_2 = dropout_adj(self.data.edge_index, edge_attr, p=self.param[f'drop_edge_rate_{2}'], force_undirected=True)[0]
         x_1 = _drop_feature(self.data.x, self.param['drop_feature_rate_1'])
         x_2 = _drop_feature(self.data.x, self.param['drop_feature_rate_2'])
         return x_1, edge_index_1, x_2, edge_index_2
@@ -197,6 +231,8 @@ class Aug:
         return x_1, edge_index_1, x_2, edge_index_2
 
     def commu_repartition(self, cd_algo: str = None):
+        if cd_algo == None:
+            cd_algo = 'louvain'
         if hasattr(self.data, "probs") and hasattr(self.data, "sizes") and cd_algo is None:
             print("already communities")
             return
@@ -254,14 +290,29 @@ class Aug:
     
     def rjc(self):
         x_1, edge_index_1, x_2, edge_index_2 = self.random()
-        neg_edge_1 = negative_sampling(edge_index_1).T.tolist()
+        neg_edge = negative_sampling(self.data.edge_index).T.tolist()
+        
         data_1 = Data(x=x_1, edge_index=edge_index_1)
         G1 = to_networkx(data_1, to_undirected=True)
-        G1 = _reconstruction(G1, nx.jaccard_coefficient, 0.9, neg_edge_1)
-        neg_edge_2 = negative_sampling(edge_index_1).T.tolist()
+        G1 = _reconstruction(G1, nx.jaccard_coefficient, 0.9, neg_edge)
         data_2 = Data(x=x_2, edge_index=edge_index_2)
         G2 = to_networkx(data_2, to_undirected=True)
-        G2 = _reconstruction(G2, nx.jaccard_coefficient, 0.9, neg_edge_2)
+        G2 = _reconstruction(G2, nx.jaccard_coefficient, 0.9, neg_edge)
+
+        data_1 = from_networkx(G1).to(self.device)
+        data_2 = from_networkx(G2).to(self.device)
+        return x_1, data_1.edge_index, x_2, data_2.edge_index
+
+    def rjc2(self):
+        x_1, edge_index_1, x_2, edge_index_2 = self.random()
+        neg_edge = negative_sampling(self.data.edge_index).T.tolist()
+        
+        data_1 = Data(x=x_1, edge_index=edge_index_1)
+        G1 = to_networkx(data_1, to_undirected=True)
+        G1 = _reconstruction(G1, nx.jaccard_coefficient, 0.9, neg_edge)
+        data_2 = Data(x=x_2, edge_index=edge_index_2)
+        G2 = to_networkx(data_2, to_undirected=True)
+        G2 = _reconstruction(G2, nx.jaccard_coefficient, 0.9, neg_edge)
 
         data_1 = from_networkx(G1).to(self.device)
         data_2 = from_networkx(G2).to(self.device)
@@ -269,14 +320,14 @@ class Aug:
 
     def raa(self):
         x_1, edge_index_1, x_2, edge_index_2 = self.random()
+        neg_edge = negative_sampling(self.data.edge_index).T.tolist()
+
         data_1 = Data(x=x_1, edge_index=edge_index_1)
         G1 = to_networkx(data_1, to_undirected=True)
-        neg_edge_1 = negative_sampling(edge_index_1).T.tolist()
-        G1 = _reconstruction(G1, nx.adamic_adar_index, 0.9, neg_edge_1)
+        G1 = _reconstruction(G1, nx.adamic_adar_index, 0.9, neg_edge)
         data_2 = Data(x=x_2, edge_index=edge_index_2)
         G2 = to_networkx(data_2, to_undirected=True)
-        neg_edge_2 = negative_sampling(edge_index_1).T.tolist()
-        G2 = _reconstruction(G2, nx.adamic_adar_index, 0.9, neg_edge_2)
+        G2 = _reconstruction(G2, nx.adamic_adar_index, 0.9, neg_edge)
 
         data_1 = from_networkx(G1).to(self.device)
         data_2 = from_networkx(G2).to(self.device)
@@ -286,16 +337,48 @@ class Aug:
         x_1, edge_index_1, x_2, edge_index_2 = self.random()
         data_1 = Data(x=x_1, edge_index=edge_index_1)
         G1 = to_networkx(data_1, to_undirected=True)
-        neg_edge_1 = negative_sampling(edge_index_1).T.tolist()
-        G1 = _reconstruction(G1, nx.resource_allocation_index, 0.9, neg_edge_1)    
+        neg_edge = negative_sampling(edge_index_1).T.tolist()
+        G1 = _reconstruction(G1, nx.resource_allocation_index, 0.9, neg_edge)    
         data_2 = Data(x=x_2, edge_index=edge_index_2)
         G2 = to_networkx(data_2, to_undirected=True)
-        neg_edge_2 = negative_sampling(edge_index_1).T.tolist()
-        G2 = _reconstruction(G2, nx.resource_allocation_index, 0.9, neg_edge_2)
+        neg_edge = negative_sampling(edge_index_2).T.tolist()
+        G2 = _reconstruction(G2, nx.resource_allocation_index, 0.9, neg_edge)
 
         data_1 = from_networkx(G1).to(self.device)
         data_2 = from_networkx(G2).to(self.device)
         return x_1, data_1.edge_index, x_2, data_2.edge_index
+
+    def random_prob(self):
+        weight = self.data.weight if 'weight' in self.data else None
+        edge_index_1 = _droupout_adj_prob(self.data.edge_index, weight, p=self.param[f'drop_edge_rate_{1}'], force_undirected=True)[0]
+        edge_index_2 = _droupout_adj_prob(self.data.edge_index, weight, p=self.param[f'drop_edge_rate_{2}'], force_undirected=True)[0]
+        x_1 = _drop_feature(self.data.x, self.param['drop_feature_rate_1'])
+        x_2 = _drop_feature(self.data.x, self.param['drop_feature_rate_2'])
+        return x_1, edge_index_1, x_2, edge_index_2
+
+def _droupout_adj_prob(edge_index, edge_weight, p: float = 0.5, 
+                       force_undirected: bool = False, num_nodes: int = None,training: bool = True):
+    def filter_adj(row, col, edge_weight, mask):
+        return row[mask], col[mask], None if edge_weight is None else edge_weight[mask]
+    if p < 0. or p > 1.:
+        raise ValueError(f'Dropout probability has to be between 0 and 1 '
+                            f'(got {p}')
+    if not training or p == 0.0:
+        return edge_index, edge_weight
+    row, col = edge_index
+    mask = torch.rand(row.size(0), device=edge_index.device) >= p*edge_weight
+    if force_undirected:
+        mask[row > col] = False
+    row, col, edge_weight = filter_adj(row, col, edge_weight, mask)
+    if force_undirected:
+        edge_index = torch.stack(
+            [torch.cat([row, col], dim=0),
+                torch.cat([col, row], dim=0)], dim=0)
+        if edge_weight is not None:
+            edge_weight = torch.cat([edge_weight, edge_weight], dim=0)
+    else:
+        edge_index = torch.stack([row, col], dim=0)
+    return edge_index, edge_weight
 
 def _reconstruction(G, algo: callable, threshold, edge_list = None):
     new_G = nx.Graph()
@@ -305,8 +388,21 @@ def _reconstruction(G, algo: callable, threshold, edge_list = None):
     for u, v, p in preds:
         if p >= threshold:
             retains.append((u, v))
-    G.add_edges_from(retains)
-    return G
+    new_G.add_edges_from(retains)
+    return new_G
+
+def _close_triangle(edge_index):
+    edge_index = to_undirected(edge_index)
+    link_to_add = [edge_index]
+    for u in edge_index[0].unique():
+        subset, sub_edge_index, _, _ = k_hop_subgraph(int(u), 2, edge_index)
+        n = len(subset)
+        num_samples = int((n*(n-1)/2)-len(sub_edge_index[0]))
+        if num_samples <= 0:
+            continue
+        neg_sampl = to_undirected(negative_sampling(sub_edge_index, num_neg_samples=num_samples))
+        link_to_add.append(neg_sampl)
+    return torch.cat(link_to_add, dim=1)
 
 def _permute_nodes(sizes, perm_rate):
         sizes = copy.copy(sizes)
