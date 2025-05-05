@@ -20,6 +20,7 @@ class Aug:
         self.data = copy.deepcopy(data)
         self.split_edge = split_edge
         self.device = self.data.x.device
+        self.data = self.data.to(self.device)
         self.train_mode = True
         feature_weights = None
         drop_weights = None
@@ -79,12 +80,12 @@ class Aug:
 
     def train(self):
         if not self.train_mode:
-            self.data.edge_index = to_undirected(self.split_edge["train"]["edge"].t())
+            self.data.edge_index = to_undirected(self.split_edge["train"]["edge"].t()).to(self.device)
             self.train_mode = True
 
     def eval(self):
         if self.train_mode:
-            self.data.edge_index = to_undirected(self.split_edge["valid"]["edge"].t())
+            self.data.edge_index = to_undirected(self.split_edge["valid"]["edge"].t()).to(self.device)
             self.train_mode = False
 
     def __call__(self):
@@ -92,10 +93,10 @@ class Aug:
 
     def random(self):
         edge_attr = self.data.edge_attr if 'edge_attr' in self.data else None
-        edge_index_1 = dropout_adj(self.data.edge_index, edge_attr, p=self.param[f'drop_edge_rate_{1}'], force_undirected=True)[0]
-        edge_index_2 = dropout_adj(self.data.edge_index, edge_attr, p=self.param[f'drop_edge_rate_{2}'], force_undirected=True)[0]
-        x_1 = _drop_feature(self.data.x, self.param['drop_feature_rate_1'])
-        x_2 = _drop_feature(self.data.x, self.param['drop_feature_rate_2'])
+        edge_index_1 = dropout_adj(self.data.edge_index, edge_attr, p=self.param[f'drop_edge_rate_{1}'], force_undirected=True)[0].to(self.device)
+        edge_index_2 = dropout_adj(self.data.edge_index, edge_attr, p=self.param[f'drop_edge_rate_{2}'], force_undirected=True)[0].to(self.device)
+        x_1 = _drop_feature(self.data.x, self.param['drop_feature_rate_1']).to(self.device)
+        x_2 = _drop_feature(self.data.x, self.param['drop_feature_rate_2']).to(self.device)
         return x_1, edge_index_1, x_2, edge_index_2
 
     def degree(self):
@@ -167,10 +168,10 @@ class Aug:
         return feature_weights, drop_weights
 
     def gca(self, feature_weights, drop_weights):
-        edge_index_1 = _drop_edge_weighted(self.data.edge_index, drop_weights, p=self.param[f'drop_edge_rate_{1}'], threshold=0.7)
-        edge_index_2 = _drop_edge_weighted(self.data.edge_index, drop_weights, p=self.param[f'drop_edge_rate_{2}'], threshold=0.7)
-        x_1 = _drop_feature_weighted(self.data.x, feature_weights, self.param['drop_feature_rate_1'])
-        x_2 = _drop_feature_weighted(self.data.x, feature_weights, self.param['drop_feature_rate_2'])
+        edge_index_1 = _drop_edge_weighted(self.data.edge_index, drop_weights, p=self.param[f'drop_edge_rate_{1}'], threshold=0.7).to(self.device)
+        edge_index_2 = _drop_edge_weighted(self.data.edge_index, drop_weights, p=self.param[f'drop_edge_rate_{2}'], threshold=0.7).to(self.device)
+        x_1 = _drop_feature_weighted(self.data.x, feature_weights, self.param['drop_feature_rate_1']).to(self.device)
+        x_2 = _drop_feature_weighted(self.data.x, feature_weights, self.param['drop_feature_rate_2']).to(self.device)
         return x_1, edge_index_1, x_2, edge_index_2
 
     def commu_strength(self):
@@ -204,7 +205,7 @@ class Aug:
             edge_weight = edge_weight.where(edge_weight > (1. - threshold), torch.ones_like(edge_weight) * (1. - threshold))
             edge_weight = edge_weight.where(edge_weight < 1, torch.ones_like(edge_weight) * 1)
             sel_mask = torch.bernoulli(edge_weight).to(torch.bool)
-            return edge_index[:, sel_mask]
+            return edge_index[:, sel_mask].to(self.device)
 
         def cav(feature: torch.Tensor,
                 node_cs: np.ndarray,
@@ -222,7 +223,7 @@ class Aug:
             drop_mask = torch.bernoulli(w).to(torch.bool)
             feature = feature.clone()
             feature[:, drop_mask] = 0.
-            return feature
+            return feature.to(self.device)
 
         edge_index_1 = ced(self.data.edge_index, node_cs, p=self.param['drop_edge_rate_1'])
         edge_index_2 = ced(self.data.edge_index, node_cs, p=self.param['drop_edge_rate_2'])

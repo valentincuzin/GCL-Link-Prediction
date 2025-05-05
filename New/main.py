@@ -20,7 +20,7 @@ from src.utils import store_res, compute_table, full_output
 DATASETS = ["synthetic_1", "synthetic_2", "synthetic_3", 
             "facebook_friends", "wiki_science", "crime", 
             "cora", "citeseer", "pubmed", "collab"]
-MODELS = ["baseline", 
+MODELS = ["baseline",
           "grace", "lgrace", "agrace", "ândgrace", "âorgrace", "extagrace", "a2grace", "csgcl", 
           "bgrl", "lbgrl", "âorbgrl", "extabgrl", "a2bgrl", "abgrl"]
 AUGMENTATIONS = ["random", "rjc", "rjc2", "raa", "rra", "deg", "pr", "evc", "scom", "sbm", "sbm2"]

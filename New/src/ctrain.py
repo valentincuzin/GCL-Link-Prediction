@@ -341,7 +341,7 @@ def pretrain_bgrl(model, aug, param):
     optimizer = torch.optim.AdamW(model.trainable_parameters(), lr=param['gnn_lr'], weight_decay=param['weight_decay'])
 
     # scheduler
-    lr_scheduler = CosineDecayScheduler(param['gnn_lr'], 1000, param['ct_epochs'])
+    lr_scheduler = CosineDecayScheduler(param['gnn_lr'], int(param['ct_epochs']/10), param['ct_epochs'])
     mm_scheduler = CosineDecayScheduler(1 - 0.99, 0, param['ct_epochs'])
 
     t1 = time.time()
@@ -388,7 +388,7 @@ def pretrain_lbgrl(model, aug, param):
     optimizer = torch.optim.AdamW(model.trainable_parameters(), lr=param['gnn_lr'], weight_decay=param['weight_decay'])
 
     # scheduler
-    lr_scheduler = CosineDecayScheduler(param['gnn_lr'], 1000, param['ct_epochs'])
+    lr_scheduler = CosineDecayScheduler(param['gnn_lr'],  int(param['ct_epochs']/10), param['ct_epochs'])
     mm_scheduler = CosineDecayScheduler(1 - 0.99, 0, param['ct_epochs'])
 
     t1 = time.time()
@@ -400,6 +400,8 @@ def pretrain_lbgrl(model, aug, param):
         aug.train()
 
         lr = lr_scheduler.get(epoch)
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = lr
         mm = 1 - mm_scheduler.get(epoch)
 
 
