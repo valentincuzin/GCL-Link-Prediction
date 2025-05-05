@@ -49,7 +49,6 @@ def pretrain_grace(model, aug, param):
         z1 = model(x_1, edge_index_1)
         z2 = model(x_2, edge_index_2)
         loss = model.loss(z1, z2)
-        writer.add_scalar("Loss/grace/train", loss, epoch)
         loss.backward()
         optimizer.step()
         if epoch % 100 == 0:
@@ -61,8 +60,8 @@ def pretrain_grace(model, aug, param):
             x_1, edge_index_1, x_2, edge_index_2 = aug()
             z1 = model(x_1, edge_index_1)
             z2 = model(x_2, edge_index_2)
-            loss = model.loss(z1, z2)
-            writer.add_scalar("Loss/grace/valid", loss, epoch)
+            val_loss = model.loss(z1, z2)
+        writer.add_scalars("Loss/grace", {'train':loss, 'val': val_loss}, epoch)
     print('pretrain loss: ', loss_res)
     pre_time = time.time()-t1
     print(f"pretrain time: {pre_time:.2f} s")
@@ -101,7 +100,6 @@ def pretrain_lgrace(model, aug, param):
         h1 = model(x_1, edge_index_1).to(aug.device)
         h2 = model(x_2, edge_index_2).to(aug.device)
         loss = model.loss(h1, h2, and_edge_index, neg_edge)
-        writer.add_scalar("Loss/lgrace/train", loss, epoch)
         loss.backward()
         optimizer.step()
         total_loss.append(loss)
@@ -128,9 +126,8 @@ def pretrain_lgrace(model, aug, param):
             neg_edge = negative_sampling(or_edge_index, num_neg_samples=and_edge_index.size(1))
             h1 = model(x_1, edge_index_1).to(aug.device)
             h2 = model(x_2, edge_index_2).to(aug.device)
-            loss = model.loss(h1, h2, and_edge_index, neg_edge)
-            writer.add_scalar("Loss/lgrace/valid", loss, epoch)
-
+            val_loss = model.loss(h1, h2, and_edge_index, neg_edge)
+        writer.add_scalars("Loss/lgrace", {'train':loss, 'val': val_loss}, epoch)
     print('real epochs: ', param['ct_epochs']-nb_jump)
     print('pretrain loss: ', loss_res)
     pre_time = time.time()-t1
@@ -354,6 +351,8 @@ def pretrain_bgrl(model, aug, param):
         aug.train()
 
         lr = lr_scheduler.get(epoch)
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = lr
         mm = 1 - mm_scheduler.get(epoch)
 
 
@@ -363,12 +362,21 @@ def pretrain_bgrl(model, aug, param):
         z2, y1 = model.train_forward((x_2, edge_index_2), (x_1, edge_index_1))
 
         loss = model.loss(z1, z2, y1, y2)
-        writer.add_scalar("Loss/pretrain_bgrl", loss, epoch)
         loss.backward()
         optimizer.step()
         model.update_target_network(mm)
         if epoch % 100 == 0:
             loss_res.append(round(float(loss), 2))
+        # valid part
+        with torch.no_grad():
+            model.eval()
+            aug.eval()
+            x_1, edge_index_1, x_2, edge_index_2 = aug()
+            z1, y2 = model.train_forward((x_1, edge_index_1), (x_2, edge_index_2))
+            z2, y1 = model.train_forward((x_2, edge_index_2), (x_1, edge_index_1))
+
+            val_loss = model.loss(z1, z2, y1, y2)
+        writer.add_scalars("Loss/grace", {'train':loss, 'val': val_loss}, epoch)
     print('pretrain loss: ', loss_res, ' s')
     pre_time = time.time()-t1
     print(f"pretrain time: {pre_time:.2f} s")
@@ -412,7 +420,6 @@ def pretrain_lbgrl(model, aug, param):
         z2, y1 = model.train_forward((x_2, edge_index_2), (x_1, edge_index_1), and_edge_index)
 
         loss = model.loss(z1, z2, y1, y2)
-        writer.add_scalar("Loss/lbgrl/train", loss, epoch)
         loss.backward()
         optimizer.step()
         model.update_target_network(mm)
@@ -436,8 +443,8 @@ def pretrain_lbgrl(model, aug, param):
             z1, y2 = model.train_forward((x_1, edge_index_1), (x_2, edge_index_2), and_edge_index)
             z2, y1 = model.train_forward((x_2, edge_index_2), (x_1, edge_index_1), and_edge_index)
 
-            loss = model.loss(z1, z2, y1, y2)
-            writer.add_scalar("Loss/lbgrl/valid", loss, epoch)
+            val_loss = model.loss(z1, z2, y1, y2)
+        writer.add_scalars("Loss/lbgrl", {'train':loss, 'val': val_loss}, epoch)
     print('real epochs: ', param['ct_epochs']-nb_jump)
     print('pretrain loss: ', loss_res, ' s')
     pre_time = time.time()-t1

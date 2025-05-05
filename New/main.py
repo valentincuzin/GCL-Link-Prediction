@@ -47,7 +47,7 @@ def arguments():
     parser.add_argument('--ct_epochs', type=int, default=500)
     parser.add_argument('--runs', type=int, default=10)
     parser.add_argument('--name', type=str, default="")
-    parser.add_argument('--use_valedges_as_input', action='store_true', default=True, help="add validation edges to the input adjacency matrix of gnn")
+    parser.add_argument('--use_valedges_as_input', action='store_true', default=False, help="add validation edges to the input adjacency matrix of gnn")
     parser.add_argument('--hp_search', type=int, default=0, help="enter the number of trials, for the search")
     args = parser.parse_args()
     args.dataset = multiparse(args.dataset, DATASETS)
