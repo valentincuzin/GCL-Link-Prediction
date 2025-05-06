@@ -8,7 +8,7 @@ from torch.utils.tensorboard import SummaryWriter
 import torch_sparse as spar
 import numpy as np
 import networkx as nx
-from src.utils import CosineDecayScheduler
+from src.utils import CosineDecayScheduler, visu_tsne, create_gif
 from src.utils import get_commu_strength
 
 writer = SummaryWriter()
@@ -40,6 +40,7 @@ def pretrain_grace(model, aug, param):
     )
     t1 = time.time()
     loss_res = []
+    img_names = []
     for epoch in tqdm(range(1, param['ct_epochs'] + 1)):
         model.train()
         aug.train()
@@ -54,14 +55,20 @@ def pretrain_grace(model, aug, param):
         if epoch % 100 == 0:
             loss_res.append(round(float(loss), 2))
         # valid part
-        with torch.no_grad():
-            model.eval()
-            aug.eval()
-            x_1, edge_index_1, x_2, edge_index_2 = aug()
-            z1 = model(x_1, edge_index_1)
-            z2 = model(x_2, edge_index_2)
-            val_loss = model.loss(z1, z2)
-        writer.add_scalars("grace", {'train':loss, 'val': val_loss}, epoch)
+        # with torch.no_grad():
+        #     model.eval()
+        #     aug.eval()
+        #     x_1, edge_index_1, x_2, edge_index_2 = aug()
+        #     z1 = model(x_1, edge_index_1)
+        #     z2 = model(x_2, edge_index_2)
+        #     h = model(aug.data.x, aug.data.edge_index)
+        #     val_loss = model.loss(z1, z2)
+        # writer.add_scalars("grace", {'train':loss, 'val': val_loss}, epoch)
+
+    #     name = f'gif/grace/{epoch}.png'
+    #     img_names.append(name)
+    #     visu_tsne(h, name=name)
+    # create_gif(img_names, 'grace_tsne.gif', 10)
     print('pretrain loss: ', loss_res)
     pre_time = time.time()-t1
     print(f"pretrain time: {pre_time:.2f} s")
@@ -78,6 +85,7 @@ def pretrain_lgrace(model, aug, param):
     t1 = time.time()
 
     total_loss = []
+    img_names = []
     nb_jump = 0
     for epoch in tqdm(range(1, 1 + param["ct_epochs"])):
         model.train()
@@ -108,26 +116,32 @@ def pretrain_lgrace(model, aug, param):
             loss_res.append(round(float(_loss), 2))
         
         # valid part
-        with torch.no_grad():
-            model.eval()
-            aug.eval()
-            x_1, edge_index_1, x_2, edge_index_2 = aug()
-            edge_index_1 = edge_index_1.T
-            edge_index_2 = edge_index_2.T
-            eq = torch.eq(edge_index_1[:, None], edge_index_2[None, :]).all(dim=2)
-            intersection_idx = torch.nonzero(eq)
-            and_edge_index = edge_index_1[intersection_idx[:, 0]].T
-            or_edge_index = torch.unique(torch.cat((edge_index_1, edge_index_2)), dim=0).T
-            edge_index_1 = edge_index_1.T
-            edge_index_2 = edge_index_2.T
-            if and_edge_index.size(1) == 0:
-                nb_jump += 1
-                continue
-            neg_edge = negative_sampling(or_edge_index, num_neg_samples=and_edge_index.size(1))
-            h1 = model(x_1, edge_index_1).to(aug.device)
-            h2 = model(x_2, edge_index_2).to(aug.device)
-            val_loss = model.loss(h1, h2, and_edge_index, neg_edge)
-        writer.add_scalars("lgrace", {'train':loss, 'val': val_loss}, epoch)
+        # with torch.no_grad():
+        #     model.eval()
+        #     aug.eval()
+        #     x_1, edge_index_1, x_2, edge_index_2 = aug()
+        #     edge_index_1 = edge_index_1.T
+        #     edge_index_2 = edge_index_2.T
+        #     eq = torch.eq(edge_index_1[:, None], edge_index_2[None, :]).all(dim=2)
+        #     intersection_idx = torch.nonzero(eq)
+        #     and_edge_index = edge_index_1[intersection_idx[:, 0]].T
+        #     or_edge_index = torch.unique(torch.cat((edge_index_1, edge_index_2)), dim=0).T
+        #     edge_index_1 = edge_index_1.T
+        #     edge_index_2 = edge_index_2.T
+        #     if and_edge_index.size(1) == 0:
+        #         nb_jump += 1
+        #         continue
+        #     neg_edge = negative_sampling(or_edge_index, num_neg_samples=and_edge_index.size(1))
+        #     h1 = model(x_1, edge_index_1).to(aug.device)
+        #     h2 = model(x_2, edge_index_2).to(aug.device)
+        #     h = model(aug.data.x, aug.data.edge_index)
+        #     val_loss = model.loss(h1, h2, and_edge_index, neg_edge)
+        # writer.add_scalars("lgrace", {'train':loss, 'val': val_loss}, epoch)
+        
+    #     name = f'gif/lgrace/{epoch}.png'
+    #     img_names.append(name)
+    #     visu_tsne(h, name=name)
+    # create_gif(img_names, 'lgrace_tsne.gif', 10)
     print('real epochs: ', param['ct_epochs']-nb_jump)
     print('pretrain loss: ', loss_res)
     pre_time = time.time()-t1
@@ -155,7 +169,7 @@ def pretrain_agrace(model, aug, param):
         z2 = model(x_2, edge_index_2)
 
         loss = model.loss(z1, z2, A_hat)
-        writer.add_scalar("Loss/pretrain_agrace", loss, epoch)
+        
         loss.backward()
         optimizer.step()
         if epoch % 100 == 0:
@@ -189,7 +203,7 @@ def pretrain_aor_grace(model, aug, param):
         z2 = model(x_2, edge_index_2)
 
         loss = model.loss(z1, z2, A_hat)
-        writer.add_scalar("Loss/pretrain_aor_grace", loss, epoch)
+        
         loss.backward()
         optimizer.step()
         if epoch % 100 == 0:
@@ -223,7 +237,7 @@ def pretrain_and_grace(model, aug, param):
         z2 = model(x_2, edge_index_2)
 
         loss = model.loss(z1, z2, A_hat)
-        writer.add_scalar("Loss/pretrain_and_grace", loss, epoch)
+        
         loss.backward()
         optimizer.step()
         if epoch % 100 == 0:
@@ -261,7 +275,7 @@ def pretrain_extend_agrace(model, aug, param):
         z2 = model(x_2, edge_index_2)
 
         loss = model.loss(z1, z2, adj)
-        writer.add_scalar("Loss/pretrain_exta_grace", loss, epoch)
+        
         loss.backward()
         optimizer.step()
         if epoch % 100 == 0:
@@ -297,7 +311,6 @@ def pretrain_a2grace(model, aug, param):
         z2 = model(x_2, edge_index_2)
 
         loss = model.loss(z1, z2, A_hat_1, A_hat_2)
-        writer.add_scalar("Loss/pretrain_a2grace", loss, epoch)
         loss.backward()
         optimizer.step()
         if epoch % 100 == 0:
@@ -305,7 +318,6 @@ def pretrain_a2grace(model, aug, param):
     print('pretrain loss: ', loss_res)
     pre_time = time.time()-t1
     print(f"pretrain time: {pre_time:.2f} s")
-    writer.flush()
     return pre_time
 
 def pretrain_csgcl(model, aug, param):
@@ -332,7 +344,6 @@ def pretrain_csgcl(model, aug, param):
     print('pretrain loss: ', loss_res, ' s')
     pre_time = time.time()-t1
     print(f"pretrain time: {pre_time:.2f} s")
-    writer.flush()
     return pre_time
 
 
@@ -346,6 +357,7 @@ def pretrain_bgrl(model, aug, param):
 
     t1 = time.time()
     loss_res = []
+    img_names = []
     for epoch in tqdm(range(1, param['ct_epochs'] + 1)):
         model.train()
         aug.train()
@@ -368,15 +380,21 @@ def pretrain_bgrl(model, aug, param):
         if epoch % 100 == 0:
             loss_res.append(round(float(loss), 2))
         # valid part
-        with torch.no_grad():
-            model.eval()
-            aug.eval()
-            x_1, edge_index_1, x_2, edge_index_2 = aug()
-            z1, y2 = model.train_forward((x_1, edge_index_1), (x_2, edge_index_2))
-            z2, y1 = model.train_forward((x_2, edge_index_2), (x_1, edge_index_1))
+        # with torch.no_grad():
+        #     model.eval()
+        #     aug.eval()
+        #     x_1, edge_index_1, x_2, edge_index_2 = aug()
+        #     z1, y2 = model.train_forward((x_1, edge_index_1), (x_2, edge_index_2))
+        #     z2, y1 = model.train_forward((x_2, edge_index_2), (x_1, edge_index_1))
 
-            val_loss = model.loss(z1, z2, y1, y2)
-        writer.add_scalars("bgrl", {'train':loss, 'val': val_loss}, epoch)
+        #     h = model(aug.data.x, aug.data.edge_index)
+        #     val_loss = model.loss(z1, z2, y1, y2)
+        # writer.add_scalars("bgrl", {'train':loss, 'val': val_loss}, epoch)
+                
+    #     name = f'gif/bgrl/{epoch}.png'
+    #     img_names.append(name)
+    #     visu_tsne(h, name=name)
+    # create_gif(img_names, 'bgrl_tsne.gif', 10)
     print('pretrain loss: ', loss_res, ' s')
     pre_time = time.time()-t1
     print(f"pretrain time: {pre_time:.2f} s")
@@ -394,7 +412,7 @@ def pretrain_lbgrl(model, aug, param):
     t1 = time.time()
     loss_res = []
     nb_jump = 0
-
+    img_names = []
     for epoch in tqdm(range(1, param['ct_epochs'] + 1)):
         model.train()
         aug.train()
@@ -428,25 +446,31 @@ def pretrain_lbgrl(model, aug, param):
         if epoch % 100 == 0:
             loss_res.append(round(float(loss), 2))
         # valid part
-        with torch.no_grad():
-            model.eval()
-            aug.eval()
-            x_1, edge_index_1, x_2, edge_index_2 = aug()
-            edge_index_1 = edge_index_1.T
-            edge_index_2 = edge_index_2.T
-            eq = torch.eq(edge_index_1[:, None], edge_index_2[None, :]).all(dim=2)
-            intersection_idx = torch.nonzero(eq)
-            and_edge_index = edge_index_1[intersection_idx[:, 0]].T
-            edge_index_1 = edge_index_1.T
-            edge_index_2 = edge_index_2.T
-            if and_edge_index.size(1) == 0:
-                nb_jump += 1
-                continue
-            z1, y2 = model.train_forward((x_1, edge_index_1), (x_2, edge_index_2), and_edge_index)
-            z2, y1 = model.train_forward((x_2, edge_index_2), (x_1, edge_index_1), and_edge_index)
+        # with torch.no_grad():
+        #     model.eval()
+        #     aug.eval()
+        #     x_1, edge_index_1, x_2, edge_index_2 = aug()
+        #     edge_index_1 = edge_index_1.T
+        #     edge_index_2 = edge_index_2.T
+        #     eq = torch.eq(edge_index_1[:, None], edge_index_2[None, :]).all(dim=2)
+        #     intersection_idx = torch.nonzero(eq)
+        #     and_edge_index = edge_index_1[intersection_idx[:, 0]].T
+        #     edge_index_1 = edge_index_1.T
+        #     edge_index_2 = edge_index_2.T
+        #     if and_edge_index.size(1) == 0:
+        #         nb_jump += 1
+        #         continue
+        #     z1, y2 = model.train_forward((x_1, edge_index_1), (x_2, edge_index_2), and_edge_index)
+        #     z2, y1 = model.train_forward((x_2, edge_index_2), (x_1, edge_index_1), and_edge_index)
 
-            val_loss = model.loss(z1, z2, y1, y2)
-        writer.add_scalars("lbgrl", {'train':loss, 'val': val_loss}, epoch)
+        #     h = model(aug.data.x, aug.data.edge_index)
+        #     val_loss = model.loss(z1, z2, y1, y2)
+        # writer.add_scalars("lbgrl", {'train':loss, 'val': val_loss}, epoch)
+                
+    #     name = f'gif/lbgrl/{epoch}.png'
+    #     img_names.append(name)
+    #     visu_tsne(h, name=name)
+    # create_gif(img_names, 'lbgrl_tsne.gif', 10)
     print('real epochs: ', param['ct_epochs']-nb_jump)
     print('pretrain loss: ', loss_res, ' s')
     pre_time = time.time()-t1
@@ -483,7 +507,7 @@ def pretrain_abgrl(model, aug, param):
         z2, y1 = model.train_forward((x_2, edge_index_2), (x_1, edge_index_1))
 
         loss = model.loss(z1, z2, y1, y2, A_hat)
-        writer.add_scalar("Loss/pretrain_abgrl", loss, epoch)
+        
         loss.backward()
         optimizer.step()
         model.update_target_network(mm)
@@ -526,7 +550,7 @@ def pretrain_or_bgrl(model, aug, param):
         z2, y1 = model.train_forward((x_2, edge_index_2), (x_1, edge_index_1))
 
         loss = model.loss(z1, z2, y1, y2, A_hat)
-        writer.add_scalar("Loss/pretrain_or_bgrl", loss, epoch)
+        
         loss.backward()
         optimizer.step()
         model.update_target_network(mm)
@@ -573,7 +597,7 @@ def pretrain_extend_abgrl(model, aug, param):
         z2, y1 = model.train_forward((x_2, edge_index_2), (x_1, edge_index_1))
 
         loss = model.loss(z1, z2, y1, y2, adj)
-        writer.add_scalar("Loss/pretrain_ext_bgrl", loss, epoch)
+        
         loss.backward()
         optimizer.step()
         model.update_target_network(mm)
@@ -617,7 +641,7 @@ def pretrain_a2bgrl(model, aug, param):
         z2, y1 = model.train_forward((x_2, edge_index_2), (x_1, edge_index_1))
 
         loss = model.loss(z1, z2, y1, y2, A_hat_1, A_hat_2)
-        writer.add_scalar("Loss/pretrain_a2bgrl", loss, epoch)
+        
         loss.backward()
         optimizer.step()
         model.update_target_network(mm)

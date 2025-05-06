@@ -47,7 +47,7 @@ def arguments():
     parser.add_argument('--ct_epochs', type=int, default=500)
     parser.add_argument('--runs', type=int, default=10)
     parser.add_argument('--name', type=str, default="")
-    parser.add_argument('--use_valedges_as_input', action='store_true', default=False, help="add validation edges to the input adjacency matrix of gnn")
+    parser.add_argument('--use_valedges_as_input', type=int, default=True, choices=[0,1], help="add validation edges to the input adjacency matrix of gnn")
     parser.add_argument('--hp_search', type=int, default=0, help="enter the number of trials, for the search")
     args = parser.parse_args()
     args.dataset = multiparse(args.dataset, DATASETS)
@@ -148,7 +148,11 @@ if __name__ == "__main__":
                     def _objective(trial):
                         res_dict = {"Hits@10": [], "Hits@20": [], "Hits@50": [], "Hits@100": [], "ROCAUC": [], "AP": [], "pretrain_time": []}
                         r = 0
-                        hp['model']['ct_epochs'] = trial.suggest_int('ct_epochs', 100, 2000, 200)
+                        hp['model']['ct_epochs'] = trial.suggest_int('ct_epochs', 600, 2000, 200)
+                        hp['model']['gnn_lr'] = trial.suggest_float('gnn_lr', 0.001, 0.1)
+                        hp['model']['weight_decay'] = trial.suggest_float('weight_decay', 1e-6, 1e-4)
+                        hp['model']['tau'] = trial.suggest_float('tau', 0.3, 0.5)
+                        hp['model']['batch_size'] = trial.suggest_int('batch_size', 128, 2000, 256)
                         seed_everything(r)
                         data, split_edge = data_split.get(r)
                         model = define_model(trial, model_name, data, hp['model'])

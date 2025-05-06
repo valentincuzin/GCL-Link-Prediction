@@ -42,7 +42,7 @@ def get_model(model_name: str, data, hp: dict):
 
 def define_model(trial, model_name, data, hp):
     hp['n_layers'] = trial.suggest_int("n_layers", 2, 10)
-    hp['hidden'] = trial.suggest_int("hidden", 32, 1024, 16)
+    hp['hidden'] = trial.suggest_int("hidden", 32, 1024, 32)
     hp['conv_layer'] = GCNConv # trial.suggest_categorical("conv_layer", [GCNConv, SAGEConv, GATConv])
     hp['activation_layer'] = nn.Identity() # trial.suggest_categorical("activation_layer", [nn.Identity, nn.PReLU, nn.LeakyReLU])()
     hp['skip'] = trial.suggest_categorical("skip", [True, False])

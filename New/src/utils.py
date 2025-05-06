@@ -2,6 +2,12 @@ import numpy as np
 import pandas as pd
 import networkx as nx
 import torch
+import imageio.v2 as imageio
+from PIL import Image
+from sklearn.manifold import TSNE
+import matplotlib.pyplot as plt
+import seaborn as sns
+
 import torch.nn.functional as F
 from cdlib import algorithms
 from cdlib.utils import convert_graph_formats
@@ -122,3 +128,46 @@ def full_output(full_res: list):
         index=True, formatters={"name": str.upper}, float_format="{:.1f}".format
     )
     return full_res, full_latex
+
+def visu_tsne(h, partition=None, name=None):
+    tsne = TSNE(n_components=2, verbose=1, random_state=0, perplexity=40, n_iter=300)
+    h = h.cpu()
+    tsne_results = tsne.fit_transform(h)
+    df = pd.DataFrame()    
+    df['tsne-2d-one'] = tsne_results[:,0]
+    df['tsne-2d-two'] = tsne_results[:,1]
+    labels = [-1] * len(df)
+    if partition is not None:
+        for group_id, group_nodes in enumerate(partition):
+            for node in group_nodes:
+                if node < len(labels):
+                    labels[node] = group_id
+                else:
+                    print(f"index {node} doesn't exist in h.")
+    else:
+        partition = []
+    df['group'] = labels
+    markers_list = ['o', 's', 'D', 'v', '^', '<', '>', 'P', 'X', '*']
+    df['marker'] = df['group'].apply(lambda g: markers_list[g % 10] if g >= 0 else 'o')
+    fig, ax = plt.subplots(figsize=(16,10))
+    sns.scatterplot(
+        x="tsne-2d-one", y="tsne-2d-two",
+        hue="group" if len(partition) > 0 else None,
+        style="marker",
+        palette=sns.color_palette("hls", len(partition)),
+        data=df,
+        legend="full",
+        alpha=0.5,
+        ax=ax
+    )
+    if name is not None:
+        ax.set_title(name)
+        plt.savefig(name, bbox_inches='tight', dpi=300)
+    plt.show()
+
+def create_gif(image_names, gif_name, duration=0.1):
+    with imageio.get_writer(gif_name, mode='I', duration=10.0, fps=0.25) as writer:
+        for filename in image_names:
+            image = imageio.imread(filename)
+            writer.append_data(image)
+    writer.close()
