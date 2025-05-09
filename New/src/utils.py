@@ -53,6 +53,7 @@ def commu_repartition(data, cd_algo: str = None):
                 probs[x,y] /= ((sizes[x]+sizes[y])*(sizes[x]+sizes[y]-1))/2 #complete graph formula
     probs /= 2 # undirected graph
     data.block = block
+    data.communities = communities
     data.probs = probs
     print("probs, ", probs)
     data.sizes = sizes
@@ -187,7 +188,7 @@ def visu_tsne(h, partition=None, name=None): # TODO color by groups
         style="marker",
         palette=sns.color_palette("hls", len(partition)),
         data=df,
-        legend="full",
+        legend=False,
         alpha=0.5,
         ax=ax
     )
