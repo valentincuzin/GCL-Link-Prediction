@@ -3,6 +3,7 @@ import pandas as pd
 import networkx as nx
 import torch
 from sklearn.manifold import TSNE
+from sklearn.metrics import average_precision_score
 import matplotlib.pyplot as plt
 import seaborn as sns
 
@@ -59,6 +60,18 @@ def commu_repartition(data, cd_algo: str = None):
     data.sizes = sizes
     print("sizes, ", sizes)
     return data
+
+def average_precision(y_pred_pos, y_pred_neg):
+    if isinstance(y_pred_pos, torch.Tensor):
+            y_pred_pos_np = y_pred_pos.cpu().numpy()
+            y_pred_neg_np = y_pred_neg.cpu().numpy()
+    else:
+        y_pred_pos_np = y_pred_pos
+        y_pred_neg_np = y_pred_neg
+
+    y_true = np.concatenate([np.ones(len(y_pred_pos_np)), np.zeros(len(y_pred_neg_np))]).astype(np.int32)
+    y_pred = np.concatenate([y_pred_pos_np, y_pred_neg_np])
+    return average_precision_score(y_true, y_pred)
 
 def community_strength(graph: nx.Graph,
                             communities) -> (np.ndarray, np.ndarray):

@@ -16,7 +16,7 @@ from torch_geometric.datasets import Planetoid
 from torch_geometric.utils import to_undirected, add_self_loops, from_networkx, to_networkx
 from torch_geometric.transforms import RandomLinkSplit
 
-from src.utils import gen_sbm
+from src.utils import gen_sbm, average_precision
 
 def randomsplit(dataset, val_ratio: float = 0.10, test_ratio: float = 0.2):
     def removerepeated(ei):
@@ -252,17 +252,7 @@ def full_eval(evaluator, pos_pred, neg_pred):
     })['rocauc']
     results['ROCAUC'] = auc
     
-    def average_precision(y_pred_pos, y_pred_neg):
-        if isinstance(y_pred_pos, torch.Tensor):
-                y_pred_pos_np = y_pred_pos.cpu().numpy()
-                y_pred_neg_np = y_pred_neg.cpu().numpy()
-        else:
-            y_pred_pos_np = y_pred_pos
-            y_pred_neg_np = y_pred_neg
 
-        y_true = np.concatenate([np.ones(len(y_pred_pos_np)), np.zeros(len(y_pred_neg_np))]).astype(np.int32)
-        y_pred = np.concatenate([y_pred_pos_np, y_pred_neg_np])
-        return average_precision_score(y_true, y_pred)
     
     results['AP'] = average_precision(pos_pred, neg_pred)
     return results

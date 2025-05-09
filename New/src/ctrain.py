@@ -2,14 +2,47 @@ import time
 from tqdm import tqdm
 import torch
 from torch_geometric.utils import negative_sampling, to_networkx
-from torch_geometric.data import Data
+from torch_geometric.data import DataLoader, Data
 import torch_sparse as spar
 import networkx as nx
 from torch.utils.tensorboard import SummaryWriter
 import numpy as np
-from src.utils import CosineDecayScheduler, get_commu_strength, commu_repartition, visu_tsne
+
+from src.predictor import InnerProd
+from src.utils import CosineDecayScheduler, get_commu_strength, average_precision, commu_repartition, visu_tsne
 
 writer = SummaryWriter()
+
+
+def valid_ap(model, data, split_edge, param):
+    if isinstance(model, torch.nn.Module):
+        model.eval()
+    device = data.adj_t.device()
+    adj_t = data.adj_t
+    h = None if model is None else model(data.x, adj_t)
+    predictor = InnerProd()
+    def test_split(split):
+        # pred positive edges and negatives edges for nodes in the split
+        pos_test_edge = split_edge[split]['edge'].to(device)
+        neg_test_edge = split_edge[split]['edge_neg'].to(device)
+        pos_test_preds = []
+        for perm in DataLoader(range(pos_test_edge.size(0)), param['batch_size']):
+            edge = pos_test_edge[perm].t()
+            out = predictor.predict(h, edge[0], edge[1])
+            pos_test_preds += [out.squeeze().cpu()]
+        pos_test_pred = torch.cat(pos_test_preds, dim=0)
+        neg_test_preds = []
+        for perm in DataLoader(range(neg_test_edge.size(0)), param['batch_size']):
+            edge = neg_test_edge[perm].t()
+            out = predictor.predict(h, edge[0], edge[1])
+            neg_test_preds += [out.squeeze().cpu()]
+        neg_test_pred = torch.cat(neg_test_preds, dim=0)
+        return pos_test_pred, neg_test_pred
+    
+    pos_valid_pred, neg_valid_pred = test_split('valid')
+    return average_precision(pos_valid_pred, neg_valid_pred)
+
+
 ### CONTRASTIVE FRAMEWORK ###
 
 def pretrain(model_name, model, aug, param):
@@ -60,7 +93,8 @@ def pretrain_grace(model, aug, param):
             z2 = model(x_2, edge_index_2)
             h = model(aug.data.x, aug.data.edge_index)
             val_loss = model.loss(z1, z2)
-        writer.add_scalars("grace", {'train':loss, 'val': val_loss}, epoch)
+            val_ap = valid_ap(model, aug.data, aug.split_edge, param)
+        writer.add_scalars("grace", {'tr_loss':loss, 'val_loss': val_loss, 'val_ap': val_ap}, epoch)
 
         # if epoch % 10 == 0:
         #     name = f'gif/grace/{epoch}.png'
@@ -135,7 +169,8 @@ def pretrain_lgrace(model, aug, param):
             h2 = model(x_2, edge_index_2).to(aug.device)
             h = model(aug.data.x, aug.data.edge_index)
             val_loss = model.loss(h1, h2, and_edge_index, neg_edge)
-        writer.add_scalars("lgrace", {'train':loss, 'val': val_loss}, epoch)
+            val_ap = valid_ap(model, aug.data, aug.split_edge, param)
+        writer.add_scalars("lgrace", {'tr_loss':loss, 'val_loss': val_loss, 'val_ap': val_ap}, epoch)
 
         # if epoch % 10 == 0:
         #     name = f'gif/lgrace/{epoch}.png'
@@ -220,7 +255,8 @@ def pretrain_bgrl(model, aug, param):
 
             h = model(aug.data.x, aug.data.edge_index)
             val_loss = model.loss(z1, z2, y1, y2)
-        writer.add_scalars("bgrl", {'train':loss, 'val': val_loss}, epoch)
+            val_ap = valid_ap(model, aug.data, aug.split_edge, param)
+        writer.add_scalars("bgrl", {'tr_loss':loss, 'val_loss': val_loss, 'val_ap': val_ap}, epoch)
 
         # if epoch % 10 == 0:         
         #     name = f'gif/bgrl/{epoch}.png'
@@ -298,7 +334,8 @@ def pretrain_lbgrl(model, aug, param):
 
             h = model(aug.data.x, aug.data.edge_index)
             val_loss = model.loss(z1, z2, y1, y2)
-        writer.add_scalars("lbgrl", {'train':loss, 'val': val_loss}, epoch)
+            val_ap = valid_ap(model, aug.data, aug.split_edge, param)
+        writer.add_scalars("lbgrl", {'tr_loss':loss, 'val_loss': val_loss, 'val_ap': val_ap}, epoch)
 
         # print('before visu')
         # if epoch % 10 == 0:
