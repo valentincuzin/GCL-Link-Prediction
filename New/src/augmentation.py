@@ -12,7 +12,7 @@ from torch_geometric.utils import degree, to_undirected, to_networkx, dropout_ad
 from torch_scatter import scatter
 from functools import partial
 
-from src.utils import get_commu_strength, gen_sbm, community_detection
+from src.utils import get_commu_strength, gen_sbm, commu_repartition
 
 
 class Aug:
@@ -38,7 +38,7 @@ class Aug:
             if '_' in type:
                 type, cd_algo = type.split('_')
             print(cd_algo, 'detection...')
-            self.commu_repartition(cd_algo)
+            self.data = commu_repartition(self.data, cd_algo).to(self.device)
         elif '_d' in type:
             type, delta = type.split('_d')
             print(type, " with variance: ", delta)
@@ -58,13 +58,13 @@ class Aug:
             tmp = from_networkx(G).to(self.device)
             self.data.edge_index = tmp.edge_index
             self.data.weight = tmp.weight
-        elif type == 'ctri':
-            self.data.edge_index = _close_triangle(self.data.edge_index)
+        # elif type == 'ctri':
+        #     self.data.edge_index = _close_triangle(self.data.edge_index)
         self.types = {
             'random': self.random,
             'rjc': self.rjc,
             'rjc2': self.rjc2,
-            'ctri': self.random,
+            'ctri': self.close_triangle,
             'raa': self.raa,
             'rra': self.rra,
             'deg': partial(self.gca, feature_weights, drop_weights),
@@ -231,36 +231,6 @@ class Aug:
         x_2 = cav(self.data.x, feature_weights, self.param['drop_feature_rate_2'])
         return x_1, edge_index_1, x_2, edge_index_2
 
-    def commu_repartition(self, cd_algo: str = None):
-        if cd_algo == None:
-            cd_algo = 'louvain'
-        if hasattr(self.data, "probs") and hasattr(self.data, "sizes") and cd_algo is None:
-            print("already communities")
-            return
-        G = to_networkx(self.data, to_undirected=True)
-        communities = community_detection(cd_algo)(G).communities
-        probs = np.zeros((len(communities), len(communities)))
-        sizes = []
-        for idx, c in enumerate(communities):
-            sizes.append(len(c))
-            for n in c:
-                G.nodes[n]["com"] = idx # get com label
-        for u, v in zip(self.data.edge_index[0], self.data.edge_index[1]): # count number of edge per com
-            u = float(u)
-            v = float(v)
-            probs[G.nodes[u]["com"], G.nodes[v]["com"]] += 1
-        for x in range(len(probs)): # make the probs
-            for y in range(len(probs)):
-                if x == y:
-                    probs[x,x] = probs[x,x]/(sizes[x]*(sizes[x]-1))/2 if sizes[x] > 1 else probs[x,x]
-                else:
-                    probs[x,y] /= ((sizes[x]+sizes[y])*(sizes[x]+sizes[y]-1))/2 #complete graph formula
-        probs /= 2 # undirected graph
-        self.data.community = communities
-        self.data.probs = probs
-        print("probs, ", probs)
-        self.data.sizes = sizes
-        print("sizes, ", sizes)
 
     def perturb_commu(self, delta):
         if not (hasattr(self.data, "probs") and hasattr(self.data, "sizes")):
@@ -348,6 +318,54 @@ class Aug:
         data_1 = from_networkx(G1).to(self.device)
         data_2 = from_networkx(G2).to(self.device)
         return x_1, data_1.edge_index, x_2, data_2.edge_index
+    
+    def close_triangle(self):
+        def exist_neight(u, v, edge_index):
+            mask = edge_index[0] == u
+            n_u = edge_index[1][mask]
+            mask = edge_index[0] == v
+            n_v = edge_index[1][mask]
+            mask = torch.eq(n_v[:, None], n_u[None, :])
+            if not mask.any():
+                # print('mask', mask)
+                return False
+            cn_uv = n_v[torch.nonzero(mask[:, 0])[:, 0]]
+            if cn_uv.shape[0] != 0:
+                # print('cn_uv', cn_uv)
+                return True
+            else:
+                return False
+
+        x_1, edge_index_1, x_2, edge_index_2 = self.random()
+        nb_sample = int(0.3*self.data.edge_index.size(1))
+        edge_index_1_close = copy.copy(edge_index_1)
+        edge_index_2_close = copy.copy(edge_index_2)
+        neg_edges = torch.cat((self.split_edge['test']['edge'], self.split_edge['test']['edge_neg'])) # to_undirected(negative_sampling(self.data.edge_index, num_neg_samples=nb_sample)).T
+        # neg_edges_1 = to_undirected(negative_sampling(edge_index_1, num_neg_samples=nb_sample)).T
+        nb_l1_add = 0
+        nb_l2_add = 0
+        # print('neg_edges_1', neg_edges_1.shape)
+        for neg_edge in neg_edges:
+            if exist_neight(neg_edge[0], neg_edge[1], edge_index_1):
+                nb_l1_add += 1
+                neg_edge_to_add = to_undirected(neg_edge.unsqueeze(dim=-1))
+                neg_edge_to_add = neg_edge_to_add.to(self.device)
+                edge_index_1_close = torch.cat((edge_index_1_close, neg_edge_to_add), dim=1)
+            if exist_neight(neg_edge[0], neg_edge[1], edge_index_2):
+                nb_l2_add += 1
+                neg_edge_to_add = to_undirected(neg_edge.unsqueeze(dim=-1))
+                neg_edge_to_add = neg_edge_to_add.to(self.device)
+                edge_index_2_close = torch.cat((edge_index_2_close, neg_edge_to_add), dim=1)
+        # neg_edges_2 = to_undirected(negative_sampling(edge_index_2, num_neg_samples=nb_sample)).T
+        # for neg_edge in neg_edges_2:
+        #     if exist_neight(neg_edge[0], neg_edge[1], edge_index_2):
+        #         nb_l2_add += 1
+        #         neg_edge = to_undirected(neg_edge.unsqueeze(dim=-1))
+        #         edge_index_2_close = torch.cat((edge_index_2_close, neg_edge), dim=1)
+        if nb_l1_add+nb_l2_add > 0:
+            print([nb_l1_add, nb_l2_add])
+        return x_1, edge_index_1_close, x_2, edge_index_2_close
+        
 
     def random_prob(self):
         weight = self.data.weight if 'weight' in self.data else None
@@ -392,6 +410,7 @@ def _reconstruction(G, algo: callable, threshold, edge_list = None):
     new_G.add_edges_from(retains)
     return new_G
 
+""" ### optimisation
 def _close_triangle(edge_index):
     edge_index = to_undirected(edge_index)
     link_to_add = [edge_index]
@@ -404,6 +423,7 @@ def _close_triangle(edge_index):
         neg_sampl = to_undirected(negative_sampling(sub_edge_index, num_neg_samples=num_samples))
         link_to_add.append(neg_sampl)
     return torch.cat(link_to_add, dim=1)
+"""
 
 def _permute_nodes(sizes, perm_rate):
         sizes = copy.copy(sizes)

@@ -3,3 +3,4 @@ dataset
 .venv
 .ipynb_checkpoints
 **.out
+**.sh

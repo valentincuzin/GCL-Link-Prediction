@@ -2,7 +2,7 @@
 	"augmentation": {
 		"drop_edge_rate_1": 0.3,
 		"drop_edge_rate_2": 0.4,
-		"drop_feature_rate_1": 0.1,
+		"drop_feature_rate_1": 0.0,
 		"drop_feature_rate_2": 0.0
 	},
 	"model": {
@@ -13,7 +13,7 @@
 		"tau": 0.4,
 		"weight_decay": 1e-5,
 		"freeze": true,
-		"batch_size": 64,
+		"batch_size": 128,
 		"mask_input": true
 	}
 }

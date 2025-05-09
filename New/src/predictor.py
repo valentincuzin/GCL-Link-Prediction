@@ -44,12 +44,13 @@ class ProbDecoder:
         self.block = block
 
     def __call__(self, u, v):
-        b1 = self.block[u].cpu()
-        b2 = self.block[v].cpu()
-        # print("b1, b2:",b1, b2)
+        u = u.cpu().numpy()
+        v = v.cpu().numpy()
+        b1 = self.block[u]
+        b2 = self.block[v]
         res = []
         for x,y in zip(b1, b2):
-            res.append(self.probs[x, y])
+            res.append(self.probs[int(x), int(y)])
         res = torch.tensor(res)
         if res.numel() <= 1:
             res = res.unsqueeze()

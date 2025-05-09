@@ -8,7 +8,7 @@ from torch.utils.tensorboard import SummaryWriter
 import torch_sparse as spar
 import numpy as np
 import networkx as nx
-from src.utils import CosineDecayScheduler, visu_tsne, create_gif
+from src.utils import CosineDecayScheduler, visu_tsne
 from src.utils import get_commu_strength
 
 writer = SummaryWriter()
@@ -36,11 +36,10 @@ def pretrain_grace(model, aug, param):
     optimizer = torch.optim.Adam(
         model.parameters(),
         lr=param['gnn_lr'],
-        weight_decay=param['weight_decay']
+        # weight_decay=param['weight_decay']
     )
     t1 = time.time()
     loss_res = []
-    img_names = []
     for epoch in tqdm(range(1, param['ct_epochs'] + 1)):
         model.train()
         aug.train()
@@ -66,9 +65,7 @@ def pretrain_grace(model, aug, param):
         # writer.add_scalars("grace", {'train':loss, 'val': val_loss}, epoch)
 
     #     name = f'gif/grace/{epoch}.png'
-    #     img_names.append(name)
     #     visu_tsne(h, name=name)
-    # create_gif(img_names, 'grace_tsne.gif', 10)
     print('pretrain loss: ', loss_res)
     pre_time = time.time()-t1
     print(f"pretrain time: {pre_time:.2f} s")
@@ -79,13 +76,12 @@ def pretrain_lgrace(model, aug, param):
     optimizer = torch.optim.Adam(
         model.parameters(),
         lr=param['gnn_lr'],
-        weight_decay=param['weight_decay']
+        # weight_decay=param['weight_decay']
     )
     loss_res = []
     t1 = time.time()
 
     total_loss = []
-    img_names = []
     nb_jump = 0
     for epoch in tqdm(range(1, 1 + param["ct_epochs"])):
         model.train()
@@ -139,9 +135,7 @@ def pretrain_lgrace(model, aug, param):
         # writer.add_scalars("lgrace", {'train':loss, 'val': val_loss}, epoch)
         
     #     name = f'gif/lgrace/{epoch}.png'
-    #     img_names.append(name)
     #     visu_tsne(h, name=name)
-    # create_gif(img_names, 'lgrace_tsne.gif', 10)
     print('real epochs: ', param['ct_epochs']-nb_jump)
     print('pretrain loss: ', loss_res)
     pre_time = time.time()-t1
@@ -149,181 +143,11 @@ def pretrain_lgrace(model, aug, param):
     writer.flush()
     return pre_time
 
-def pretrain_agrace(model, aug, param):
-    optimizer = torch.optim.Adam(
-        model.parameters(),
-        lr=param['gnn_lr'],
-        weight_decay=param['weight_decay']
-    )
-    t1 = time.time()
-    loss_res = []
-    for epoch in tqdm(range(1, param['ct_epochs'] + 1)):
-        model.train()
-        aug.train()
-        optimizer.zero_grad()
-        x_1, edge_index_1, x_2, edge_index_2 = aug()
-        adj_t = SparseTensor.from_edge_index(edge_index_1, sparse_sizes=(aug.data.num_nodes, aug.data.num_nodes))
-        adj_t = adj_t.to_symmetric().coalesce()
-        A_hat = adj_t.to_dense()+torch.eye(aug.data.x.shape[0]).to(aug.device)
-        z1 = model(x_1, edge_index_1)
-        z2 = model(x_2, edge_index_2)
-
-        loss = model.loss(z1, z2, A_hat)
-        
-        loss.backward()
-        optimizer.step()
-        if epoch % 100 == 0:
-            loss_res.append(round(float(loss), 2))
-    print('pretrain loss: ', loss_res)
-    pre_time = time.time()-t1
-    print(f"pretrain time: {pre_time:.2f} s")
-    writer.flush()
-    return pre_time
-
-def pretrain_aor_grace(model, aug, param):
-    optimizer = torch.optim.Adam(
-        model.parameters(),
-        lr=param['gnn_lr'],
-        weight_decay=param['weight_decay']
-    )
-    t1 = time.time()
-    loss_res = []
-    for epoch in tqdm(range(1, param['ct_epochs'] + 1)):
-        model.train()
-        aug.train()
-        optimizer.zero_grad()
-        x_1, edge_index_1, x_2, edge_index_2 = aug()
-        adj_1 = SparseTensor.from_edge_index(edge_index_1, sparse_sizes=(aug.data.num_nodes, aug.data.num_nodes)).to_torch_sparse_coo_tensor().coalesce()
-        adj_2 = SparseTensor.from_edge_index(edge_index_2, sparse_sizes=(aug.data.num_nodes, aug.data.num_nodes)).to_torch_sparse_coo_tensor().coalesce()
-        hat_indices, hat_values = spar.eye(aug.data.x.shape[0])
-        A_indices = torch.cat([adj_1.indices(), adj_2.indices(), hat_indices.to(aug.device)], dim=-1)
-        A_value = torch.cat([adj_1.values(), adj_2.values(), hat_values.to(aug.device)])
-        A_hat = torch.sparse_coo_tensor(A_indices, A_value).coalesce()
-        z1 = model(x_1, edge_index_1)
-        z2 = model(x_2, edge_index_2)
-
-        loss = model.loss(z1, z2, A_hat)
-        
-        loss.backward()
-        optimizer.step()
-        if epoch % 100 == 0:
-            loss_res.append(round(float(loss), 2))
-    print('pretrain loss: ', loss_res)
-    pre_time = time.time()-t1
-    print(f"pretrain time: {pre_time:.2f} s")
-    writer.flush()
-    return pre_time
-
-def pretrain_and_grace(model, aug, param):
-    optimizer = torch.optim.Adam(
-        model.parameters(),
-        lr=param['gnn_lr'],
-        weight_decay=param['weight_decay']
-    )
-    t1 = time.time()
-    loss_res = []
-    for epoch in tqdm(range(1, param['ct_epochs'] + 1)):
-        model.train()
-        aug.train()
-        optimizer.zero_grad()
-        x_1, edge_index_1, x_2, edge_index_2 = aug()
-        adj_1 = SparseTensor.from_edge_index(edge_index_1, sparse_sizes=(aug.data.num_nodes, aug.data.num_nodes))
-        adj_1 = adj_1.to_symmetric().coalesce().to_torch_sparse_csr_tensor()
-        adj_2 = SparseTensor.from_edge_index(edge_index_2, sparse_sizes=(aug.data.num_nodes, aug.data.num_nodes))
-        adj_2 = adj_2.to_symmetric().coalesce().to_torch_sparse_csr_tensor()
-        hat = torch.eye(aug.data.x.shape[0]).to_sparse().to(aug.device)
-        A_hat = torch.sparse.mm(adj_1, adj_2)+hat
-        z1 = model(x_1, edge_index_1)
-        z2 = model(x_2, edge_index_2)
-
-        loss = model.loss(z1, z2, A_hat)
-        
-        loss.backward()
-        optimizer.step()
-        if epoch % 100 == 0:
-            loss_res.append(round(float(loss), 2))
-    print('pretrain loss: ', loss_res)
-    pre_time = time.time()-t1
-    print(f"pretrain time: {pre_time:.2f} s")
-    writer.flush()
-    return pre_time
-
-def pretrain_extend_agrace(model, aug, param):
-    optimizer = torch.optim.Adam(
-        model.parameters(),
-        lr=param['gnn_lr'],
-        weight_decay=param['weight_decay']
-    )
-    t1 = time.time()
-    loss_res = []
-    for epoch in tqdm(range(1, param['ct_epochs'] + 1)):
-        model.train()
-        aug.train()
-        optimizer.zero_grad()
-        x_1, edge_index_1, x_2, edge_index_2 = aug()
-        data = Data(x_1, edge_index_1)
-        G = to_networkx(data, to_undirected=True)
-        distance_matrix = dict(nx.all_pairs_shortest_path_length(G))
-        adj_matrix = np.zeros((len(G.nodes), len(G.nodes)))
-        for source, distances in distance_matrix.items():
-            for target, distance in distances.items():
-                adj_matrix[source, target] = distance
-        adj_matrix[adj_matrix!=0] = 1/adj_matrix[adj_matrix!=0]
-        adj = torch.tensor(adj_matrix, dtype=torch.float).to(aug.device)
-        adj += torch.eye(aug.data.x.shape[0]).to(aug.device)
-        z1 = model(x_1, edge_index_1)
-        z2 = model(x_2, edge_index_2)
-
-        loss = model.loss(z1, z2, adj)
-        
-        loss.backward()
-        optimizer.step()
-        if epoch % 100 == 0:
-            loss_res.append(round(float(loss), 2))
-    print('pretrain loss: ', loss_res)
-    pre_time = time.time()-t1
-    print(f"pretrain time: {pre_time:.2f} s")
-    writer.flush()
-    return pre_time
-
-def pretrain_a2grace(model, aug, param):
-    optimizer = torch.optim.Adam(
-        model.parameters(),
-        lr=param['gnn_lr'],
-        weight_decay=param['weight_decay']
-    )
-    t1 = time.time()
-    loss_res = []
-    for epoch in tqdm(range(1, param['ct_epochs'] + 1)):
-        model.train()
-        aug.train()
-        optimizer.zero_grad()
-        x_1, edge_index_1, x_2, edge_index_2 = aug()
-        adj_t = SparseTensor.from_edge_index(edge_index_1, sparse_sizes=(aug.data.num_nodes, aug.data.num_nodes))
-        adj_t = adj_t.to_symmetric().coalesce()
-        A_hat_1 = adj_t.to_dense()+torch.eye(aug.data.x.shape[0]).to(aug.device)
-
-        adj_t = SparseTensor.from_edge_index(edge_index_2, sparse_sizes=(aug.data.num_nodes, aug.data.num_nodes))
-        adj_t = adj_t.to_symmetric().coalesce()
-        A_hat_2 = adj_t.to_dense()+torch.eye(aug.data.x.shape[0]).to(aug.device)
-
-        z1 = model(x_1, edge_index_1)
-        z2 = model(x_2, edge_index_2)
-
-        loss = model.loss(z1, z2, A_hat_1, A_hat_2)
-        loss.backward()
-        optimizer.step()
-        if epoch % 100 == 0:
-            loss_res.append(round(float(loss), 2))
-    print('pretrain loss: ', loss_res)
-    pre_time = time.time()-t1
-    print(f"pretrain time: {pre_time:.2f} s")
-    return pre_time
-
 def pretrain_csgcl(model, aug, param):
     optimizer = torch.optim.Adam(model.parameters(),
                                  lr=param['gnn_lr'],
-                                 weight_decay=param['weight_decay'])
+                                #  weight_decay=param['weight_decay']
+                                 )
     t1 = time.time()
     loss_res = []
     _, _, node_cs = get_commu_strength(aug.data)
@@ -357,7 +181,6 @@ def pretrain_bgrl(model, aug, param):
 
     t1 = time.time()
     loss_res = []
-    img_names = []
     for epoch in tqdm(range(1, param['ct_epochs'] + 1)):
         model.train()
         aug.train()
@@ -392,9 +215,7 @@ def pretrain_bgrl(model, aug, param):
         # writer.add_scalars("bgrl", {'train':loss, 'val': val_loss}, epoch)
                 
     #     name = f'gif/bgrl/{epoch}.png'
-    #     img_names.append(name)
     #     visu_tsne(h, name=name)
-    # create_gif(img_names, 'bgrl_tsne.gif', 10)
     print('pretrain loss: ', loss_res, ' s')
     pre_time = time.time()-t1
     print(f"pretrain time: {pre_time:.2f} s")
@@ -412,7 +233,6 @@ def pretrain_lbgrl(model, aug, param):
     t1 = time.time()
     loss_res = []
     nb_jump = 0
-    img_names = []
     for epoch in tqdm(range(1, param['ct_epochs'] + 1)):
         model.train()
         aug.train()
@@ -468,14 +288,184 @@ def pretrain_lbgrl(model, aug, param):
         # writer.add_scalars("lbgrl", {'train':loss, 'val': val_loss}, epoch)
                 
     #     name = f'gif/lbgrl/{epoch}.png'
-    #     img_names.append(name)
     #     visu_tsne(h, name=name)
-    # create_gif(img_names, 'lbgrl_tsne.gif', 10)
     print('real epochs: ', param['ct_epochs']-nb_jump)
     print('pretrain loss: ', loss_res, ' s')
     pre_time = time.time()-t1
     print(f"pretrain time: {pre_time:.2f} s")
     writer.flush()
+    return pre_time
+
+""" ### Â loss
+def pretrain_agrace(model, aug, param):
+    optimizer = torch.optim.Adam(
+        model.parameters(),
+        lr=param['gnn_lr'],
+        # weight_decay=param['weight_decay']
+    )
+    t1 = time.time()
+    loss_res = []
+    for epoch in tqdm(range(1, param['ct_epochs'] + 1)):
+        model.train()
+        aug.train()
+        optimizer.zero_grad()
+        x_1, edge_index_1, x_2, edge_index_2 = aug()
+        adj_t = SparseTensor.from_edge_index(edge_index_1, sparse_sizes=(aug.data.num_nodes, aug.data.num_nodes))
+        adj_t = adj_t.to_symmetric().coalesce()
+        A_hat = adj_t.to_dense()+torch.eye(aug.data.x.shape[0]).to(aug.device)
+        z1 = model(x_1, edge_index_1)
+        z2 = model(x_2, edge_index_2)
+
+        loss = model.loss(z1, z2, A_hat)
+        
+        loss.backward()
+        optimizer.step()
+        if epoch % 100 == 0:
+            loss_res.append(round(float(loss), 2))
+    print('pretrain loss: ', loss_res)
+    pre_time = time.time()-t1
+    print(f"pretrain time: {pre_time:.2f} s")
+    writer.flush()
+    return pre_time
+
+def pretrain_aor_grace(model, aug, param):
+    optimizer = torch.optim.Adam(
+        model.parameters(),
+        lr=param['gnn_lr'],
+        # weight_decay=param['weight_decay']
+    )
+    t1 = time.time()
+    loss_res = []
+    for epoch in tqdm(range(1, param['ct_epochs'] + 1)):
+        model.train()
+        aug.train()
+        optimizer.zero_grad()
+        x_1, edge_index_1, x_2, edge_index_2 = aug()
+        adj_1 = SparseTensor.from_edge_index(edge_index_1, sparse_sizes=(aug.data.num_nodes, aug.data.num_nodes)).to_torch_sparse_coo_tensor().coalesce()
+        adj_2 = SparseTensor.from_edge_index(edge_index_2, sparse_sizes=(aug.data.num_nodes, aug.data.num_nodes)).to_torch_sparse_coo_tensor().coalesce()
+        hat_indices, hat_values = spar.eye(aug.data.x.shape[0])
+        A_indices = torch.cat([adj_1.indices(), adj_2.indices(), hat_indices.to(aug.device)], dim=-1)
+        A_value = torch.cat([adj_1.values(), adj_2.values(), hat_values.to(aug.device)])
+        A_hat = torch.sparse_coo_tensor(A_indices, A_value).coalesce()
+        z1 = model(x_1, edge_index_1)
+        z2 = model(x_2, edge_index_2)
+
+        loss = model.loss(z1, z2, A_hat)
+        
+        loss.backward()
+        optimizer.step()
+        if epoch % 100 == 0:
+            loss_res.append(round(float(loss), 2))
+    print('pretrain loss: ', loss_res)
+    pre_time = time.time()-t1
+    print(f"pretrain time: {pre_time:.2f} s")
+    writer.flush()
+    return pre_time
+
+def pretrain_and_grace(model, aug, param):
+    optimizer = torch.optim.Adam(
+        model.parameters(),
+        lr=param['gnn_lr'],
+        # weight_decay=param['weight_decay']
+    )
+    t1 = time.time()
+    loss_res = []
+    for epoch in tqdm(range(1, param['ct_epochs'] + 1)):
+        model.train()
+        aug.train()
+        optimizer.zero_grad()
+        x_1, edge_index_1, x_2, edge_index_2 = aug()
+        adj_1 = SparseTensor.from_edge_index(edge_index_1, sparse_sizes=(aug.data.num_nodes, aug.data.num_nodes))
+        adj_1 = adj_1.to_symmetric().coalesce().to_torch_sparse_csr_tensor()
+        adj_2 = SparseTensor.from_edge_index(edge_index_2, sparse_sizes=(aug.data.num_nodes, aug.data.num_nodes))
+        adj_2 = adj_2.to_symmetric().coalesce().to_torch_sparse_csr_tensor()
+        hat = torch.eye(aug.data.x.shape[0]).to_sparse().to(aug.device)
+        A_hat = torch.sparse.mm(adj_1, adj_2)+hat
+        z1 = model(x_1, edge_index_1)
+        z2 = model(x_2, edge_index_2)
+
+        loss = model.loss(z1, z2, A_hat)
+        
+        loss.backward()
+        optimizer.step()
+        if epoch % 100 == 0:
+            loss_res.append(round(float(loss), 2))
+    print('pretrain loss: ', loss_res)
+    pre_time = time.time()-t1
+    print(f"pretrain time: {pre_time:.2f} s")
+    writer.flush()
+    return pre_time
+
+def pretrain_extend_agrace(model, aug, param):
+    optimizer = torch.optim.Adam(
+        model.parameters(),
+        lr=param['gnn_lr'],
+        # weight_decay=param['weight_decay']
+    )
+    t1 = time.time()
+    loss_res = []
+    for epoch in tqdm(range(1, param['ct_epochs'] + 1)):
+        model.train()
+        aug.train()
+        optimizer.zero_grad()
+        x_1, edge_index_1, x_2, edge_index_2 = aug()
+        data = Data(x_1, edge_index_1)
+        G = to_networkx(data, to_undirected=True)
+        distance_matrix = dict(nx.all_pairs_shortest_path_length(G))
+        adj_matrix = np.zeros((len(G.nodes), len(G.nodes)))
+        for source, distances in distance_matrix.items():
+            for target, distance in distances.items():
+                adj_matrix[source, target] = distance
+        adj_matrix[adj_matrix!=0] = 1/adj_matrix[adj_matrix!=0]
+        adj = torch.tensor(adj_matrix, dtype=torch.float).to(aug.device)
+        adj += torch.eye(aug.data.x.shape[0]).to(aug.device)
+        z1 = model(x_1, edge_index_1)
+        z2 = model(x_2, edge_index_2)
+
+        loss = model.loss(z1, z2, adj)
+        
+        loss.backward()
+        optimizer.step()
+        if epoch % 100 == 0:
+            loss_res.append(round(float(loss), 2))
+    print('pretrain loss: ', loss_res)
+    pre_time = time.time()-t1
+    print(f"pretrain time: {pre_time:.2f} s")
+    writer.flush()
+    return pre_time
+
+def pretrain_a2grace(model, aug, param):
+    optimizer = torch.optim.Adam(
+        model.parameters(),
+        lr=param['gnn_lr'],
+        # weight_decay=param['weight_decay']
+    )
+    t1 = time.time()
+    loss_res = []
+    for epoch in tqdm(range(1, param['ct_epochs'] + 1)):
+        model.train()
+        aug.train()
+        optimizer.zero_grad()
+        x_1, edge_index_1, x_2, edge_index_2 = aug()
+        adj_t = SparseTensor.from_edge_index(edge_index_1, sparse_sizes=(aug.data.num_nodes, aug.data.num_nodes))
+        adj_t = adj_t.to_symmetric().coalesce()
+        A_hat_1 = adj_t.to_dense()+torch.eye(aug.data.x.shape[0]).to(aug.device)
+
+        adj_t = SparseTensor.from_edge_index(edge_index_2, sparse_sizes=(aug.data.num_nodes, aug.data.num_nodes))
+        adj_t = adj_t.to_symmetric().coalesce()
+        A_hat_2 = adj_t.to_dense()+torch.eye(aug.data.x.shape[0]).to(aug.device)
+
+        z1 = model(x_1, edge_index_1)
+        z2 = model(x_2, edge_index_2)
+
+        loss = model.loss(z1, z2, A_hat_1, A_hat_2)
+        loss.backward()
+        optimizer.step()
+        if epoch % 100 == 0:
+            loss_res.append(round(float(loss), 2))
+    print('pretrain loss: ', loss_res)
+    pre_time = time.time()-t1
+    print(f"pretrain time: {pre_time:.2f} s")
     return pre_time
 
 
@@ -652,3 +642,4 @@ def pretrain_a2bgrl(model, aug, param):
     print(f"pretrain time: {pre_time:.2f} s")
     writer.flush()
     return pre_time
+"""

@@ -2,8 +2,6 @@ import numpy as np
 import pandas as pd
 import networkx as nx
 import torch
-import imageio.v2 as imageio
-from PIL import Image
 from sklearn.manifold import TSNE
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -21,12 +19,45 @@ def community_detection(name):
         'leiden': algorithms.leiden,
         'combo': algorithms.pycombo,
         'infomap': algorithms.infomap,
-        # 'girvan_newman': algorithms.girvan_newman,
         # overlapping algorithms
         # 'demon': algorithms.demon,
         # 'lemon': algorithms.lemon,
     }
     return algs[name]
+
+def commu_repartition(data, cd_algo: str = None):
+    if hasattr(data, "probs") and hasattr(data, "sizes") and cd_algo is None:
+        print("already communities")
+        return data
+    if cd_algo == None:
+        cd_algo = 'louvain'
+    G = to_networkx(data, to_undirected=True)
+    communities = community_detection(cd_algo)(G).communities
+    probs = np.zeros((len(communities), len(communities)))
+    sizes = []
+    block = np.empty((len(G.nodes)))
+    for idx, c in enumerate(communities):
+        sizes.append(len(c))
+        for n in c:
+            block[n] = idx
+            G.nodes[n]["com"] = idx # get com label
+    for u, v in zip(data.edge_index[0], data.edge_index[1]): # count number of edge per com
+        u = float(u)
+        v = float(v)
+        probs[G.nodes[u]["com"], G.nodes[v]["com"]] += 1
+    for x in range(len(probs)): # make the probs
+        for y in range(len(probs)):
+            if x == y:
+                probs[x,x] = probs[x,x]/(sizes[x]*(sizes[x]-1))/2 if sizes[x] > 1 else probs[x,x]
+            else:
+                probs[x,y] /= ((sizes[x]+sizes[y])*(sizes[x]+sizes[y]-1))/2 #complete graph formula
+    probs /= 2 # undirected graph
+    data.block = block
+    data.probs = probs
+    print("probs, ", probs)
+    data.sizes = sizes
+    print("sizes, ", sizes)
+    return data
 
 def community_strength(graph: nx.Graph,
                             communities) -> (np.ndarray, np.ndarray):
@@ -129,7 +160,7 @@ def full_output(full_res: list):
     )
     return full_res, full_latex
 
-def visu_tsne(h, partition=None, name=None):
+def visu_tsne(h, partition=None, name=None): # TODO color by groups
     tsne = TSNE(n_components=2, verbose=1, random_state=0, perplexity=40, n_iter=300)
     h = h.cpu()
     tsne_results = tsne.fit_transform(h)
@@ -164,10 +195,3 @@ def visu_tsne(h, partition=None, name=None):
         ax.set_title(name)
         plt.savefig(name, bbox_inches='tight', dpi=300)
     plt.show()
-
-def create_gif(image_names, gif_name, duration=0.1):
-    with imageio.get_writer(gif_name, mode='I', duration=10.0, fps=0.25) as writer:
-        for filename in image_names:
-            image = imageio.imread(filename)
-            writer.append_data(image)
-    writer.close()

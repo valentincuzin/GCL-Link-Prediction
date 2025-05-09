@@ -5,7 +5,6 @@ import torch
 import numpy as np
 import igraph as ig
 import networkx as nx
-import matplotlib.pyplot as plt
 import torch.nn.functional as F
 from sklearn.metrics import average_precision_score
 from ogb.linkproppred import PygLinkPropPredDataset, Evaluator
@@ -87,7 +86,8 @@ def loaddataset(name: str|list, use_valedges_as_input: bool, reduce_feature: int
 
         if data.edge_index.max().item() + 1 < data.num_nodes:
             data.edge_index = add_self_loops(data.edge_index, num_nodes=data.num_nodes)[0]
-    elif name in ["facebook_friends", "wiki_science", "crime"]:
+    elif name in ["facebook_friends", "wiki_science", "crime", 
+                  "power", "unicodelang", "euroroad"]:
         igG = ig.Graph.Read_GML(f'./small_gml/{name}.gml')
         G = igG.to_networkx()
         data = from_networkx(G)

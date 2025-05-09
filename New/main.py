@@ -15,11 +15,12 @@ from src.datasets import DataSplit, get_evaluator, full_eval
 from src.predictor import get_predictor, ProbDecoder
 from src.train import pred_train, baseline_train, test
 from src.ctrain import pretrain
-from src.utils import store_res, compute_table, full_output
+from src.utils import store_res, compute_table, full_output, commu_repartition
 
+SMALL_DATASETS = ["facebook_friends", "wiki_science", "crime", 
+                  "power", "unicodelang", "euroroad"]
 DATASETS = ["synthetic_1", "synthetic_2", "synthetic_3", 
-            "facebook_friends", "wiki_science", "crime", 
-            "cora", "citeseer", "pubmed", "collab"]
+            "cora", "citeseer", "pubmed", "collab"]+SMALL_DATASETS
 MODELS = ["baseline",
           "grace", "lgrace", "agrace", "ândgrace", "âorgrace", "extagrace", "a2grace", "csgcl", 
           "bgrl", "lbgrl", "âorbgrl", "extabgrl", "a2bgrl", "abgrl"]
@@ -63,12 +64,15 @@ def synthetic_pred(data_split, evaluator, hp):
     for r in range(data_split.runs):
         seed_everything(r)
         data, split_edge = data_split.get(r)
+        if not hasattr(data, "probs") and not hasattr(data, "sizes"):
+            data = commu_repartition(data, 'louvain').to(data.x.device)
+        # print('block', data.block)
         predictor = ProbDecoder(data.probs, data.block)
         _, _, pos_test_pred, neg_test_pred = test(None, predictor, data, split_edge, hp['model'])
-        neg_test_pred += np.random.normal(0, 0.001, neg_test_pred.shape)
+        neg_test_pred += np.random.uniform(-0.001, 0.001, neg_test_pred.shape)
         test_res = full_eval(evaluator, pos_test_pred, neg_test_pred)
         res_dict = store_res(test_res, res_dict)
-    save_name = "synthetic_prob_pred"
+    save_name = "louvain_prob_pred"
     df_res, res_latex = compute_table(res_dict, save_name)
     print(df_res)
     return df_res
@@ -78,6 +82,8 @@ def hp_load(dataset: str, args):
     print(f"....{dataset}....")
     if "synthetic" in dataset:
         hp_files = os.path.join('params','synthetic.json')
+    elif dataset in SMALL_DATASETS:
+        hp_files = os.path.join('params','small.json')
     else:
         hp_files = os.path.join('params', dataset+'.json')
     with open(hp_files) as json_file:
@@ -134,7 +140,7 @@ if __name__ == "__main__":
         data_split = DataSplit(dataset, device, args.runs, args.use_valedges_as_input, args.reduce_feature, args.only_feature)
         evaluator = get_evaluator(dataset)
         full_res = []
-        if "synthetic" in dataset:
+        if "sbm" in args.augmentation:
             full_res.append(synthetic_pred(data_split, evaluator, hp))
         for model_name in args.model:
             print(f"...{model_name}...")
@@ -150,8 +156,7 @@ if __name__ == "__main__":
                         r = 0
                         hp['model']['ct_epochs'] = trial.suggest_int('ct_epochs', 600, 2000, 200)
                         hp['model']['gnn_lr'] = trial.suggest_float('gnn_lr', 0.001, 0.1)
-                        hp['model']['weight_decay'] = trial.suggest_float('weight_decay', 1e-6, 1e-4)
-                        hp['model']['tau'] = trial.suggest_float('tau', 0.3, 0.5)
+                        hp['model']['tau'] = trial.suggest_int('tau', 2, 5)/10
                         hp['model']['batch_size'] = trial.suggest_int('batch_size', 128, 2000, 256)
                         seed_everything(r)
                         data, split_edge = data_split.get(r)
