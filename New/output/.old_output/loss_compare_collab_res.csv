@@ -1,0 +1,8 @@
+metrics;baseline'_'log_sig;baseline'_'bce;baseline'_'auc;baseline'_'hinge_auc
+Hits@10;9.54$\pm$1.86;9.17$\pm$1.82;6.81$\pm$3.7;8.02$\pm$3.92
+Hits@20;14.53$\pm$1.77;14.17$\pm$1.96;11.26$\pm$4.46;12.51$\pm$4.54
+Hits@50;24.33$\pm$1.86;23.47$\pm$2.33;20.35$\pm$4.96;22.01$\pm$5.25
+Hits@100;33.55$\pm$1.75;32.39$\pm$2.56;30.21$\pm$4.29;31.71$\pm$4.6
+ROCAUC;97.27$\pm$0.05;97.14$\pm$0.35;97.04$\pm$0.32;97.15$\pm$0.33
+AP;95.4$\pm$0.12;95.14$\pm$0.65;95.01$\pm$0.58;95.15$\pm$0.57
+pretrain_time;nan$\pm$nan;nan$\pm$nan;nan$\pm$nan;nan$\pm$nan

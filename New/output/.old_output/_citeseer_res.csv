@@ -1,0 +1,8 @@
+metrics;grace_random
+Hits@10;57.36$\pm$0.0
+Hits@20;62.64$\pm$0.0
+Hits@50;71.87$\pm$0.0
+Hits@100;79.12$\pm$0.0
+ROCAUC;91.59$\pm$0.0
+AP;93.11$\pm$0.0
+pretrain_time;3.73$\pm$0.0
