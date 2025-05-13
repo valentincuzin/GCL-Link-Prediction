@@ -20,8 +20,20 @@ class Aug:
         self.data = copy.deepcopy(data)
         self.split_edge = split_edge
         self.device = self.data.x.device
+        self.param = param
+        self.type = type
         self.data = self.data.to(self.device)
         self.train_mode = True
+        if '&' in type:
+            type1, type2 = type.split('&')
+            self.data1, aug_fct1 = self.precompute(data, type1)
+            self.data2, aug_fct2 = self.precompute(data, type2)
+            self.get = partial(self.mix, aug_fct1, aug_fct2)
+        else:
+            self.data, aug_fct = self.precompute(data, type)
+            self.get = aug_fct
+
+    def precompute(self, data, type: str):
         feature_weights = None
         drop_weights = None
         if type in ['deg', 'pr', 'evc']:
@@ -38,29 +50,29 @@ class Aug:
             if '_' in type:
                 type, cd_algo = type.split('_')
             print(cd_algo, 'detection...')
-            self.data = commu_repartition(self.data, cd_algo).to(self.device)
+            data = commu_repartition(data, cd_algo).to(self.device)
         elif '_d' in type:
             type, delta = type.split('_d')
             print(type, " with variance: ", delta)
             self.perturb_commu(delta)
         elif type == 'rjc2':
-            G = to_networkx(self.data, to_undirected=True)
+            G = to_networkx(data, to_undirected=True)
             preds = nx.jaccard_coefficient(G)
             for u, v in G.edges():
-                G[u][v]['weight'] = 1
+                G[u][v]['weight'] = 1 # not sure to put 1 if their is a link
             nb_add = 0
             for u, v, p in preds:
-                if p >= 0.5:
+                if p >= random.random():
                     nb_add += 1
-                    G.add_edge(u, v, weight=0.75+p)
-                    G.add_edge(v, u, weight=0.75+p)
+                    G.add_edge(u, v, weight=p)
+                    G.add_edge(v, u, weight=p)
             print('add', nb_add, 'edges')
             tmp = from_networkx(G).to(self.device)
-            self.data.edge_index = tmp.edge_index
-            self.data.weight = tmp.weight
+            data.edge_index = tmp.edge_index
+            data.weight = tmp.weight
         # elif type == 'ctri':
-        #     self.data.edge_index = _close_triangle(self.data.edge_index)
-        self.types = {
+        #     data.edge_index = _close_triangle(data.edge_index)
+        types = {
             'random': self.random,
             'rjc': self.rjc,
             'rjc2': self.rjc2,
@@ -74,9 +86,7 @@ class Aug:
             'sbm': self.sbm,
             'sbm2': self.sbm_2
         }
-        self.param = param
-        self.get = self.types[type]
-        self.type = type
+        return data, types[type]
 
     def train(self):
         if not self.train_mode:
@@ -90,6 +100,15 @@ class Aug:
 
     def __call__(self):
         return self.get()
+    
+    def mix(self, aug_fct1, aug_fct2):
+        self.tmp = copy.deepcopy(self.data)
+        self.data = self.data1
+        x_1, edge_index_1, _, _ = aug_fct1()
+        self.data = self.data2
+        _, _, x_2, edge_index_2 = aug_fct2()
+        self.data = self.tmp
+        return x_1, edge_index_1, x_2, edge_index_2
 
     def random(self):
         edge_attr = self.data.edge_attr if 'edge_attr' in self.data else None
@@ -275,19 +294,23 @@ class Aug:
         return x_1, data_1.edge_index, x_2, data_2.edge_index
 
     def rjc2(self):
-        x_1, edge_index_1, x_2, edge_index_2 = self.random()
-        neg_edge = negative_sampling(self.data.edge_index).T.tolist()
+        # x_1, edge_index_1, x_2, edge_index_2 = self.random()
+        # neg_edge = negative_sampling(self.data.edge_index).T.tolist()
         
-        data_1 = Data(x=x_1, edge_index=edge_index_1)
-        G1 = to_networkx(data_1, to_undirected=True)
-        G1 = _reconstruction(G1, nx.jaccard_coefficient, 0.9, neg_edge)
-        data_2 = Data(x=x_2, edge_index=edge_index_2)
-        G2 = to_networkx(data_2, to_undirected=True)
-        G2 = _reconstruction(G2, nx.jaccard_coefficient, 0.9, neg_edge)
+        # data_1 = Data(x=x_1, edge_index=edge_index_1)
+        # G1 = to_networkx(data_1, to_undirected=True)
+        # G1 = _reconstruction(G1, nx.jaccard_coefficient, 0.9, neg_edge)
+        # data_2 = Data(x=x_2, edge_index=edge_index_2)
+        # G2 = to_networkx(data_2, to_undirected=True)
+        # G2 = _reconstruction(G2, nx.jaccard_coefficient, 0.9, neg_edge)
 
-        data_1 = from_networkx(G1).to(self.device)
-        data_2 = from_networkx(G2).to(self.device)
-        return x_1, data_1.edge_index, x_2, data_2.edge_index
+        # data_1 = from_networkx(G1).to(self.device)
+        # data_2 = from_networkx(G2).to(self.device)
+        edge_index_1 = _drop_edge_weighted(self.data.edge_index, self.data.weight, self.param['drop_edge_rate_1']).to(self.device)
+        edge_index_2 = _drop_edge_weighted(self.data.edge_index, self.data.weight, self.param['drop_edge_rate_2']).to(self.device)
+        x_1 = _drop_feature(self.data.x, self.param['drop_feature_rate_1']).to(self.device)
+        x_2 = _drop_feature(self.data.x, self.param['drop_feature_rate_2']).to(self.device)
+        return x_1, edge_index_1, x_2, edge_index_2
 
     def raa(self):
         x_1, edge_index_1, x_2, edge_index_2 = self.random()
