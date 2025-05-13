@@ -15,6 +15,11 @@ from torch_geometric import seed_everything
 from torch_geometric.datasets import Planetoid
 from torch_geometric.utils import to_undirected, add_self_loops, from_networkx, to_networkx
 from torch_geometric.transforms import RandomLinkSplit
+from torch_geometric.data.storage import GlobalStorage
+from torch_geometric.data.data import DataEdgeAttr, DataTensorAttr
+from numpy.core.multiarray import _reconstruct
+
+torch.serialization.add_safe_globals([_reconstruct, DataEdgeAttr, DataTensorAttr, GlobalStorage])
 
 from src.utils import gen_sbm, average_precision
 

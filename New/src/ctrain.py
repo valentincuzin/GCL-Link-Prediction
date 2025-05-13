@@ -85,16 +85,16 @@ def pretrain_grace(model, aug, param):
         if epoch % 100 == 0:
             loss_res.append(round(float(loss), 2))
         # valid part
-        with torch.no_grad():
-            model.eval()
-            aug.eval()
-            x_1, edge_index_1, x_2, edge_index_2 = aug()
-            z1 = model(x_1, edge_index_1)
-            z2 = model(x_2, edge_index_2)
-            h = model(aug.data.x, aug.data.edge_index)
-            val_loss = model.loss(z1, z2)
-            val_ap = valid_ap(model, aug.data, aug.split_edge, param)
-        writer.add_scalars("grace", {'tr_loss':loss, 'val_loss': val_loss, 'val_ap': val_ap}, epoch)
+        # with torch.no_grad():
+        #     model.eval()
+        #     aug.eval()
+        #     x_1, edge_index_1, x_2, edge_index_2 = aug()
+        #     z1 = model(x_1, edge_index_1)
+        #     z2 = model(x_2, edge_index_2)
+        #     h = model(aug.data.x, aug.data.edge_index)
+        #     val_loss = model.loss(z1, z2)
+        #     val_ap = valid_ap(model, aug.data, aug.split_edge, param)
+        # writer.add_scalars("grace", {'tr_loss':loss, 'val_loss': val_loss, 'val_ap': val_ap}, epoch)
 
         # if epoch % 10 == 0:
         #     name = f'gif/grace/{epoch}.png'
@@ -149,28 +149,28 @@ def pretrain_lgrace(model, aug, param):
             loss_res.append(round(float(_loss), 2))
         
         # valid part
-        with torch.no_grad():
-            model.eval()
-            aug.eval()
-            x_1, edge_index_1, x_2, edge_index_2 = aug()
-            edge_index_1 = edge_index_1.T
-            edge_index_2 = edge_index_2.T
-            eq = torch.eq(edge_index_1[:, None], edge_index_2[None, :]).all(dim=2)
-            intersection_idx = torch.nonzero(eq)
-            and_edge_index = edge_index_1[intersection_idx[:, 0]].T
-            or_edge_index = torch.unique(torch.cat((edge_index_1, edge_index_2)), dim=0).T
-            edge_index_1 = edge_index_1.T
-            edge_index_2 = edge_index_2.T
-            if and_edge_index.size(1) == 0:
-                nb_jump += 1
-                continue
-            neg_edge = negative_sampling(or_edge_index, num_neg_samples=and_edge_index.size(1))
-            h1 = model(x_1, edge_index_1).to(aug.device)
-            h2 = model(x_2, edge_index_2).to(aug.device)
-            h = model(aug.data.x, aug.data.edge_index)
-            val_loss = model.loss(h1, h2, and_edge_index, neg_edge)
-            val_ap = valid_ap(model, aug.data, aug.split_edge, param)
-        writer.add_scalars("lgrace", {'tr_loss':loss, 'val_loss': val_loss, 'val_ap': val_ap}, epoch)
+        # with torch.no_grad():
+        #     model.eval()
+        #     aug.eval()
+        #     x_1, edge_index_1, x_2, edge_index_2 = aug()
+        #     edge_index_1 = edge_index_1.T
+        #     edge_index_2 = edge_index_2.T
+        #     eq = torch.eq(edge_index_1[:, None], edge_index_2[None, :]).all(dim=2)
+        #     intersection_idx = torch.nonzero(eq)
+        #     and_edge_index = edge_index_1[intersection_idx[:, 0]].T
+        #     or_edge_index = torch.unique(torch.cat((edge_index_1, edge_index_2)), dim=0).T
+        #     edge_index_1 = edge_index_1.T
+        #     edge_index_2 = edge_index_2.T
+        #     if and_edge_index.size(1) == 0:
+        #         nb_jump += 1
+        #         continue
+        #     neg_edge = negative_sampling(or_edge_index, num_neg_samples=and_edge_index.size(1))
+        #     h1 = model(x_1, edge_index_1).to(aug.device)
+        #     h2 = model(x_2, edge_index_2).to(aug.device)
+        #     h = model(aug.data.x, aug.data.edge_index)
+        #     val_loss = model.loss(h1, h2, and_edge_index, neg_edge)
+        #     val_ap = valid_ap(model, aug.data, aug.split_edge, param)
+        # writer.add_scalars("lgrace", {'tr_loss':loss, 'val_loss': val_loss, 'val_ap': val_ap}, epoch)
 
         # if epoch % 10 == 0:
         #     name = f'gif/lgrace/{epoch}.png'
@@ -246,17 +246,17 @@ def pretrain_bgrl(model, aug, param):
         if epoch % 100 == 0:
             loss_res.append(round(float(loss), 2))
         # valid part
-        with torch.no_grad():
-            model.eval()
-            aug.eval()
-            x_1, edge_index_1, x_2, edge_index_2 = aug()
-            z1, y2 = model.train_forward((x_1, edge_index_1), (x_2, edge_index_2))
-            z2, y1 = model.train_forward((x_2, edge_index_2), (x_1, edge_index_1))
+        # with torch.no_grad():
+        #     model.eval()
+        #     aug.eval()
+        #     x_1, edge_index_1, x_2, edge_index_2 = aug()
+        #     z1, y2 = model.train_forward((x_1, edge_index_1), (x_2, edge_index_2))
+        #     z2, y1 = model.train_forward((x_2, edge_index_2), (x_1, edge_index_1))
 
-            h = model(aug.data.x, aug.data.edge_index)
-            val_loss = model.loss(z1, z2, y1, y2)
-            val_ap = valid_ap(model, aug.data, aug.split_edge, param)
-        writer.add_scalars("bgrl", {'tr_loss':loss, 'val_loss': val_loss, 'val_ap': val_ap}, epoch)
+        #     h = model(aug.data.x, aug.data.edge_index)
+        #     val_loss = model.loss(z1, z2, y1, y2)
+        #     val_ap = valid_ap(model, aug.data, aug.split_edge, param)
+        # writer.add_scalars("bgrl", {'tr_loss':loss, 'val_loss': val_loss, 'val_ap': val_ap}, epoch)
 
         # if epoch % 10 == 0:         
         #     name = f'gif/bgrl/{epoch}.png'
@@ -315,27 +315,27 @@ def pretrain_lbgrl(model, aug, param):
         if epoch % 100 == 0:
             loss_res.append(round(float(loss), 2))
         # valid part
-        with torch.no_grad():
-            model.eval()
-            aug.eval()
-            x_1, edge_index_1, x_2, edge_index_2 = aug()
-            edge_index_1 = edge_index_1.T
-            edge_index_2 = edge_index_2.T
-            eq = torch.eq(edge_index_1[:, None], edge_index_2[None, :]).all(dim=2)
-            intersection_idx = torch.nonzero(eq)
-            and_edge_index = edge_index_1[intersection_idx[:, 0]].T
-            edge_index_1 = edge_index_1.T
-            edge_index_2 = edge_index_2.T
-            if and_edge_index.size(1) == 0:
-                nb_jump += 1
-                continue
-            z1, y2 = model.train_forward((x_1, edge_index_1), (x_2, edge_index_2), and_edge_index)
-            z2, y1 = model.train_forward((x_2, edge_index_2), (x_1, edge_index_1), and_edge_index)
+        # with torch.no_grad():
+        #     model.eval()
+        #     aug.eval()
+        #     x_1, edge_index_1, x_2, edge_index_2 = aug()
+        #     edge_index_1 = edge_index_1.T
+        #     edge_index_2 = edge_index_2.T
+        #     eq = torch.eq(edge_index_1[:, None], edge_index_2[None, :]).all(dim=2)
+        #     intersection_idx = torch.nonzero(eq)
+        #     and_edge_index = edge_index_1[intersection_idx[:, 0]].T
+        #     edge_index_1 = edge_index_1.T
+        #     edge_index_2 = edge_index_2.T
+        #     if and_edge_index.size(1) == 0:
+        #         nb_jump += 1
+        #         continue
+        #     z1, y2 = model.train_forward((x_1, edge_index_1), (x_2, edge_index_2), and_edge_index)
+        #     z2, y1 = model.train_forward((x_2, edge_index_2), (x_1, edge_index_1), and_edge_index)
 
-            h = model(aug.data.x, aug.data.edge_index)
-            val_loss = model.loss(z1, z2, y1, y2)
-            val_ap = valid_ap(model, aug.data, aug.split_edge, param)
-        writer.add_scalars("lbgrl", {'tr_loss':loss, 'val_loss': val_loss, 'val_ap': val_ap}, epoch)
+        #     h = model(aug.data.x, aug.data.edge_index)
+        #     val_loss = model.loss(z1, z2, y1, y2)
+        #     val_ap = valid_ap(model, aug.data, aug.split_edge, param)
+        # writer.add_scalars("lbgrl", {'tr_loss':loss, 'val_loss': val_loss, 'val_ap': val_ap}, epoch)
 
         # print('before visu')
         # if epoch % 10 == 0:

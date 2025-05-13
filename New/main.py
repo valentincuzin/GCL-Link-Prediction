@@ -1,7 +1,6 @@
 import argparse
 import json
 import os
-import random
 import optuna
 from optuna.trial import TrialState
 import numpy as np
@@ -69,7 +68,8 @@ def synthetic_pred(data_split, evaluator, hp):
         # print('block', data.block)
         predictor = ProbDecoder(data.probs, data.block)
         _, _, pos_test_pred, neg_test_pred = test(None, predictor, data, split_edge, hp['model'])
-        neg_test_pred += np.random.uniform(-0.001, 0.001, neg_test_pred.shape)
+        pos_test_pred += np.random.uniform(-0.0001, 0.0001, pos_test_pred.shape)
+        neg_test_pred += np.random.uniform(-0.0001, 0.0001, neg_test_pred.shape)
         test_res = full_eval(evaluator, pos_test_pred, neg_test_pred)
         res_dict = store_res(test_res, res_dict)
     save_name = "louvain_prob_pred"
