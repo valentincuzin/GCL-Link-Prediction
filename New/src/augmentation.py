@@ -55,30 +55,16 @@ class Aug:
             type, delta = type.split('_d')
             print(type, " with variance: ", delta)
             self.perturb_commu(delta)
-        elif type == 'rjc2':
-            G = to_networkx(data, to_undirected=True)
-            preds = nx.jaccard_coefficient(G)
-            for u, v in G.edges():
-                G[u][v]['weight'] = 1 # not sure to put 1 if their is a link
-            nb_add = 0
-            for u, v, p in preds:
-                if p >= random.random():
-                    nb_add += 1
-                    G.add_edge(u, v, weight=p)
-                    G.add_edge(v, u, weight=p)
-            print('add', nb_add, 'edges')
-            tmp = from_networkx(G).to(self.device)
-            data.edge_index = tmp.edge_index
-            data.weight = tmp.weight
+        elif type in ['rjc', 'raa', 'rra']:
+            data = self.pred(data, type)
+            type = 'reconstruct'
         # elif type == 'ctri':
         #     data.edge_index = _close_triangle(data.edge_index)
         types = {
             'random': self.random,
-            'rjc': self.rjc,
-            'rjc2': self.rjc2,
-            'ctri': self.close_triangle,
-            'raa': self.raa,
-            'rra': self.rra,
+            'reconstruct': self.reconstruct,
+            # 'raa': self.raa,
+            # 'rra': self.rra,
             'deg': partial(self.gca, feature_weights, drop_weights),
             'pr': partial(self.gca, feature_weights, drop_weights),
             'evc': partial(self.gca, feature_weights, drop_weights),
@@ -122,9 +108,13 @@ class Aug:
         def degree_drop_weights(edge_index):
             edge_index_ = to_undirected(edge_index)
             deg = degree(edge_index_[1])
+            print('deg', deg)
             deg_col = deg[edge_index[1]].to(torch.float32)
+            print('deg_col', deg_col)
             s_col = torch.log(deg_col)
+            print('s_col', s_col)
             weights = (s_col.max() - s_col) / (s_col.max() - s_col.mean())
+            print('weights', weights)
             return weights
         drop_weights = degree_drop_weights(self.data.edge_index).to(self.device)
         edge_index_ = to_undirected(self.data.edge_index)
@@ -185,6 +175,54 @@ class Aug:
         node_evc = eigenvector_centrality(self.data)
         feature_weights = _feature_drop_weights(self.data.x, node_c=node_evc).to(self.device)
         return feature_weights, drop_weights
+
+    def pred(self, data, type):
+        G = to_networkx(data, to_undirected=True)
+        switch = {
+            'rjc': nx.jaccard_coefficient,
+            'raa': nx.adamic_adar_index,
+            'rra': nx.resource_allocation_index
+        }
+        preds = switch[type](G)
+        
+        nb_add = 0
+        values = []
+        values_norm = []
+        probs = []
+        min_p = float('inf')
+        max_p = float('-inf')
+        mean_p = []
+        for u, v, p in preds:
+            mean_p.append(p)
+            values.append((u, v, p))
+            if p < min_p:
+                min_p = p
+            if p > max_p:
+                max_p = p
+        mean_p = np.mean(mean_p)
+        for u, v, p in values:
+            p = float((p-min_p)/(max_p-min_p))
+            # p = float((max_p-p)/(max_p-mean_p))
+            probs.append(p)
+            values_norm.append((u, v, p))
+
+        print('mean pred: ', mean_p)
+
+        for u, v, p in values_norm:
+            if p >= mean_p:
+                nb_add += 1
+                G.add_edge(u, v, weight=p)
+                G.add_edge(v, u, weight=p)
+        print('add', nb_add, 'edges')
+
+        for u, v in G.edges():
+            G[u][v]['weight'] = 1.0 # not sure to put 1 if their is a link
+
+        tmp = from_networkx(G).to(self.device)
+        data.edge_index = tmp.edge_index
+        data.weight = tmp.weight
+        print(tmp.weight)
+        return data
 
     def gca(self, feature_weights, drop_weights):
         edge_index_1 = _drop_edge_weighted(self.data.edge_index, drop_weights, p=self.param[f'drop_edge_rate_{1}'], threshold=0.7).to(self.device)
@@ -278,6 +316,15 @@ class Aug:
         data_2.x = _drop_feature(data_2.x, self.param['drop_feature_rate_2'])
         return data_1.x, data_1.edge_index, data_2.x, data_2.edge_index
     
+    def reconstruct(self):
+        edge_index_1 = _drop_edge_weighted(self.data.edge_index, self.data.weight, self.param['drop_edge_rate_1']).to(self.device)
+        edge_index_2 = _drop_edge_weighted(self.data.edge_index, self.data.weight, self.param['drop_edge_rate_2']).to(self.device)
+        x_1 = _drop_feature(self.data.x, self.param['drop_feature_rate_1']).to(self.device)
+        x_2 = _drop_feature(self.data.x, self.param['drop_feature_rate_2']).to(self.device)
+        return x_1, edge_index_1, x_2, edge_index_2
+
+
+    """ predictor augmentation...
     def rjc(self):
         x_1, edge_index_1, x_2, edge_index_2 = self.random()
         neg_edge = negative_sampling(self.data.edge_index).T.tolist()
@@ -387,8 +434,8 @@ class Aug:
         #         edge_index_2_close = torch.cat((edge_index_2_close, neg_edge), dim=1)
         if nb_l1_add+nb_l2_add > 0:
             print([nb_l1_add, nb_l2_add])
-        return x_1, edge_index_1_close, x_2, edge_index_2_close
-        
+        return x_1, edge_index_1_close, x_2, edge_index_2_close"""
+
 
     def random_prob(self):
         weight = self.data.weight if 'weight' in self.data else None
@@ -422,6 +469,7 @@ def _droupout_adj_prob(edge_index, edge_weight, p: float = 0.5,
         edge_index = torch.stack([row, col], dim=0)
     return edge_index, edge_weight
 
+"""
 def _reconstruction(G, algo: callable, threshold, edge_list = None):
     new_G = nx.Graph()
     new_G.add_node(G)
@@ -431,7 +479,7 @@ def _reconstruction(G, algo: callable, threshold, edge_list = None):
         if p >= threshold:
             retains.append((u, v))
     new_G.add_edges_from(retains)
-    return new_G
+    return new_G"""
 
 """ ### optimisation
 def _close_triangle(edge_index):
@@ -490,6 +538,7 @@ def _feature_drop_weights(x, node_c):
 def _drop_edge_weighted(edge_index, edge_weights, p: float, threshold: float = 1.):
     edge_weights = edge_weights / edge_weights.mean() * p
     edge_weights = edge_weights.where(edge_weights < threshold, torch.ones_like(edge_weights) * threshold)
+    # print(edge_weights)
     sel_mask = torch.bernoulli(1. - edge_weights).to(torch.bool)
     return edge_index[:, sel_mask]
 
