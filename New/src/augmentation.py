@@ -201,18 +201,24 @@ class Aug:
                 max_p = p
         mean_p = np.mean(mean_p)
         for u, v, p in values:
-            p = float((p-min_p)/(max_p-min_p))
+            if max_p != min_p:
+                p = float((p-min_p)/(max_p-min_p))
             # p = float((max_p-p)/(max_p-mean_p))
             probs.append(p)
             values_norm.append((u, v, p))
 
         print('mean pred: ', mean_p)
 
+        to_reconstruct = int(data.edge_index.shape[1]*0.4)
+        values_norm = sorted(values_norm, key=lambda x: x[2], reverse=True)
         for u, v, p in values_norm:
             if p >= mean_p:
-                nb_add += 1
                 G.add_edge(u, v, weight=p)
                 G.add_edge(v, u, weight=p)
+                nb_add += 1
+                if nb_add >= to_reconstruct:
+                    print('min de prob added: ', p)
+                    break
         print('add', nb_add, 'edges')
 
         for u, v in G.edges():
