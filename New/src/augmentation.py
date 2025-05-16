@@ -176,7 +176,8 @@ class Aug:
         feature_weights = _feature_drop_weights(self.data.x, node_c=node_evc).to(self.device)
         return feature_weights, drop_weights
 
-    def pred(self, data, type):
+    def pred(self, data_param, type):
+        data = copy.deepcopy(data_param)
         G = to_networkx(data, to_undirected=True)
         switch = {
             'rjc': nx.jaccard_coefficient,

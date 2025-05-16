@@ -156,7 +156,7 @@ def compute_table(res_dict: dict[str, list | float], name: str):
             unit = 100 if key != 'pretrain_time' else 1
             mean = round(unit * np.mean(result), 2)
             std = round(unit * np.std(result), 2)
-            new_tab.append({"metrics": key, name: fr"{mean}$\pm${std}"})
+            new_tab.append({"metrics": key, name+'_mean': fr"{mean}$\pm${std}", name: result})
     df = pd.DataFrame(data=new_tab)
     df.set_index('metrics')
     res_latex = df.to_latex(
