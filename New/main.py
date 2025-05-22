@@ -17,7 +17,8 @@ from src.ctrain import pretrain
 from src.utils import store_res, compute_table, full_output, commu_repartition
 
 SMALL_DATASETS = ["facebook_friends", "wiki_science", "crime", 
-                  "power", "unicodelang", "euroroad"]
+                  "power", "unicodelang", "euroroad", 
+                  "escort", "tips", "pol_kato", "pol_robertson"]
 DATASETS = ["synthetic_1", "synthetic_2", "synthetic_3", 
             "cora", "citeseer", "pubmed", "collab"]+SMALL_DATASETS
 MODELS = ["baseline",

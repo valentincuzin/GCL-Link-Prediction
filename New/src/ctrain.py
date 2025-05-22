@@ -1,6 +1,7 @@
 import time
 from tqdm import tqdm
 import torch
+import matplotlib.pyplot as plt
 from torch_geometric.utils import negative_sampling, to_networkx
 from torch_geometric.data import DataLoader, Data
 import torch_sparse as spar
@@ -282,6 +283,13 @@ def pretrain_lbgrl(model, aug, param):
     t1 = time.time()
     loss_res = []
     nb_jump = 0
+    # G = to_networkx(aug.data, to_undirected=True)
+    # G.remove_nodes_from(list(nx.isolates(G)))
+    # nx.draw(G, node_size=20)
+    # nx.spring_layout(G)
+    # plt.savefig(f'train_split.png')
+    # plt.close('all')
+    # and_edge_index_total = None
     for epoch in tqdm(range(1, param['ct_epochs'] + 1)):
         model.train()
         aug.train()
@@ -294,11 +302,39 @@ def pretrain_lbgrl(model, aug, param):
 
         optimizer.zero_grad()
         x_1, edge_index_1, x_2, edge_index_2 = aug()
+        
+        # data1 = Data(x=x_1, edge_index=edge_index_1)
+        # print(data1)
+        # G1 = to_networkx(data1, to_undirected=True)
+        # G1.remove_nodes_from(list(nx.isolates(G1)))
+        # nx.draw(G1, node_size=20)
+        # nx.spring_layout(G1)
+        # plt.savefig(f'{epoch}__aug1.png')
+        # plt.close('all')
+        # data2 = Data(x=x_2, edge_index=edge_index_2)
+        # print(data2)
+        # G2 = to_networkx(data2, to_undirected=True)
+        # G2.remove_nodes_from(list(nx.isolates(G2)))
+        # nx.draw(G2, node_size=20)
+        # nx.spring_layout(G2)
+        # plt.savefig(f'{epoch}__aug2.png')
+        # plt.close('all')
+        
+
         edge_index_1 = edge_index_1.T
         edge_index_2 = edge_index_2.T
         eq = torch.eq(edge_index_1[:, None], edge_index_2[None, :]).all(dim=2)
         intersection_idx = torch.nonzero(eq)
         and_edge_index = edge_index_1[intersection_idx[:, 0]].T
+        # and_edge_index_total = torch.cat((and_edge_index_total, and_edge_index), dim=1) if and_edge_index_total is not None else and_edge_index
+        # data3 = Data(x=x_2, edge_index=and_edge_index)
+        # print(data3)
+        # G3 = to_networkx(data3, to_undirected=True)
+        # G3.remove_nodes_from(list(nx.isolates(G3)))
+        # nx.draw(G3, node_size=20)
+        # nx.spring_layout(G3)
+        # plt.savefig(f'{epoch}__aug_inter.png')
+        # plt.close('all')
         edge_index_1 = edge_index_1.T
         edge_index_2 = edge_index_2.T
         if and_edge_index.size(1) == 0:
@@ -346,6 +382,14 @@ def pretrain_lbgrl(model, aug, param):
         #     else:
         #         data = aug.data
         #     visu_tsne(h, partition=data.communities, name=name)
+    # data4 = Data(x=x_2, edge_index=and_edge_index_total)
+    # print(data4)
+    # G4 = to_networkx(data4, to_undirected=True)
+    # G4.remove_nodes_from(list(nx.isolates(G4)))
+    # nx.draw(G4, node_size=20)
+    # nx.spring_layout(G4)
+    # plt.savefig(f'final__aug_inter.png')
+    # plt.close('all')
     print('real epochs: ', param['ct_epochs']-nb_jump)
     print('pretrain loss: ', loss_res, ' s')
     pre_time = time.time()-t1

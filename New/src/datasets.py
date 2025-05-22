@@ -92,11 +92,13 @@ def loaddataset(name: str|list, use_valedges_as_input: bool, reduce_feature: int
         if data.edge_index.max().item() + 1 < data.num_nodes:
             data.edge_index = add_self_loops(data.edge_index, num_nodes=data.num_nodes)[0]
     elif name in ["facebook_friends", "wiki_science", "crime", 
-                  "power", "unicodelang", "euroroad"]:
+                  "power", "unicodelang", "euroroad",
+                  "escort", "tips", "pol_kato", "pol_robertson"]:
         igG = ig.Graph.Read_GML(f'./small_gml/{name}.gml')
         G = igG.to_networkx()
         data = from_networkx(G)
         data.x = F.one_hot(torch.arange(0, len(G.nodes))).float()
+        data.edge_index = to_undirected(data.edge_index)
         split_edge = randomsplit([data])
         data.edge_index = to_undirected(split_edge["train"]["edge"].t())
         edge_index = data.edge_index

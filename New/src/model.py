@@ -4,12 +4,16 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch_geometric.nn import GCNConv, BatchNorm, LayerNorm, Sequential
+from torch_sparse.matmul import spmm_add
+from torch_sparse import SparseTensor
+
 
 def get_model(model_name: str, data, hp: dict):
     device = data.x.device
     if hp['hp_search']:
         _encoder = ENCODER_GRACE(data.num_features, hp['hidden'], hp['activation_layer'], hp['conv_layer'],k=hp['n_layers'], skip=hp['skip']).to(device)
     else:
+        # _encoder = GCN(data.num_features, hp['hidden'], hp['hidden'], 1, hp['gnn_dp'], conv_fn='pure_gcn', res=hp['gnn_res'], jk=hp['gnn_jk'], xdropout=hp['gnn_xdp']).to(device)
         _encoder = ENCODER_GRACE(data.num_features, hp['hidden'], nn.Identity()).to(device)
     if model_name == "baseline":
         return _encoder
@@ -97,6 +101,126 @@ class ENCODER_GRACE(nn.Module):
             conv.reset_parameters()
         if self.skip:
             self.fc_skip.reset_parameters()
+
+# code adapted from NCNC
+
+class PureGCNConv(nn.Module):
+    def __init__(self, indim, outdim) -> None:
+        super().__init__()
+        if indim == outdim:
+            self.lin = nn.Identity()
+        else:
+            raise NotImplementedError
+
+    def forward(self, x, adj_t):
+        x = self.lin(x)
+        if isinstance(adj_t, torch.Tensor):
+            adj_t = SparseTensor.from_edge_index(adj_t, sparse_sizes=(len(x),len(x)))
+        norm = torch.rsqrt_((1+adj_t.sum(dim=-1))).reshape(-1, 1)
+        x = norm * x
+        x = spmm_add(adj_t, x) + x
+        x = norm * x
+        return x
+
+    def reset_parameters(self):
+        pass
+    
+# Vanilla MPNN composed of several layers.
+class GCN(nn.Module):
+
+    def __init__(self,
+                 in_channels,
+                 hidden_channels,
+                 out_channels,
+                 num_layers,
+                 dropout,
+                 conv_fn="gcn",
+                 ln=True,
+                 res=False,
+                 jk=False,
+                 edrop=0.0,
+                 xdropout=0.0,
+                 taildropout=0.0,
+                 noinputlin=False):
+        super().__init__()
+        
+        self.xemb = nn.Sequential(nn.Dropout(xdropout)) #nn.Identity()
+        if not noinputlin and ("pure" in conv_fn or num_layers==0):
+            self.xemb.append(nn.Linear(in_channels, hidden_channels))
+            self.xemb.append(nn.Dropout(dropout, inplace=True) if dropout > 1e-6 else nn.Identity())
+        
+        self.res = res
+        self.jk = jk
+        if jk:
+            self.register_parameter("jkparams", nn.Parameter(torch.randn((num_layers,))))
+        
+        convfn = PureGCNConv if 'pure' in conv_fn else GCNConv
+        lnfn = lambda dim, ln: nn.LayerNorm(dim) if ln else nn.Identity()
+
+        if num_layers == 1:
+            hidden_channels = out_channels
+
+        self.convs = nn.ModuleList()
+        self.lins = nn.ModuleList()
+
+        if "pure" in conv_fn:
+            self.convs.append(convfn(hidden_channels, hidden_channels))
+            for i in range(num_layers-1):
+                self.lins.append(nn.Identity())
+                self.convs.append(convfn(hidden_channels, hidden_channels))
+            self.lins.append(nn.Dropout(taildropout, True))
+        else:
+            self.convs.append(convfn(in_channels, hidden_channels))
+            self.lins.append(
+                nn.Sequential(lnfn(hidden_channels, ln), nn.Dropout(dropout, True),
+                            nn.ReLU(True)))
+            for i in range(num_layers - 1):
+                self.convs.append(
+                    convfn(
+                        hidden_channels,
+                        hidden_channels if i == num_layers - 2 else out_channels))
+                if i < num_layers - 2:
+                    self.lins.append(
+                        nn.Sequential(
+                            lnfn(
+                                hidden_channels if i == num_layers -
+                                2 else out_channels, ln),
+                            nn.Dropout(dropout, True), nn.ReLU(True)))
+                else:
+                    self.lins.append(nn.Identity())
+            
+
+    def forward(self, x, adj_t):
+        x = self.xemb(x)
+        jkx = []
+        for i, conv in enumerate(self.convs):
+            x1 = self.lins[i](conv(x, adj_t))
+            if self.res and x1.shape[-1] == x.shape[-1]: # residual connection
+                x = x1 + x
+            else:
+                x = x1
+            if self.jk:
+                jkx.append(x)
+        if self.jk: # JumpingKnowledge Connection
+            jkx = torch.stack(jkx, dim=0)
+            sftmax = self.jkparams.reshape(-1, 1, 1)
+            x = torch.sum(jkx*sftmax, dim=0)
+        return x
+    
+    def reset_parameters(self):
+        for conv in self.convs:
+            conv.reset_parameters()
+        for lin in self.lins:
+            for module in lin.modules():
+                if hasattr(module, 'reset_parameters'):
+                    module.reset_parameters()
+        if hasattr(self, 'xemb'):
+            for module in self.xemb.modules():
+                if hasattr(module, 'reset_parameters'):
+                    module.reset_parameters()
+        if hasattr(self, 'jkparams'):
+            nn.init.normal_(self.jkparams)
+
 
 
 class GRACE(nn.Module):
