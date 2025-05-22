@@ -26,11 +26,11 @@ class Aug:
         self.train_mode = True
         if '&' in type:
             type1, type2 = type.split('&')
-            self.data1, aug_fct1 = self.precompute(data, type1)
-            self.data2, aug_fct2 = self.precompute(data, type2)
+            self.data1, aug_fct1 = self.precompute(self.data, type1)
+            self.data2, aug_fct2 = self.precompute(self.data, type2)
             self.get = partial(self.mix, aug_fct1, aug_fct2)
         else:
-            self.data, aug_fct = self.precompute(data, type)
+            self.data, aug_fct = self.precompute(self.data, type)
             self.get = aug_fct
 
     def precompute(self, data, type: str):
