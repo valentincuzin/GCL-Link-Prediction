@@ -1,9 +1,8 @@
-from critdd import Diagram
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from sklearn.metrics import jaccard_score
-from cdlib.evaluation.internal.statistical_ranking import friedman_test,bonferroni_dunn_test
+# from sklearn.metrics import jaccard_score
+# from cdlib.evaluation.internal.statistical_ranking import friedman_test,bonferroni_dunn_test
 
 
 def res_load(csv_name: str):
