@@ -1,6 +1,7 @@
 __pycache__
 dataset
 .venv
+logs
 .ipynb_checkpoints
 **.out
 **.sh

@@ -10,11 +10,8 @@ from torch_sparse import SparseTensor
 
 def get_model(model_name: str, data, hp: dict):
     device = data.x.device
-    if hp['hp_search']:
-        _encoder = ENCODER_GRACE(data.num_features, hp['hidden'], hp['activation_layer'], hp['conv_layer'],k=hp['n_layers'], skip=hp['skip']).to(device)
-    else:
-        # _encoder = GCN(data.num_features, hp['hidden'], hp['hidden'], 1, hp['gnn_dp'], conv_fn='pure_gcn', res=hp['gnn_res'], jk=hp['gnn_jk'], xdropout=hp['gnn_xdp']).to(device)
-        _encoder = ENCODER_GRACE(data.num_features, hp['hidden'], nn.Identity()).to(device)
+    # _encoder = GCN(data.num_features, hp['hidden'], hp['n_layers'], hp['gnn_dp'], conv_fn='gcn', res=hp['gnn_res'], jk=hp['gnn_jk'], xdropout=hp['gnn_xdp']).to(device)
+    _encoder = ENCODER_GRACE(data.num_features, hp['hidden'], nn.Identity()).to(device)
     if model_name == "baseline":
         return _encoder
     elif model_name == "grace":
@@ -45,43 +42,32 @@ def get_model(model_name: str, data, hp: dict):
         model = A2BGRL(_encoder, _predictor).to(device)"""
     return model
 
-def define_model(trial, model_name, data, hp):
-    hp['n_layers'] = trial.suggest_int("n_layers", 2, 10)
-    hp['hidden'] = trial.suggest_int("hidden", 32, 1024, 32)
-    hp['conv_layer'] = GCNConv # trial.suggest_categorical("conv_layer", [GCNConv, SAGEConv, GATConv])
-    hp['activation_layer'] = nn.Identity() # trial.suggest_categorical("activation_layer", [nn.Identity, nn.PReLU, nn.LeakyReLU])()
-    hp['skip'] = trial.suggest_categorical("skip", [True, False])
-    return get_model(model_name, data, hp)
-
-
 ###############################################
 # Code from GRACE
 
 class ENCODER_GRACE(nn.Module):
-    def __init__(self, in_channels: int, out_channels: int, activation, base_model=GCNConv, k: int = 2, skip=False):
+    def __init__(self, in_channels: int, out_channels: int, activation, conv_fn='gcn', k: int = 2, skip=False):
         super(ENCODER_GRACE, self).__init__()
-        self.base_model = base_model
+        self.base_model = PureGCNConv if 'pure' in conv_fn else GCNConv
         self.out_channels = out_channels
 
         assert k >= 2
         self.k = k
         self.skip = skip
+        self.activation = activation
         if not self.skip:
-            self.conv = [base_model(in_channels, 2 * out_channels).jittable()]
+            self.conv = [self.base_model(in_channels, 2 * out_channels)]
             for _ in range(1, k - 1):
-                self.conv.append(base_model(2 * out_channels, 2 * out_channels))
-            self.conv.append(base_model(2 * out_channels, out_channels))
+                self.conv.append(self.base_model(2 * out_channels, 2 * out_channels))
+            self.conv.append(self.base_model(2 * out_channels, out_channels))
             self.conv = nn.ModuleList(self.conv)
-
-            self.activation = activation
         else:
             self.fc_skip = nn.Linear(in_channels, out_channels)
-            self.conv = [base_model(in_channels, out_channels)]
+            self.conv = [self.base_model(in_channels, out_channels)]
             for _ in range(1, k):
-                self.conv.append(base_model(out_channels, out_channels))
+                self.conv.append(self.base_model(out_channels, out_channels))
             self.conv = nn.ModuleList(self.conv)
 
-            self.activation = activation
 
     def forward(self, x: torch.Tensor, edge_index: torch.Tensor):
         if not self.skip:
@@ -131,14 +117,12 @@ class GCN(nn.Module):
     def __init__(self,
                  in_channels,
                  hidden_channels,
-                 out_channels,
                  num_layers,
                  dropout,
                  conv_fn="gcn",
                  ln=True,
                  res=False,
                  jk=False,
-                 edrop=0.0,
                  xdropout=0.0,
                  taildropout=0.0,
                  noinputlin=False):
@@ -156,9 +140,6 @@ class GCN(nn.Module):
         
         convfn = PureGCNConv if 'pure' in conv_fn else GCNConv
         lnfn = lambda dim, ln: nn.LayerNorm(dim) if ln else nn.Identity()
-
-        if num_layers == 1:
-            hidden_channels = out_channels
 
         self.convs = nn.ModuleList()
         self.lins = nn.ModuleList()
@@ -178,13 +159,12 @@ class GCN(nn.Module):
                 self.convs.append(
                     convfn(
                         hidden_channels,
-                        hidden_channels if i == num_layers - 2 else out_channels))
+                        hidden_channels))
                 if i < num_layers - 2:
                     self.lins.append(
                         nn.Sequential(
                             lnfn(
-                                hidden_channels if i == num_layers -
-                                2 else out_channels, ln),
+                                hidden_channels, ln),
                             nn.Dropout(dropout, True), nn.ReLU(True)))
                 else:
                     self.lins.append(nn.Identity())
@@ -467,7 +447,7 @@ class CSGCL(torch.nn.Module):
                      z2: torch.Tensor,
                      cs: np.ndarray,
                      current_ep: int,
-                     t0: int = 0,
+                     t0: int = 500,
                      gamma_max: int = 1,
                      mean: bool = True,
                      batch_size: int = None) -> torch.Tensor:

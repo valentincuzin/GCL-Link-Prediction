@@ -12,7 +12,7 @@ from torch_sparse import SparseTensor
 from sklearn.decomposition import PCA
 from networkx.generators.community import LFR_benchmark_graph
 from torch_geometric import seed_everything
-from torch_geometric.datasets import Planetoid
+from torch_geometric.datasets import Planetoid, Coauthor, Amazon
 from torch_geometric.utils import to_undirected, add_self_loops, from_networkx, to_networkx
 from torch_geometric.transforms import RandomLinkSplit
 from torch_geometric.data.storage import GlobalStorage
@@ -73,8 +73,44 @@ def loaddataset(name: str|list, use_valedges_as_input: bool, reduce_feature: int
 
         if data.edge_index.max().item() + 1 < data.num_nodes:
             data.edge_index = add_self_loops(data.edge_index, num_nodes=data.num_nodes)[0]
-    elif name in ["cora", "citeseer", "pubmed"]:
-        dataset = Planetoid(root="dataset", name=name)
+    elif name in ["facebook_friends", "wiki_science", "crime", 
+                  "power", "unicodelang", "euroroad",
+                  "escort", "tips", "pol_kato", "pol_robertson", "yeast", "netscience"]:
+        igG = ig.Graph.Read_GML(f'./small_gml/{name}.gml')
+        G = igG.to_networkx()
+        data = from_networkx(G)
+        data.x = F.one_hot(torch.arange(0, len(G.nodes))).float()
+        data.edge_index = to_undirected(data.edge_index)
+        split_edge = randomsplit([data])
+        data.edge_index = to_undirected(split_edge["train"]["edge"].t())
+        edge_index = data.edge_index
+        data.num_nodes = data.x.shape[0]
+
+        if data.edge_index.max().item() + 1 < data.num_nodes:
+            data.edge_index = add_self_loops(data.edge_index, num_nodes=data.num_nodes)[0]
+    elif name in ['collab']:
+        dataset = PygLinkPropPredDataset(name=f'ogbl-{name}')
+        split_edge = dataset.get_edge_split()
+        data = dataset[0]
+        if reduce_feature is not None:
+            if reduce_feature == 0:
+                data.x = F.one_hot(torch.arange(0, len(data.x))).float()
+            else:
+                reduce_node_features(data, reduce_feature)
+        edge_index = data.edge_index
+        if only_feature:
+            data.edge_index = torch.tensor([[], []], dtype=torch.long)
+            data.edge_index = add_self_loops(data.edge_index, num_nodes=data.num_nodes)[0]
+
+        if data.edge_index.max().item() + 1 < data.num_nodes:
+            data.edge_index = add_self_loops(data.edge_index, num_nodes=data.num_nodes)[0]
+    else:
+        if name in ["cora", "citeseer", "pubmed"]:
+            dataset = Planetoid(root="dataset", name=name)
+        elif name in ["cs", "physics"]:
+            dataset = Coauthor(root="dataset", name=name)
+        elif name in ["computers", "photo"]:
+            dataset = Amazon(root="dataset", name=name)
         split_edge = randomsplit(dataset)
         data = dataset[0]
         if reduce_feature is not None:
@@ -91,48 +127,11 @@ def loaddataset(name: str|list, use_valedges_as_input: bool, reduce_feature: int
 
         if data.edge_index.max().item() + 1 < data.num_nodes:
             data.edge_index = add_self_loops(data.edge_index, num_nodes=data.num_nodes)[0]
-    elif name in ["facebook_friends", "wiki_science", "crime", 
-                  "power", "unicodelang", "euroroad",
-                  "escort", "tips", "pol_kato", "pol_robertson"]:
-        igG = ig.Graph.Read_GML(f'./small_gml/{name}.gml')
-        G = igG.to_networkx()
-        data = from_networkx(G)
-        data.x = F.one_hot(torch.arange(0, len(G.nodes))).float()
-        data.edge_index = to_undirected(data.edge_index)
-        split_edge = randomsplit([data])
-        data.edge_index = to_undirected(split_edge["train"]["edge"].t())
-        edge_index = data.edge_index
-        data.num_nodes = data.x.shape[0]
-
-        if data.edge_index.max().item() + 1 < data.num_nodes:
-            data.edge_index = add_self_loops(data.edge_index, num_nodes=data.num_nodes)[0]
-    else:
-        dataset = PygLinkPropPredDataset(name=f'ogbl-{name}')
-        split_edge = dataset.get_edge_split()
-        data = dataset[0]
-        if reduce_feature is not None:
-            if reduce_feature == 0:
-                data.x = F.one_hot(torch.arange(0, len(data.x))).float()
-            else:
-                reduce_node_features(data, reduce_feature)
-        edge_index = data.edge_index
-        if only_feature:
-            data.edge_index = torch.tensor([[], []], dtype=torch.long)
-            data.edge_index = add_self_loops(data.edge_index, num_nodes=data.num_nodes)[0]
-
-        if data.edge_index.max().item() + 1 < data.num_nodes:
-            data.edge_index = add_self_loops(data.edge_index, num_nodes=data.num_nodes)[0]
 
     data.edge_weight = None 
     data.adj_t = SparseTensor.from_edge_index(edge_index, sparse_sizes=(data.num_nodes, data.num_nodes))
     data.adj_t = data.adj_t.to_symmetric().coalesce()
     data.max_x = -1
-    if name == "ppa":
-        data.x = torch.argmax(data.x, dim=-1)
-        data.max_x = torch.max(data.x).item()
-    elif name == "ddi":
-        data.x = torch.arange(data.num_nodes)
-        data.max_x = data.num_nodes
     if load is not None:
         data.x = torch.load(load, map_location="cpu")
         data.max_x = -1
@@ -230,6 +229,7 @@ class DataSplit:
     def info(self):
         print("split time: ", self.info_time, " s")
         data, split_edge = self.data_runs[0]
+        print("data: ", data)
         print("dataset split ")
         for key1 in split_edge:
             for key2  in split_edge[key1]:

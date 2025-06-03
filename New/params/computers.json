@@ -1,0 +1,23 @@
+{
+	"augmentation": {
+		"drop_edge_rate_1": 0.3,
+		"drop_edge_rate_2": 0.4,
+		"drop_feature_rate_1": 0.1,
+		"drop_feature_rate_2": 0.0
+	},
+	"model": {
+		"hidden": 256,
+		"proj_hidden": 32,
+		"gnn_lr": 0.0097,
+		"gnn_dp": 0.1,
+		"gnn_xdp": 0.3,
+		"gnn_jk": true,
+		"gnn_res": false,
+		"pre_lr": 0.002,
+		"tau": 0.4,
+		"weight_decay": 1e-5,
+		"freeze": true,
+		"batch_size": 2048,
+		"mask_input": true
+	}
+}

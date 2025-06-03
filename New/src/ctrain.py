@@ -1,3 +1,4 @@
+from copy import copy
 import time
 from tqdm import tqdm
 import torch
@@ -10,12 +11,13 @@ from torch.utils.tensorboard import SummaryWriter
 import numpy as np
 
 from src.predictor import InnerProd
-from src.utils import CosineDecayScheduler, get_commu_strength, average_precision, commu_repartition, visu_tsne
+from src.utils import CosineDecayScheduler, get_commu_strength, commu_repartition, visu_tsne
+from src.datasets import get_evaluator
 
 writer = SummaryWriter()
 
 
-def valid_ap(model, data, split_edge, param):
+def valid_hits50(model, data, split_edge, param):
     if isinstance(model, torch.nn.Module):
         model.eval()
     device = data.adj_t.device()
@@ -41,7 +43,13 @@ def valid_ap(model, data, split_edge, param):
         return pos_test_pred, neg_test_pred
     
     pos_valid_pred, neg_valid_pred = test_split('valid')
-    return average_precision(pos_valid_pred, neg_valid_pred)
+    evaluator = get_evaluator()
+    evaluator.eval_metric = 'hits@k'
+    evaluator.K = 50
+    return evaluator.eval({
+            'y_pred_pos': pos_valid_pred,
+            'y_pred_neg': neg_valid_pred,
+        })['hits@50']
 
 
 ### CONTRASTIVE FRAMEWORK ###
@@ -72,10 +80,11 @@ def pretrain_grace(model, aug, param):
     )
     t1 = time.time()
     loss_res = []
+    best_model = model.state_dict()
+    best_val = 0
+    patience = 100
     for epoch in tqdm(range(1, param['ct_epochs'] + 1)):
         model.train()
-        aug.train()
-        aug.train()
         optimizer.zero_grad()
         x_1, edge_index_1, x_2, edge_index_2 = aug()
         z1 = model(x_1, edge_index_1)
@@ -83,27 +92,25 @@ def pretrain_grace(model, aug, param):
         loss = model.loss(z1, z2)
         loss.backward()
         optimizer.step()
-        if epoch % 100 == 0:
+        if epoch % 10 == 0:
             loss_res.append(round(float(loss), 2))
-        # valid part
-        # with torch.no_grad():
-        #     model.eval()
-        #     aug.eval()
-        #     x_1, edge_index_1, x_2, edge_index_2 = aug()
-        #     z1 = model(x_1, edge_index_1)
-        #     z2 = model(x_2, edge_index_2)
-        #     h = model(aug.data.x, aug.data.edge_index)
-        #     val_loss = model.loss(z1, z2)
-        #     val_ap = valid_ap(model, aug.data, aug.split_edge, param)
-        # writer.add_scalars("grace", {'tr_loss':loss, 'val_loss': val_loss, 'val_ap': val_ap}, epoch)
+            # valid part
+            with torch.no_grad():
+                model.eval()
+                val_score = valid_hits50(model, aug.data, aug.split_edge, param)
+            val_score = round(val_score, 4)
+            if val_score >= best_val:
+                patience = 100
+                best_val = val_score
+                print(f"best model at ep {epoch} with val score {val_score}, loss {loss}")
+                best_model = model.state_dict()
+            else:
+                patience -= 1
+            writer.add_scalars("grace", {'tr_loss':loss, 'val_score': val_score}, epoch)
+            if patience == 0:
+                break
+    model.load_state_dict(best_model)
 
-        # if epoch % 10 == 0:
-        #     name = f'gif/grace/{epoch}.png'
-        #     if not hasattr(aug.data, 'communities'):
-        #         data = commu_repartition(aug.data, 'louvain')
-        #     else:
-        #         data = aug.data
-        #     visu_tsne(h, partition=data.communities, name=name)
     print('pretrain loss: ', loss_res)
     pre_time = time.time()-t1
     print(f"pretrain time: {pre_time:.2f} s")
@@ -121,10 +128,11 @@ def pretrain_lgrace(model, aug, param):
 
     total_loss = []
     nb_jump = 0
+    best_model = model.state_dict()
+    best_val = 0
+    patience = 100
     for epoch in tqdm(range(1, 1 + param["ct_epochs"])):
         model.train()
-        aug.train()
-        aug.train()
         optimizer.zero_grad()
         x_1, edge_index_1, x_2, edge_index_2 = aug()
         edge_index_1 = edge_index_1.T
@@ -145,41 +153,27 @@ def pretrain_lgrace(model, aug, param):
         loss.backward()
         optimizer.step()
         total_loss.append(loss)
-        if epoch % 100 == 0:
+        if epoch % 10 == 0:
             _loss = np.average([_.item() for _ in total_loss])
             loss_res.append(round(float(_loss), 2))
         
-        # valid part
-        # with torch.no_grad():
-        #     model.eval()
-        #     aug.eval()
-        #     x_1, edge_index_1, x_2, edge_index_2 = aug()
-        #     edge_index_1 = edge_index_1.T
-        #     edge_index_2 = edge_index_2.T
-        #     eq = torch.eq(edge_index_1[:, None], edge_index_2[None, :]).all(dim=2)
-        #     intersection_idx = torch.nonzero(eq)
-        #     and_edge_index = edge_index_1[intersection_idx[:, 0]].T
-        #     or_edge_index = torch.unique(torch.cat((edge_index_1, edge_index_2)), dim=0).T
-        #     edge_index_1 = edge_index_1.T
-        #     edge_index_2 = edge_index_2.T
-        #     if and_edge_index.size(1) == 0:
-        #         nb_jump += 1
-        #         continue
-        #     neg_edge = negative_sampling(or_edge_index, num_neg_samples=and_edge_index.size(1))
-        #     h1 = model(x_1, edge_index_1).to(aug.device)
-        #     h2 = model(x_2, edge_index_2).to(aug.device)
-        #     h = model(aug.data.x, aug.data.edge_index)
-        #     val_loss = model.loss(h1, h2, and_edge_index, neg_edge)
-        #     val_ap = valid_ap(model, aug.data, aug.split_edge, param)
-        # writer.add_scalars("lgrace", {'tr_loss':loss, 'val_loss': val_loss, 'val_ap': val_ap}, epoch)
+            # valid part
+            with torch.no_grad():
+                model.eval()
+                val_score = valid_hits50(model, aug.data, aug.split_edge, param)
+            val_score = round(val_score, 4)
+            if val_score >= best_val:
+                patience = 100
+                best_val = val_score
+                print(f"best model at ep {epoch} with val score {val_score}, loss {loss}")
+                best_model = model.state_dict()
+            else:
+                patience -= 1
+            writer.add_scalars("lgrace", {'tr_loss':loss, 'val_score': val_score}, epoch)
+            if patience == 0:
+                break
+    model.load_state_dict(best_model)
 
-        # if epoch % 10 == 0:
-        #     name = f'gif/lgrace/{epoch}.png'
-        #     if not hasattr(aug.data, 'communities'):
-        #         data = commu_repartition(aug.data, 'louvain')
-        #     else:
-        #         data = aug.data
-        #     visu_tsne(h, partition=data.communities, name=name)
     print('real epochs: ', param['ct_epochs']-nb_jump)
     print('pretrain loss: ', loss_res)
     pre_time = time.time()-t1
@@ -194,10 +188,12 @@ def pretrain_csgcl(model, aug, param):
                                  )
     t1 = time.time()
     loss_res = []
+    best_model = model.state_dict()
+    best_val = 0
+    patience = 100
     _, _, node_cs = get_commu_strength(aug.data)
     for epoch in tqdm(range(1, param['ct_epochs'] + 1)):
         model.train()
-        aug.train()
         optimizer.zero_grad()
         x_1, edge_index_1, x_2, edge_index_2 = aug()
         z1 = model(x_1, edge_index_1)
@@ -207,8 +203,25 @@ def pretrain_csgcl(model, aug, param):
                                   current_ep=epoch)
         loss.backward()
         optimizer.step()
-        if epoch % 100 == 0:
+        if epoch % 10 == 0:
             loss_res.append(round(float(loss), 2))
+            # valid part
+            with torch.no_grad():
+                model.eval()
+                val_score = valid_hits50(model, aug.data, aug.split_edge, param)
+            val_score = round(val_score, 4)
+            if val_score >= best_val:
+                patience = 100
+                best_val = val_score
+                print(f"best model at ep {epoch} with val score {val_score}, loss {loss}")
+                best_model = model.state_dict()
+            else:
+                patience -= 1
+            writer.add_scalars("csgcl", {'tr_loss':loss, 'val_score': val_score}, epoch)
+            if patience == 0:
+                break
+    model.load_state_dict(best_model)
+
     print('pretrain loss: ', loss_res, ' s')
     pre_time = time.time()-t1
     print(f"pretrain time: {pre_time:.2f} s")
@@ -225,15 +238,16 @@ def pretrain_bgrl(model, aug, param):
 
     t1 = time.time()
     loss_res = []
+    best_model = model.state_dict()
+    best_val = 0
+    patience = 100
     for epoch in tqdm(range(1, param['ct_epochs'] + 1)):
         model.train()
-        aug.train()
 
         lr = lr_scheduler.get(epoch)
         for param_group in optimizer.param_groups:
             param_group['lr'] = lr
         mm = 1 - mm_scheduler.get(epoch)
-
 
         optimizer.zero_grad()
         x_1, edge_index_1, x_2, edge_index_2 = aug()
@@ -244,28 +258,23 @@ def pretrain_bgrl(model, aug, param):
         loss.backward()
         optimizer.step()
         model.update_target_network(mm)
-        if epoch % 100 == 0:
+        if epoch % 10 == 0:
             loss_res.append(round(float(loss), 2))
-        # valid part
-        # with torch.no_grad():
-        #     model.eval()
-        #     aug.eval()
-        #     x_1, edge_index_1, x_2, edge_index_2 = aug()
-        #     z1, y2 = model.train_forward((x_1, edge_index_1), (x_2, edge_index_2))
-        #     z2, y1 = model.train_forward((x_2, edge_index_2), (x_1, edge_index_1))
-
-        #     h = model(aug.data.x, aug.data.edge_index)
-        #     val_loss = model.loss(z1, z2, y1, y2)
-        #     val_ap = valid_ap(model, aug.data, aug.split_edge, param)
-        # writer.add_scalars("bgrl", {'tr_loss':loss, 'val_loss': val_loss, 'val_ap': val_ap}, epoch)
-
-        # if epoch % 10 == 0:         
-        #     name = f'gif/bgrl/{epoch}.png'
-        #     if not hasattr(aug.data, 'communities'):
-        #         data = commu_repartition(aug.data, 'louvain')
-        #     else:
-        #         data = aug.data
-        #     visu_tsne(h, partition=data.communities, name=name)
+            with torch.no_grad():
+                model.eval()
+                val_score = valid_hits50(model, aug.data, aug.split_edge, param)
+            val_score = round(val_score, 4)
+            if val_score >= best_val:
+                patience = 100
+                best_val = val_score
+                print(f"best model at ep {epoch} with val score {val_score}, loss {loss}")
+                best_model = model.state_dict()
+            else:
+                patience -= 1
+            writer.add_scalars("bgrl", {'tr_loss':loss, 'val_score': val_score}, epoch)
+            if patience == 0:
+                break
+    model.load_state_dict(best_model)
     print('pretrain loss: ', loss_res, ' s')
     pre_time = time.time()-t1
     print(f"pretrain time: {pre_time:.2f} s")
@@ -283,58 +292,25 @@ def pretrain_lbgrl(model, aug, param):
     t1 = time.time()
     loss_res = []
     nb_jump = 0
-    # G = to_networkx(aug.data, to_undirected=True)
-    # G.remove_nodes_from(list(nx.isolates(G)))
-    # nx.draw(G, node_size=20)
-    # nx.spring_layout(G)
-    # plt.savefig(f'train_split.png')
-    # plt.close('all')
-    # and_edge_index_total = None
+    best_model = model.state_dict()
+    best_val = 0
+    patience = 100
     for epoch in tqdm(range(1, param['ct_epochs'] + 1)):
-        model.train()
-        aug.train()
 
         lr = lr_scheduler.get(epoch)
         for param_group in optimizer.param_groups:
             param_group['lr'] = lr
         mm = 1 - mm_scheduler.get(epoch)
 
-
         optimizer.zero_grad()
         x_1, edge_index_1, x_2, edge_index_2 = aug()
-        
-        # data1 = Data(x=x_1, edge_index=edge_index_1)
-        # print(data1)
-        # G1 = to_networkx(data1, to_undirected=True)
-        # G1.remove_nodes_from(list(nx.isolates(G1)))
-        # nx.draw(G1, node_size=20)
-        # nx.spring_layout(G1)
-        # plt.savefig(f'{epoch}__aug1.png')
-        # plt.close('all')
-        # data2 = Data(x=x_2, edge_index=edge_index_2)
-        # print(data2)
-        # G2 = to_networkx(data2, to_undirected=True)
-        # G2.remove_nodes_from(list(nx.isolates(G2)))
-        # nx.draw(G2, node_size=20)
-        # nx.spring_layout(G2)
-        # plt.savefig(f'{epoch}__aug2.png')
-        # plt.close('all')
-        
 
         edge_index_1 = edge_index_1.T
         edge_index_2 = edge_index_2.T
         eq = torch.eq(edge_index_1[:, None], edge_index_2[None, :]).all(dim=2)
         intersection_idx = torch.nonzero(eq)
         and_edge_index = edge_index_1[intersection_idx[:, 0]].T
-        # and_edge_index_total = torch.cat((and_edge_index_total, and_edge_index), dim=1) if and_edge_index_total is not None else and_edge_index
-        # data3 = Data(x=x_2, edge_index=and_edge_index)
-        # print(data3)
-        # G3 = to_networkx(data3, to_undirected=True)
-        # G3.remove_nodes_from(list(nx.isolates(G3)))
-        # nx.draw(G3, node_size=20)
-        # nx.spring_layout(G3)
-        # plt.savefig(f'{epoch}__aug_inter.png')
-        # plt.close('all')
+    
         edge_index_1 = edge_index_1.T
         edge_index_2 = edge_index_2.T
         if and_edge_index.size(1) == 0:
@@ -348,48 +324,26 @@ def pretrain_lbgrl(model, aug, param):
         loss.backward()
         optimizer.step()
         model.update_target_network(mm)
-        if epoch % 100 == 0:
+        if epoch % 10 == 0:
             loss_res.append(round(float(loss), 2))
-        # valid part
-        # with torch.no_grad():
-        #     model.eval()
-        #     aug.eval()
-        #     x_1, edge_index_1, x_2, edge_index_2 = aug()
-        #     edge_index_1 = edge_index_1.T
-        #     edge_index_2 = edge_index_2.T
-        #     eq = torch.eq(edge_index_1[:, None], edge_index_2[None, :]).all(dim=2)
-        #     intersection_idx = torch.nonzero(eq)
-        #     and_edge_index = edge_index_1[intersection_idx[:, 0]].T
-        #     edge_index_1 = edge_index_1.T
-        #     edge_index_2 = edge_index_2.T
-        #     if and_edge_index.size(1) == 0:
-        #         nb_jump += 1
-        #         continue
-        #     z1, y2 = model.train_forward((x_1, edge_index_1), (x_2, edge_index_2), and_edge_index)
-        #     z2, y1 = model.train_forward((x_2, edge_index_2), (x_1, edge_index_1), and_edge_index)
+            #valid part
+            with torch.no_grad():
+                model.eval()
 
-        #     h = model(aug.data.x, aug.data.edge_index)
-        #     val_loss = model.loss(z1, z2, y1, y2)
-        #     val_ap = valid_ap(model, aug.data, aug.split_edge, param)
-        # writer.add_scalars("lbgrl", {'tr_loss':loss, 'val_loss': val_loss, 'val_ap': val_ap}, epoch)
+                val_score = valid_hits50(model, aug.data, aug.split_edge, param)
+            val_score = round(val_score, 4)
+            if val_score >= best_val:
+                patience = 100
+                best_val = val_score
+                print(f"best model at ep {epoch} with val score {val_score}, loss {loss}")
+                best_model = model.state_dict()
+            else:
+                patience -= 1
+            writer.add_scalars("lbgrl", {'tr_loss':loss, 'val_score': val_score}, epoch)
+            if patience == 0:
+                break
+    model.load_state_dict(best_model)
 
-        # print('before visu')
-        # if epoch % 10 == 0:
-        #     print('visu')
-        #     name = f'gif/lbgrl/{epoch}.png'
-        #     if not hasattr(aug.data, 'communities'):
-        #         data = commu_repartition(aug.data, 'louvain')
-        #     else:
-        #         data = aug.data
-        #     visu_tsne(h, partition=data.communities, name=name)
-    # data4 = Data(x=x_2, edge_index=and_edge_index_total)
-    # print(data4)
-    # G4 = to_networkx(data4, to_undirected=True)
-    # G4.remove_nodes_from(list(nx.isolates(G4)))
-    # nx.draw(G4, node_size=20)
-    # nx.spring_layout(G4)
-    # plt.savefig(f'final__aug_inter.png')
-    # plt.close('all')
     print('real epochs: ', param['ct_epochs']-nb_jump)
     print('pretrain loss: ', loss_res, ' s')
     pre_time = time.time()-t1
@@ -408,7 +362,7 @@ def pretrain_agrace(model, aug, param):
     loss_res = []
     for epoch in tqdm(range(1, param['ct_epochs'] + 1)):
         model.train()
-        aug.train()
+        # aug.train()
         optimizer.zero_grad()
         x_1, edge_index_1, x_2, edge_index_2 = aug()
         adj_t = spar.SparseTensor.from_edge_index(edge_index_1, sparse_sizes=(aug.data.num_nodes, aug.data.num_nodes))
@@ -439,7 +393,7 @@ def pretrain_aor_grace(model, aug, param):
     loss_res = []
     for epoch in tqdm(range(1, param['ct_epochs'] + 1)):
         model.train()
-        aug.train()
+        # aug.train()
         optimizer.zero_grad()
         x_1, edge_index_1, x_2, edge_index_2 = aug()
         adj_1 = spar.SparseTensor.from_edge_index(edge_index_1, sparse_sizes=(aug.data.num_nodes, aug.data.num_nodes)).to_torch_sparse_coo_tensor().coalesce()
@@ -473,7 +427,7 @@ def pretrain_and_grace(model, aug, param):
     loss_res = []
     for epoch in tqdm(range(1, param['ct_epochs'] + 1)):
         model.train()
-        aug.train()
+        # aug.train()
         optimizer.zero_grad()
         x_1, edge_index_1, x_2, edge_index_2 = aug()
         adj_1 = spar.SparseTensor.from_edge_index(edge_index_1, sparse_sizes=(aug.data.num_nodes, aug.data.num_nodes))
@@ -507,7 +461,7 @@ def pretrain_extend_agrace(model, aug, param):
     loss_res = []
     for epoch in tqdm(range(1, param['ct_epochs'] + 1)):
         model.train()
-        aug.train()
+        # aug.train()
         optimizer.zero_grad()
         x_1, edge_index_1, x_2, edge_index_2 = aug()
         data = Data(x_1, edge_index_1)
@@ -545,7 +499,7 @@ def pretrain_a2grace(model, aug, param):
     loss_res = []
     for epoch in tqdm(range(1, param['ct_epochs'] + 1)):
         model.train()
-        aug.train()
+        # aug.train()
         optimizer.zero_grad()
         x_1, edge_index_1, x_2, edge_index_2 = aug()
         adj_t = spar.SparseTensor.from_edge_index(edge_index_1, sparse_sizes=(aug.data.num_nodes, aug.data.num_nodes))
@@ -582,7 +536,7 @@ def pretrain_abgrl(model, aug, param):
     loss_res = []
     for epoch in tqdm(range(1, param['ct_epochs'] + 1)):
         model.train()
-        aug.train()
+        # aug.train()
 
         lr = lr_scheduler.get(epoch)
         mm = 1 - mm_scheduler.get(epoch)
@@ -622,7 +576,7 @@ def pretrain_or_bgrl(model, aug, param):
     loss_res = []
     for epoch in tqdm(range(1, param['ct_epochs'] + 1)):
         model.train()
-        aug.train()
+        # aug.train()
 
         lr = lr_scheduler.get(epoch)
         mm = 1 - mm_scheduler.get(epoch)
@@ -665,7 +619,7 @@ def pretrain_extend_abgrl(model, aug, param):
     loss_res = []
     for epoch in tqdm(range(1, param['ct_epochs'] + 1)):
         model.train()
-        aug.train()
+        # aug.train()
 
         lr = lr_scheduler.get(epoch)
         mm = 1 - mm_scheduler.get(epoch)
@@ -712,7 +666,7 @@ def pretrain_a2bgrl(model, aug, param):
     loss_res = []
     for epoch in tqdm(range(1, param['ct_epochs'] + 1)):
         model.train()
-        aug.train()
+        # aug.train()
 
         lr = lr_scheduler.get(epoch)
         mm = 1 - mm_scheduler.get(epoch)

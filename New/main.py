@@ -9,7 +9,7 @@ import torch.nn as nn
 from torch_geometric import seed_everything
 
 from src.augmentation import Aug
-from src.model import get_model, define_model
+from src.model import get_model
 from src.datasets import DataSplit, get_evaluator, full_eval
 from src.predictor import get_predictor, ProbDecoder
 from src.train import pred_train, baseline_train, test
@@ -18,9 +18,11 @@ from src.utils import store_res, compute_table, full_output, commu_repartition
 
 SMALL_DATASETS = ["facebook_friends", "wiki_science", "crime", 
                   "power", "unicodelang", "euroroad", 
-                  "escort", "tips", "pol_kato", "pol_robertson"]
+                  "escort", "tips", "pol_kato", "pol_robertson", "yeast", "netscience"]
 DATASETS = ["synthetic_1", "synthetic_2", "synthetic_3", 
-            "cora", "citeseer", "pubmed", "collab"]+SMALL_DATASETS
+            "cora", "citeseer", "pubmed", 
+            "cs", "physics", "computers", "photo",
+            "collab", "ddi"]+SMALL_DATASETS
 MODELS = ["baseline",
           "grace", "lgrace", "agrace", "ândgrace", "âorgrace", "extagrace", "a2grace", "csgcl", 
           "bgrl", "lbgrl", "âorbgrl", "extabgrl", "a2bgrl", "abgrl"]
@@ -45,7 +47,7 @@ def arguments():
     parser.add_argument('--predictor', type=str, default='mlp', choices=["inner", "mlp", "prob"])
     parser.add_argument('--loss', type=str, default='log_sig')
     parser.add_argument('--epochs', type=int, default=100)
-    parser.add_argument('--ct_epochs', type=int, default=500)
+    parser.add_argument('--ct_epochs', type=int, default=3000)
     parser.add_argument('--runs', type=int, default=10)
     parser.add_argument('--name', type=str, default="")
     parser.add_argument('--use_valedges_as_input', type=int, default=True, choices=[0,1], help="add validation edges to the input adjacency matrix of gnn")
@@ -115,7 +117,7 @@ def update_hp(study, hp):
         hp[key] = value
     return hp
 
-def train_test_run(model, predictor, data, split_edge, model_name, augmentation, loss_name, evaluator, args, hp, res_dict):
+def train_test_run(model, predictor, data, split_edge, model_name, augmentation, loss_name, evaluator, hp, res_dict, valid = False):
     if model_name != "baseline":
         print(f"..{augmentation}..")
         aug = Aug(data, split_edge, hp['augmentation'], augmentation)
@@ -131,7 +133,8 @@ def train_test_run(model, predictor, data, split_edge, model_name, augmentation,
     test_res = full_eval(evaluator, pos_test_pred, neg_test_pred)
     for (key, v_res), t_res in zip(val_res.items(), test_res.values()):
         print(f"{key}:  val: {100 * v_res:.2f}%, test: {100 * t_res:.2f}%")
-    return store_res(test_res, res_dict)
+    res = store_res(val_res, res_dict) if valid else store_res(test_res, res_dict)
+    return res
 
 if __name__ == "__main__":
     args = arguments()
@@ -155,15 +158,28 @@ if __name__ == "__main__":
                     def _objective(trial):
                         res_dict = {"Hits@10": [], "Hits@20": [], "Hits@50": [], "Hits@100": [], "ROCAUC": [], "AP": [], "pretrain_time": []}
                         r = 0
-                        hp['model']['ct_epochs'] = trial.suggest_int('ct_epochs', 600, 2000, 200)
+                        #augmentation params
+                        hp['augmentation']['drop_edge_rate_1'] = trial.suggest_categorical('drop_edge_rate_1', np.arange(0.1, 0.91, 0.1))
+                        hp['augmentation']['drop_edge_rate_2'] = trial.suggest_categorical('drop_edge_rate_2', np.arange(0.1, 0.91, 0.1))
+                        hp['augmentation']['drop_feature_rate_1'] = trial.suggest_categorical('drop_feature_rate_1', np.arange(0.1, 0.91, 0.1))
+                        hp['augmentation']['drop_feature_rate_2'] = trial.suggest_categorical('drop_feature_rate_2', np.arange(0.1, 0.91, 0.1))
+
+                        #model params
+                        hp['model']['ct_epochs'] = trial.suggest_int('ct_epochs', 500, 5000, 500)
+                        hp['model']['hidden'] = trial.suggest_int('hidden', 32, 512, 32)
+                        hp['model']['n_layers'] = trial.suggest_int('n_layers', 1, 4)
+                        hp['model']['gnn_dp'] = trial.suggest_float('gnn_dp', 0.0, 0.1)
+                        hp['model']['lnorm'] = trial.suggest_categorical('lnorm', [True, False])
+                        hp['model']['gnn_res'] = trial.suggest_categorical('gnn_res', [True, False])
+                        hp['model']['gnn_jk'] = trial.suggest_categorical('gnn_jk', [True, False])
                         hp['model']['gnn_lr'] = trial.suggest_float('gnn_lr', 0.001, 0.1)
-                        hp['model']['tau'] = trial.suggest_int('tau', 2, 5)/10
-                        hp['model']['batch_size'] = trial.suggest_int('batch_size', 128, 2000, 256)
+                        hp['model']['tau'] = trial.suggest_categorical('tau', np.arange(0.2, 0.51, 0.1))
+                        hp['model']['batch_size'] = trial.suggest_int('batch_size', 32, 3200, 32)
                         seed_everything(r)
                         data, split_edge = data_split.get(r)
-                        model = define_model(trial, model_name, data, hp['model'])
+                        model = get_model(model_name, data, hp['model'])
                         predictor = get_predictor(args.predictor, hp['model'])
-                        res_dict = train_test_run(model, predictor, data, split_edge, model_name, augmentation, loss_name, evaluator, args, hp, res_dict)
+                        res_dict = train_test_run(model, predictor, data, split_edge, model_name, augmentation, loss_name, evaluator, hp, res_dict, valid=True)
                         hit50 = res_dict.pop("Hits@50")[0]
                         trial.report(hit50, hp['model']['ct_epochs'])
                         # # Handle pruning based on the intermediate value.
@@ -179,7 +195,7 @@ if __name__ == "__main__":
                         data, split_edge = data_split.get(r)
                         model = get_model(model_name, data, hp['model'])
                         predictor = get_predictor(args.predictor, hp['model'])
-                        res_dict = train_test_run(model, predictor, data, split_edge, model_name,augmentation, loss_name, evaluator, args, hp, res_dict)
+                        res_dict = train_test_run(model, predictor, data, split_edge, model_name,augmentation, loss_name, evaluator, hp, res_dict)
                     save_name = f"{model_name}{'_'+loss_name if loss_name != "log_sig" else ""}{'_'+augmentation if model_name != "baseline" else ""}"
                     df_res, res_latex = compute_table(res_dict, save_name)
                     print(df_res)

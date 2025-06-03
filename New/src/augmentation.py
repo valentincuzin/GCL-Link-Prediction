@@ -24,8 +24,8 @@ class Aug:
         self.type = type
         self.data = self.data.to(self.device)
         self.train_mode = True
-        if '&' in type:
-            type1, type2 = type.split('&')
+        if '+' in type:
+            type1, type2 = type.split('+')
             self.data1, aug_fct1 = self.precompute(self.data, type1)
             self.data2, aug_fct2 = self.precompute(self.data, type2)
             self.get = partial(self.mix, aug_fct1, aug_fct2)
@@ -74,18 +74,19 @@ class Aug:
         }
         return data, types[type]
 
-    def train(self):
-        if not self.train_mode:
-            self.data.edge_index = to_undirected(self.split_edge["train"]["edge"].t()).to(self.device)
-            self.train_mode = True
+    # def train(self):
+    #     if not self.train_mode:
+    #         self.data.edge_index = to_undirected(self.split_edge["train"]["edge"].t()).to(self.device)
+    #         self.train_mode = True
 
-    def eval(self):
-        if self.train_mode:
-            self.data.edge_index = to_undirected(self.split_edge["valid"]["edge"].t()).to(self.device)
-            self.train_mode = False
+    # def eval(self):
+    #     if self.train_mode:
+    #         self.data.edge_index = to_undirected(self.split_edge["valid"]["edge"].t()).to(self.device)
+    #         self.train_mode = False
+
 
     def __call__(self):
-        return self.get()
+        return self.get() if self.train_mode else self.get_val()
     
     def mix(self, aug_fct1, aug_fct2):
         self.tmp = copy.deepcopy(self.data)
@@ -158,7 +159,7 @@ class Aug:
     def eigenvector(self):
         def eigenvector_centrality(data):
             graph = to_networkx(data, to_undirected=True)
-            x = nx.eigenvector_centrality(graph, max_iter=200)
+            x = nx.eigenvector_centrality(graph, max_iter=1000)
             x = [x[i] for i in range(data.num_nodes)]
             return torch.tensor(x, dtype=torch.float32).to(data.edge_index.device)
         def evc_drop_weights(data):
