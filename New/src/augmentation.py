@@ -211,6 +211,9 @@ class Aug:
 
         print('mean pred: ', mean_p)
 
+        for u, v in G.edges():
+            G[u][v]['weight'] = 1.0 # not sure to put 1 if their is a link
+
         to_reconstruct = int(data.edge_index.shape[1]*0.4)
         values_norm = sorted(values_norm, key=lambda x: x[2], reverse=True)
         for u, v, p in values_norm:
@@ -222,9 +225,6 @@ class Aug:
                     print('min de prob added: ', p)
                     break
         print('add', nb_add, 'edges')
-
-        for u, v in G.edges():
-            G[u][v]['weight'] = 1.0 # not sure to put 1 if their is a link
 
         tmp = from_networkx(G).to(self.device)
         data.edge_index = tmp.edge_index
