@@ -1,8 +1,8 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-# from sklearn.metrics import jaccard_score
-# from cdlib.evaluation.internal.statistical_ranking import friedman_test,bonferroni_dunn_test
+from sklearn.metrics import jaccard_score
+from cdlib.evaluation.internal.statistical_ranking import friedman_test,bonferroni_dunn_test
 
 
 def res_load(csv_name: str):
@@ -93,19 +93,22 @@ def heatmap(
         )
     else:
         normalized_data = data
-    fig, ax = plt.subplots(figsize=size)
+    fig, ax = plt.subplots(figsize=size, dpi=400)
     im = ax.imshow(normalized_data)
 
-    plt.xticks(rotation=90)
+    plt.xticks(rotation=90, fontsize=14)
 
     ax.set_yticks(
         range(len(data.index)),
         labels=data.index,
+        fontsize=14,
         rotation=45,
         ha="right",
         rotation_mode="anchor",
     )
-    ax.set_xticks(range(len(data.columns)), labels=data.columns)
+    ax.set_xticks(range(len(data.columns)), labels=data.columns,rotation=45,
+        ha="right",
+        rotation_mode="anchor")
 
     for i in range(len(data.index)):
         for j in range(len(data.columns)):
@@ -123,6 +126,7 @@ def heatmap(
                     ha="center",
                     va="center",
                     color=text_color,
+                    fontsize=11
                 )
             else:
                 text = ax.text(
@@ -132,6 +136,7 @@ def heatmap(
                     ha="center",
                     va="center",
                     color=text_color,
+                    fontsize=11
                 )
 
     ax.set_title(Title)
@@ -171,15 +176,20 @@ def split_methods(data, sep: str):
 
 def compute_significantly_top_methods(df, metric: str = "ROCAUC"):
 
-    unique_methods = df.columns.unique()  
+    unique_methods = df.columns.unique()
     all_scores_by_algorithm=[]
 
-    #print("-------df",df.columns,df)
+    # print("-------df",df.columns,df)
+    to_remove = []
     for algo in unique_methods:
-        all_scores_by_algorithm.append([score for score in df.loc[metric][algo]])
+        if isinstance(df.loc[metric][algo], np.ndarray):
+            all_scores_by_algorithm.append([score for score in df.loc[metric][algo]])
+        else:
+            to_remove.append(algo)
+    unique_methods = unique_methods.drop(to_remove, errors='ignore')
     #print("size data",len(df),len(all_scores_by_algorithm[0]))
     #print("check",len(df),sorted_methods,all_scores_by_algorithm)
-    #print("scores",all_scores_by_algorithm)
+    # print("scores",all_scores_by_algorithm)
     try:
         f_value,p_value, rankings, pivots = friedman_test(*all_scores_by_algorithm)
     except:
@@ -252,7 +262,7 @@ def tex_table(means, data= None):
     print('}')
     return means
 
-def mix_dataset(names, metric):
+def mix_dataset(names, metric, filtre = None, filtre2 = None):
     dataset = []
     for_significant = []
     for name in names:
@@ -263,4 +273,12 @@ def mix_dataset(names, metric):
     import pandas as pd
     all_data = pd.concat(dataset, keys=names, axis=1)
     all_res = pd.concat(for_significant, keys=names, axis=1)
+    if filtre is not None:
+        pattern = '|'.join(filtre)
+        all_data = all_data[all_data.index.str.contains(pattern)]
+        all_res = all_res[all_res.index.str.contains(pattern)]
+    if filtre2 is not None:
+        pattern = '|'.join(filtre2)
+        all_data = all_data[~all_data.index.str.contains(pattern)]
+        all_res = all_res[~all_res.index.str.contains(pattern)]
     return all_data.T, all_res.T
