@@ -24,8 +24,8 @@ DATASETS = ["synthetic_1", "synthetic_2", "synthetic_3",
             "cs", "physics", "computers", "photo",
             "collab", "ddi"]+SMALL_DATASETS
 MODELS = ["baseline",
-          "grace", "lgrace", "agrace", "ândgrace", "âorgrace", "extagrace", "a2grace", "csgcl", 
-          "bgrl", "lbgrl", "âorbgrl", "extabgrl", "a2bgrl", "abgrl"]
+          "grace", "lgrace", "a2grace", "csgcl", 
+          "bgrl", "lbgrl", "a2bgrl"]
 AUGMENTATIONS = ["random", "rjc", "rjc2", "raa", "rra", "deg", "pr", "evc", "scom", "sbm", "sbm2"]
 LOSS = ["log_sig", "bce", "auc", "hinge_auc"]
 
