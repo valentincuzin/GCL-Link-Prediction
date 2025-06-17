@@ -1,0 +1,17 @@
+{
+    "drop_edge_rate_1": 0.9,
+    "drop_edge_rate_2": 0.2,
+    "drop_feature_rate_1": 0.2,
+    "drop_feature_rate_2": 0.6,
+    "hidden": 224,
+    "n_layers": 1,
+    "gnn_dp": 0.044731752740473585,
+    "gnn_xdp": 0.16747923228920705,
+    "lnorm": false,
+    "gnn_res": false,
+    "gnn_jk": false,
+    "gnn_lr": 0.05505959108575819,
+    "pre_lr": 0.08566118014941704,
+    "batch_size": 2176,
+    "weight_decay": 4.320744129122368e-05
+}
