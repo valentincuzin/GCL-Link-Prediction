@@ -1,0 +1,16 @@
+{
+    "gnn_lr": 0.0863711037589282,
+    "batch_size": 1856,
+    "use_valedges_as_input": false,
+    "epochs": 150,
+    "pre_lr": 0.018370725527438632,
+    "loss_func": "bce",
+    "mask_input": true,
+    "weight_decay": 3.697022143616936e-05,
+    "n_layers": 2,
+    "1_layer_size": 448,
+    "2_layer_size": 320,
+    "batch_layer_norm": true,
+    "batchnorm_mm": 0.8700000000000001,
+    "weight_standardization": true
+}

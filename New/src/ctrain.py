@@ -31,13 +31,13 @@ def valid_hits50(model, data, split_edge, param):
         pos_test_preds = []
         for perm in DataLoader(range(pos_test_edge.size(0)), param['batch_size']):
             edge = pos_test_edge[perm].t()
-            out = predictor.predict(h, edge[0], edge[1])
+            out = predictor.predict(h, edge[0], edge[1], data.adj_t)
             pos_test_preds += [out.squeeze().cpu()]
         pos_test_pred = torch.cat(pos_test_preds, dim=0)
         neg_test_preds = []
         for perm in DataLoader(range(neg_test_edge.size(0)), param['batch_size']):
             edge = neg_test_edge[perm].t()
-            out = predictor.predict(h, edge[0], edge[1])
+            out = predictor.predict(h, edge[0], edge[1], data.adj_t)
             neg_test_preds += [out.squeeze().cpu()]
         neg_test_pred = torch.cat(neg_test_preds, dim=0)
         return pos_test_pred, neg_test_pred

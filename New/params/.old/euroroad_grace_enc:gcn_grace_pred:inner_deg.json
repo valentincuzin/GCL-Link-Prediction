@@ -1,0 +1,18 @@
+{
+    "drop_edge_rate_1": 0.1,
+    "drop_edge_rate_2": 0.5,
+    "drop_feature_rate_1": 0.30000000000000004,
+    "drop_feature_rate_2": 0.9,
+    "gnn_lr": 0.017495076974500864,
+    "batch_size": 1632,
+    "epochs": 80,
+    "pre_lr": 0.05840515879258075,
+    "mask_input": true,
+    "n_layers": 1,
+    "ct_epochs": 3470,
+    "hidden": 512,
+    "activation": "relu",
+    "skip": false,
+    "proj_hidden": 224,
+    "tau": 0.5
+}

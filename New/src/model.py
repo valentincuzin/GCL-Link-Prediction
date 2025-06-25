@@ -6,18 +6,28 @@ import torch.nn.functional as F
 from torch_geometric.nn import GCNConv, BatchNorm, LayerNorm, Sequential
 from torch_sparse.matmul import spmm_add
 from torch_sparse import SparseTensor
+from src.encoder import BGRL_GCN, TBGRL_GCN, GRACE_GCN, MPLP_GCN, NCN_GCN
 
+from functools import partial
 
-def get_model(model_name: str, data, hp: dict):
+def get_model(encoder_name: str, model_name: str, data, hp: dict):
     device = data.x.device
+    switch = {
+        'gcn_bgrl': BGRL_GCN,
+        'gcn_tbgrl': TBGRL_GCN,
+        'gcn_grace': GRACE_GCN,
+        'mplp': MPLP_GCN,
+        'ncn': NCN_GCN
+    }
+    _encoder = switch[encoder_name](data.num_features, hp).to(device)
     # _encoder = GCN(data.num_features, hp['hidden'], hp['n_layers'], hp['gnn_dp'], conv_fn='gcn', res=hp['gnn_res'], jk=hp['gnn_jk'], xdropout=hp['gnn_xdp']).to(device)
-    _encoder = ENCODER_GRACE(data.num_features, hp['hidden'], nn.Identity()).to(device)
+    # _encoder = ENCODER_GRACE(data.num_features, hp['hidden'], nn.Identity()).to(device)
     if model_name == "baseline":
         return _encoder
     elif model_name == "grace":
-        model = GRACE(_encoder, hp['hidden'], hp['hidden']).to(device)
+        model = GRACE(_encoder, hp['hidden'], hp['hidden'], hp['tau']).to(device)
     elif model_name == "lgrace":
-        model = LinkGRACE(_encoder, hp['hidden'], hp['hidden']).to(device)
+        model = LinkGRACE(_encoder, hp['hidden'], hp['hidden'], hp['tau']).to(device)
     elif model_name == "csgcl":
         model = CSGCL(_encoder,
                         hp['hidden'],
@@ -30,9 +40,9 @@ def get_model(model_name: str, data, hp: dict):
         _predictor = MLP_Head_BGRL(hp['hidden'], hp['hidden']).to(device)
         model = LinkBGRL(_encoder, _predictor).to(device)
     elif model_name in  "a2grace":
-        model = A2GRACE(_encoder, hp['hidden'], hp['hidden']).to(device)
+        model = A2GRACE(_encoder, hp['hidden'], hp['hidden'], hp['tau']).to(device)
     elif model_name in "a2bgrl":
-        _predictor = MLP_Head_BGRL(hp['hidden'], hp['hidden']).to(device)
+        _predictor = MLP_Head_BGRL(hp['hidden'], hp['hidden'], hp['tau']).to(device)
         model = A2BGRL(_encoder, _predictor).to(device)
     """ ### Â loss
     elif model_name in  ["agrace", "ândgrace", "âorgrace", "extagrace"]:
@@ -47,168 +57,168 @@ def get_model(model_name: str, data, hp: dict):
 ###############################################
 # Code from GRACE
 
-class ENCODER_GRACE(nn.Module):
-    def __init__(self, in_channels: int, out_channels: int, activation, conv_fn='gcn', k: int = 2, skip=False):
-        super(ENCODER_GRACE, self).__init__()
-        self.base_model = PureGCNConv if 'pure' in conv_fn else GCNConv
-        self.out_channels = out_channels
+# class ENCODER_GRACE(nn.Module):
+#     def __init__(self, in_channels: int, out_channels: int, activation, conv_fn='gcn', k: int = 2, skip=False):
+#         super(ENCODER_GRACE, self).__init__()
+#         self.base_model = PureGCNConv if 'pure' in conv_fn else GCNConv
+#         self.out_channels = out_channels
 
-        assert k >= 2
-        self.k = k
-        self.skip = skip
-        self.activation = activation
-        if not self.skip:
-            self.conv = [self.base_model(in_channels, 2 * out_channels)]
-            for _ in range(1, k - 1):
-                self.conv.append(self.base_model(2 * out_channels, 2 * out_channels))
-            self.conv.append(self.base_model(2 * out_channels, out_channels))
-            self.conv = nn.ModuleList(self.conv)
-        else:
-            self.fc_skip = nn.Linear(in_channels, out_channels)
-            self.conv = [self.base_model(in_channels, out_channels)]
-            for _ in range(1, k):
-                self.conv.append(self.base_model(out_channels, out_channels))
-            self.conv = nn.ModuleList(self.conv)
+#         assert k >= 2
+#         self.k = k
+#         self.skip = skip
+#         self.activation = activation
+#         if not self.skip:
+#             self.conv = [self.base_model(in_channels, 2 * out_channels)]
+#             for _ in range(1, k - 1):
+#                 self.conv.append(self.base_model(2 * out_channels, 2 * out_channels))
+#             self.conv.append(self.base_model(2 * out_channels, out_channels))
+#             self.conv = nn.ModuleList(self.conv)
+#         else:
+#             self.fc_skip = nn.Linear(in_channels, out_channels)
+#             self.conv = [self.base_model(in_channels, out_channels)]
+#             for _ in range(1, k):
+#                 self.conv.append(self.base_model(out_channels, out_channels))
+#             self.conv = nn.ModuleList(self.conv)
 
 
-    def forward(self, x: torch.Tensor, edge_index: torch.Tensor):
-        if not self.skip:
-            for i in range(self.k):
-                x = self.activation(self.conv[i](x, edge_index))
-            return x
-        else:
-            h = self.activation(self.conv[0](x, edge_index))
-            hs = [self.fc_skip(x), h]
-            for i in range(1, self.k):
-                u = sum(hs)
-                hs.append(self.activation(self.conv[i](u, edge_index)))
-            return hs[-1]
+#     def forward(self, x: torch.Tensor, edge_index: torch.Tensor):
+#         if not self.skip:
+#             for i in range(self.k):
+#                 x = self.activation(self.conv[i](x, edge_index))
+#             return x
+#         else:
+#             h = self.activation(self.conv[0](x, edge_index))
+#             hs = [self.fc_skip(x), h]
+#             for i in range(1, self.k):
+#                 u = sum(hs)
+#                 hs.append(self.activation(self.conv[i](u, edge_index)))
+#             return hs[-1]
     
-    def reset_parameters(self):
-        for conv in self.conv:
-            conv.reset_parameters()
-        if self.skip:
-            self.fc_skip.reset_parameters()
+#     def reset_parameters(self):
+#         for conv in self.conv:
+#             conv.reset_parameters()
+#         if self.skip:
+#             self.fc_skip.reset_parameters()
 
-# code adapted from NCNC
+# # code adapted from NCNC
 
-class PureGCNConv(nn.Module):
-    def __init__(self, indim, outdim) -> None:
-        super().__init__()
-        if indim == outdim:
-            self.lin = nn.Identity()
-        else:
-            raise NotImplementedError
+# class PureGCNConv(nn.Module):
+#     def __init__(self, indim, outdim) -> None:
+#         super().__init__()
+#         if indim == outdim:
+#             self.lin = nn.Identity()
+#         else:
+#             raise NotImplementedError
 
-    def forward(self, x, adj_t):
-        x = self.lin(x)
-        if isinstance(adj_t, torch.Tensor):
-            adj_t = SparseTensor.from_edge_index(adj_t, sparse_sizes=(len(x),len(x)))
-        norm = torch.rsqrt_((1+adj_t.sum(dim=-1))).reshape(-1, 1)
-        x = norm * x
-        x = spmm_add(adj_t, x) + x
-        x = norm * x
-        return x
+#     def forward(self, x, adj_t):
+#         x = self.lin(x)
+#         if isinstance(adj_t, torch.Tensor):
+#             adj_t = SparseTensor.from_edge_index(adj_t, sparse_sizes=(len(x),len(x)))
+#         norm = torch.rsqrt_((1+adj_t.sum(dim=-1))).reshape(-1, 1)
+#         x = norm * x
+#         x = spmm_add(adj_t, x) + x
+#         x = norm * x
+#         return x
 
-    def reset_parameters(self):
-        pass
+#     def reset_parameters(self):
+#         pass
     
-# Vanilla MPNN composed of several layers.
-class GCN(nn.Module):
+# # Vanilla MPNN composed of several layers.
+# class GCN(nn.Module):
 
-    def __init__(self,
-                 in_channels,
-                 hidden_channels,
-                 num_layers,
-                 dropout,
-                 conv_fn="gcn",
-                 ln=True,
-                 res=False,
-                 jk=False,
-                 xdropout=0.0,
-                 taildropout=0.0,
-                 noinputlin=False):
-        super().__init__()
+#     def __init__(self,
+#                  in_channels,
+#                  hidden_channels,
+#                  num_layers,
+#                  dropout,
+#                  conv_fn="gcn",
+#                  ln=True,
+#                  res=False,
+#                  jk=False,
+#                  xdropout=0.0,
+#                  taildropout=0.0,
+#                  noinputlin=False):
+#         super().__init__()
         
-        self.xemb = nn.Sequential(nn.Dropout(xdropout)) #nn.Identity()
-        if not noinputlin and ("pure" in conv_fn or num_layers==0):
-            self.xemb.append(nn.Linear(in_channels, hidden_channels))
-            self.xemb.append(nn.Dropout(dropout, inplace=True) if dropout > 1e-6 else nn.Identity())
+#         self.xemb = nn.Sequential(nn.Dropout(xdropout)) #nn.Identity()
+#         if not noinputlin and ("pure" in conv_fn or num_layers==0):
+#             self.xemb.append(nn.Linear(in_channels, hidden_channels))
+#             self.xemb.append(nn.Dropout(dropout, inplace=True) if dropout > 1e-6 else nn.Identity())
         
-        self.res = res
-        self.jk = jk
-        if jk:
-            self.register_parameter("jkparams", nn.Parameter(torch.randn((num_layers,))))
+#         self.res = res
+#         self.jk = jk
+#         if jk:
+#             self.register_parameter("jkparams", nn.Parameter(torch.randn((num_layers,))))
         
-        convfn = PureGCNConv if 'pure' in conv_fn else GCNConv
-        lnfn = lambda dim, ln: nn.LayerNorm(dim) if ln else nn.Identity()
+#         convfn = PureGCNConv if 'pure' in conv_fn else GCNConv
+#         lnfn = lambda dim, ln: nn.LayerNorm(dim) if ln else nn.Identity()
 
-        self.convs = nn.ModuleList()
-        self.lins = nn.ModuleList()
+#         self.convs = nn.ModuleList()
+#         self.lins = nn.ModuleList()
 
-        if "pure" in conv_fn:
-            self.convs.append(convfn(hidden_channels, hidden_channels))
-            for i in range(num_layers-1):
-                self.lins.append(nn.Identity())
-                self.convs.append(convfn(hidden_channels, hidden_channels))
-            self.lins.append(nn.Dropout(taildropout, True))
-        else:
-            self.convs.append(convfn(in_channels, hidden_channels))
-            self.lins.append(
-                nn.Sequential(lnfn(hidden_channels, ln), nn.Dropout(dropout, True),
-                            nn.ReLU(True)))
-            for i in range(num_layers - 1):
-                self.convs.append(
-                    convfn(
-                        hidden_channels,
-                        hidden_channels))
-                if i < num_layers - 2:
-                    self.lins.append(
-                        nn.Sequential(
-                            lnfn(
-                                hidden_channels, ln),
-                            nn.Dropout(dropout, True), nn.ReLU(True)))
-                else:
-                    self.lins.append(nn.Identity())
+#         if "pure" in conv_fn:
+#             self.convs.append(convfn(hidden_channels, hidden_channels))
+#             for i in range(num_layers-1):
+#                 self.lins.append(nn.Identity())
+#                 self.convs.append(convfn(hidden_channels, hidden_channels))
+#             self.lins.append(nn.Dropout(taildropout, True))
+#         else:
+#             self.convs.append(convfn(in_channels, hidden_channels))
+#             self.lins.append(
+#                 nn.Sequential(lnfn(hidden_channels, ln), nn.Dropout(dropout, True),
+#                             nn.ReLU(True)))
+#             for i in range(num_layers - 1):
+#                 self.convs.append(
+#                     convfn(
+#                         hidden_channels,
+#                         hidden_channels))
+#                 if i < num_layers - 2:
+#                     self.lins.append(
+#                         nn.Sequential(
+#                             lnfn(
+#                                 hidden_channels, ln),
+#                             nn.Dropout(dropout, True), nn.ReLU(True)))
+#                 else:
+#                     self.lins.append(nn.Identity())
             
 
-    def forward(self, x, adj_t):
-        x = self.xemb(x)
-        jkx = []
-        for i, conv in enumerate(self.convs):
-            x1 = self.lins[i](conv(x, adj_t))
-            if self.res and x1.shape[-1] == x.shape[-1]: # residual connection
-                x = x1 + x
-            else:
-                x = x1
-            if self.jk:
-                jkx.append(x)
-        if self.jk: # JumpingKnowledge Connection
-            jkx = torch.stack(jkx, dim=0)
-            sftmax = self.jkparams.reshape(-1, 1, 1)
-            x = torch.sum(jkx*sftmax, dim=0)
-        return x
+#     def forward(self, x, adj_t):
+#         x = self.xemb(x)
+#         jkx = []
+#         for i, conv in enumerate(self.convs):
+#             x1 = self.lins[i](conv(x, adj_t))
+#             if self.res and x1.shape[-1] == x.shape[-1]: # residual connection
+#                 x = x1 + x
+#             else:
+#                 x = x1
+#             if self.jk:
+#                 jkx.append(x)
+#         if self.jk: # JumpingKnowledge Connection
+#             jkx = torch.stack(jkx, dim=0)
+#             sftmax = self.jkparams.reshape(-1, 1, 1)
+#             x = torch.sum(jkx*sftmax, dim=0)
+#         return x
     
-    def reset_parameters(self):
-        for conv in self.convs:
-            conv.reset_parameters()
-        for lin in self.lins:
-            for module in lin.modules():
-                if hasattr(module, 'reset_parameters'):
-                    module.reset_parameters()
-        if hasattr(self, 'xemb'):
-            for module in self.xemb.modules():
-                if hasattr(module, 'reset_parameters'):
-                    module.reset_parameters()
-        if hasattr(self, 'jkparams'):
-            nn.init.normal_(self.jkparams)
+#     def reset_parameters(self):
+#         for conv in self.convs:
+#             conv.reset_parameters()
+#         for lin in self.lins:
+#             for module in lin.modules():
+#                 if hasattr(module, 'reset_parameters'):
+#                     module.reset_parameters()
+#         if hasattr(self, 'xemb'):
+#             for module in self.xemb.modules():
+#                 if hasattr(module, 'reset_parameters'):
+#                     module.reset_parameters()
+#         if hasattr(self, 'jkparams'):
+#             nn.init.normal_(self.jkparams)
 
 
 
 class GRACE(nn.Module):
-    def __init__(self, encoder: ENCODER_GRACE, hidden: int, proj_hidden: int, tau: float = 0.5):
+    def __init__(self, encoder, hidden: int, proj_hidden: int, tau: float = 0.5):
         super(GRACE, self).__init__()
-        self.encoder: ENCODER_GRACE = encoder
+        self.encoder = encoder
         self.tau: float = tau
 
         self.fc1 = nn.Linear(hidden, proj_hidden)
@@ -272,9 +282,9 @@ class GRACE(nn.Module):
         return ret
 
 class LinkGRACE(nn.Module):
-    def __init__(self, encoder: ENCODER_GRACE, hidden: int, proj_hidden: int, tau: float = 0.5):
+    def __init__(self, encoder, hidden: int, proj_hidden: int, tau: float = 0.5):
         super(LinkGRACE, self).__init__()
-        self.encoder: ENCODER_GRACE = encoder
+        self.encoder = encoder
         self.tau: float = tau
 
         self.fc1 = nn.Linear(hidden, proj_hidden)
@@ -327,7 +337,7 @@ class LinkGRACE(nn.Module):
 
 class CSGCL(torch.nn.Module):
     def __init__(self,
-                 encoder: ENCODER_GRACE,
+                 encoder,
                  hidden: int,
                  proj_hidden: int,
                  tau: float = 0.5):
@@ -730,9 +740,9 @@ class AGRACE(nn.Module):
 
 """
 class A2GRACE(nn.Module):
-    def __init__(self, encoder: ENCODER_GRACE, hidden: int, proj_hidden: int, tau: float = 0.5):
+    def __init__(self, encoder, hidden: int, proj_hidden: int, tau: float = 0.5):
         super(A2GRACE, self).__init__()
-        self.encoder: ENCODER_GRACE = encoder
+        self.encoder = encoder
         self.tau: float = tau
 
         self.fc1 = nn.Linear(hidden, proj_hidden)

@@ -1,4 +1,3 @@
-from functools import partial
 import time
 from tqdm import tqdm
 import torch
@@ -9,6 +8,7 @@ from torch_geometric.utils import negative_sampling
 from torch_sparse import SparseTensor
 import numpy as np
 
+from src.utils import visu_tsne, commu_repartition
 
 @torch.no_grad()
 def test(encoder: nn.Module, predictor: nn.Module, data, split_edge: dict, hp: dict):
@@ -19,6 +19,9 @@ def test(encoder: nn.Module, predictor: nn.Module, data, split_edge: dict, hp: d
     device = data.adj_t.device()
     adj_t = data.adj_t
     h = None if encoder is None else encoder(data.x, adj_t)
+    # data2 = commu_repartition(data, 'louvain')
+    # print(len(data2.sizes))
+    # visu_tsne(h, data2.communities, 'LBGRL raa euroroad')
     def test_split(split):
         # pred positive edges and negatives edges for nodes in the split
         pos_test_edge = split_edge[split]['edge'].to(device)
@@ -28,14 +31,13 @@ def test(encoder: nn.Module, predictor: nn.Module, data, split_edge: dict, hp: d
             # print('perm', perm)
             edge = pos_test_edge[perm].t()
             # print('edge', edge)
-            out = predictor.predict(h, edge[0], edge[1])
+            out = predictor.predict(h, edge[0], edge[1], adj_t)
             pos_test_preds += [out.squeeze().cpu()]
-        # print(pos_test_preds)
         pos_test_pred = torch.cat(pos_test_preds, dim=0)
         neg_test_preds = []
         for perm in DataLoader(range(neg_test_edge.size(0)), hp['batch_size']):
             edge = neg_test_edge[perm].t()
-            out = predictor.predict(h, edge[0], edge[1])
+            out = predictor.predict(h, edge[0], edge[1], adj_t)
             neg_test_preds += [out.squeeze().cpu()]
         neg_test_pred = torch.cat(neg_test_preds, dim=0)
         return pos_test_pred, neg_test_pred
@@ -46,38 +48,29 @@ def test(encoder: nn.Module, predictor: nn.Module, data, split_edge: dict, hp: d
         h = None if encoder is None else encoder(data.x, adj_t)
     pos_test_pred, neg_test_pred = test_split('test')
     # print("pos_test_pred", pos_test_pred)
+    # print("neg_test_pred", neg_test_pred)
     return pos_valid_pred, neg_valid_pred, pos_test_pred, neg_test_pred
 
 def pred_train(encoder: nn.Module,
           predictor: nn.Module,
           data,
           split_edge: dict,
-          loss_name: str,
           hp: dict):
-    if not hp['freeze']:
-        optimizer = torch.optim.Adam(
-            [
-                {"params": encoder.parameters(), "lr": hp["gnn_lr"]},
-                {"params": predictor.parameters(), "lr": hp["pre_lr"]},
-            ]
-        )
-    elif hp['freeze']:
-        optimizer = torch.optim.Adam(params=predictor.parameters(), lr=hp["pre_lr"])
+    optimizer = torch.optim.Adam(params=predictor.parameters(), lr=hp["pre_lr"])
     encoder.train()
     predictor.train()
-    return _train(encoder, predictor, data, split_edge, optimizer, hp, loss_name)
+    return _train(encoder, predictor, data, split_edge, optimizer, hp)
 
 def baseline_train(encoder: nn.Module,
           predictor: nn.Module,
           data,
           split_edge: dict,
-          loss_name: str,
           hp: dict):
     if isinstance(predictor, nn.Module):
         predictor = predictor.to(data.x.device)
         optimizer = torch.optim.Adam(
             [
-                {"params": encoder.parameters(), "lr": hp["gnn_lr"],  "weight_decay": hp['weight_decay']},
+                {"params": encoder.parameters(), "lr": hp["gnn_lr"], "weight_decay": hp['weight_decay']},
                 {"params": predictor.parameters(), "lr": hp["pre_lr"]},
             ]
         )
@@ -85,9 +78,9 @@ def baseline_train(encoder: nn.Module,
     else:
         optimizer = torch.optim.Adam(params=encoder.parameters(), lr=hp["gnn_lr"], weight_decay=hp['weight_decay'])
     encoder.train()
-    return _train(encoder, predictor, data, split_edge, optimizer, hp, loss_name)
+    return _train(encoder, predictor, data, split_edge, optimizer, hp)
 
-def _train(encoder, predictor, data, split_edge, optimizer, hp, loss_name):
+def _train(encoder, predictor, data, split_edge, optimizer, hp):
     loss_res = []
     t1 = time.time()
     device = data.adj_t.device()
@@ -113,11 +106,11 @@ def _train(encoder, predictor, data, split_edge, optimizer, hp, loss_name):
                 adj = data.adj_t
             h = encoder(data.x, adj)
             edge = pos_train_edge[:, perm]
-            pos_outs = predictor(h, edge[0], edge[1])
+            pos_outs = predictor(h, edge[0], edge[1], adj)
 
             edge = negedge[:, perm]
-            neg_outs = predictor(h, edge[0], edge[1])
-            loss = get_loss(loss_name, pos_outs, neg_outs)
+            neg_outs = predictor(h, edge[0], edge[1], adj)
+            loss = get_loss(hp['loss_func'], pos_outs, neg_outs)
             loss.backward()
             optimizer.step()
             total_loss.append(loss)
@@ -130,12 +123,12 @@ def _train(encoder, predictor, data, split_edge, optimizer, hp, loss_name):
 
 def get_loss(loss_name: str, pos_outs, neg_outs):
     switch = {
-        'log_sig': partial(log_sig_loss, pos_outs, neg_outs),
-        'bce': partial(bce_loss, pos_outs, neg_outs),
-        'auc': partial(auc_loss, pos_outs, neg_outs),
-        'hinge_auc': partial(hinge_auc_loss, pos_outs, neg_outs),
+        'log_sig': log_sig_loss,
+        'bce': bce_loss,
+        'auc': auc_loss,
+        'hinge_auc': hinge_auc_loss
     }
-    return switch[loss_name]()
+    return switch[loss_name](pos_outs, neg_outs)
 
 def log_sig_loss(pos_outs, neg_outs):
     pos_losss = -F.logsigmoid(pos_outs).mean()

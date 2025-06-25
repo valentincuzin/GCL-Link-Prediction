@@ -4,6 +4,7 @@ from copy import deepcopy
 import torch
 import numpy as np
 import igraph as ig
+import scipy.io as sio
 import networkx as nx
 import torch.nn.functional as F
 from sklearn.metrics import average_precision_score
@@ -13,7 +14,8 @@ from sklearn.decomposition import PCA
 from networkx.generators.community import LFR_benchmark_graph
 from torch_geometric import seed_everything
 from torch_geometric.datasets import Planetoid, Coauthor, Amazon
-from torch_geometric.utils import to_undirected, add_self_loops, from_networkx, to_networkx
+from torch_geometric.data import Data
+from torch_geometric.utils import to_undirected, add_self_loops, from_networkx, to_networkx, from_scipy_sparse_matrix
 from torch_geometric.transforms import RandomLinkSplit
 from torch_geometric.data.storage import GlobalStorage
 from torch_geometric.data.data import DataEdgeAttr, DataTensorAttr
@@ -55,7 +57,7 @@ def randomsplit(dataset, val_ratio: float = 0.10, test_ratio: float = 0.2):
                            'edge_neg': removerepeated(test_data_neg).t()}}    
     return split_edge
 
-def loaddataset(name: str|list, use_valedges_as_input: bool, reduce_feature: int|None = None, only_feature: bool = False, load=None):
+def loaddataset(name: str|list, reduce_feature: int|None = None, only_feature: bool = False, load=None):
     if isinstance(name,list):
         split_edge = randomsplit(name)
         data = name[0]
@@ -88,6 +90,19 @@ def loaddataset(name: str|list, use_valedges_as_input: bool, reduce_feature: int
 
         if data.edge_index.max().item() + 1 < data.num_nodes:
             data.edge_index = add_self_loops(data.edge_index, num_nodes=data.num_nodes)[0]
+    elif name in ['USAir', 'NS', 'PB', 'Yeast', 'Celegans', 'Power', 'Router', 'Ecoli']:
+        data_dir = f'./small_mat/{name}.mat'
+        net = sio.loadmat(data_dir)
+        edge_index,_ = from_scipy_sparse_matrix(net['net'])
+        data = Data(edge_index=edge_index, num_nodes=torch.max(edge_index).item()+1)
+        data.x = F.one_hot(torch.arange(0, data.num_nodes)).float()
+        split_edge = randomsplit([data])
+        data.edge_index = to_undirected(split_edge["train"]["edge"].t())
+        edge_index = data.edge_index
+
+        if data.edge_index.max().item() + 1 < data.num_nodes:
+            data.edge_index = add_self_loops(data.edge_index, num_nodes=data.num_nodes)[0]
+
     elif name in ['collab']:
         dataset = PygLinkPropPredDataset(name=f'ogbl-{name}')
         split_edge = dataset.get_edge_split()
@@ -136,14 +151,10 @@ def loaddataset(name: str|list, use_valedges_as_input: bool, reduce_feature: int
         data.x = torch.load(load, map_location="cpu")
         data.max_x = -1
 
-    # Use training + validation edges for inference on test set.
-    if use_valedges_as_input:
-        val_edge_index = split_edge['valid']['edge'].t()
-        full_edge_index = torch.cat([edge_index, val_edge_index], dim=-1)
-        data.full_adj_t = SparseTensor.from_edge_index(full_edge_index, sparse_sizes=(data.num_nodes, data.num_nodes)).coalesce()
-        data.full_adj_t = data.full_adj_t.to_symmetric()
-    else:
-        data.full_adj_t = data.adj_t
+    val_edge_index = split_edge['valid']['edge'].t()
+    full_edge_index = torch.cat([edge_index, val_edge_index], dim=-1)
+    data.full_adj_t = SparseTensor.from_edge_index(full_edge_index, sparse_sizes=(data.num_nodes, data.num_nodes)).coalesce()
+    data.full_adj_t = data.full_adj_t.to_symmetric()
     return data, split_edge
 
 def reduce_node_features(data, nb_features):
@@ -193,7 +204,7 @@ def _get_sizes_probs(data, G, communities):
     return sizes, probs
 
 class DataSplit:
-    def __init__(self, dataset: str|list, device: str, runs: int, use_valedges_as_input: bool = False, reduce_feature: int|None = None, only_feature: bool = False):
+    def __init__(self, dataset: str|list, device: str, runs: int, reduce_feature: int|None = None, only_feature: bool = False):
         print(f"{runs} split from the dataset {dataset}")
         if dataset in ["synthetic_1", "synthetic_2", "synthetic_3"]:
             if dataset == "synthetic_1":
@@ -216,7 +227,7 @@ class DataSplit:
         for r in tqdm(range(runs)):
             seed_everything(r)
             dataset_tmp = deepcopy(dataset)
-            data, split_edge = loaddataset(dataset_tmp, use_valedges_as_input, reduce_feature, only_feature)
+            data, split_edge = loaddataset(dataset_tmp, reduce_feature, only_feature)
             data = data.to(device)
             self.data_runs[r] = data, split_edge
         self.info_time = round(time.time()-t1, 2)

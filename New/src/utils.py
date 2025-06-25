@@ -7,6 +7,8 @@ from sklearn.metrics import average_precision_score
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+import torch_sparse
+import torch.nn as nn
 import torch.nn.functional as F
 from cdlib import algorithms
 from cdlib.utils import convert_graph_formats
@@ -124,6 +126,37 @@ def gen_sbm(sizes, probs):
     data.x = F.one_hot(torch.arange(0, data.num_nodes)).float()
     return data
 
+def gen_sgf(data, alpha, transformation='identity'):
+    G = to_networkx(data, to_undirected=True)
+    new_G = nx.spectral_graph_forge(G, alpha, transformation)
+    data = from_networkx(new_G)
+    data.edge_index = to_undirected(data.edge_index)
+    data.num_nodes = len(G.nodes)
+    data.num_features = data.num_nodes
+    data.x = F.one_hot(torch.arange(0, data.num_nodes)).float()
+    return data
+
+def gen_ba(data):
+    G = to_networkx(data, to_undirected=True)
+    new_G = nx.barabasi_albert_graph(data.num_nodes, 1, initial_graph=G)
+    data = from_networkx(new_G)
+    data.edge_index = to_undirected(data.edge_index)
+    data.num_nodes = len(G.nodes)
+    data.num_features = data.num_nodes
+    data.x = F.one_hot(torch.arange(0, data.num_nodes)).float()
+    return data
+
+def gen_deg(data):
+    G = to_networkx(data, to_undirected=True)
+    deg = [d for v, d in nx.degree(G)]
+    new_G = nx.expected_degree_graph(deg, False)
+    data = from_networkx(new_G)
+    data.edge_index = to_undirected(data.edge_index)
+    data.num_nodes = len(G.nodes)
+    data.num_features = data.num_nodes
+    data.x = F.one_hot(torch.arange(0, data.num_nodes)).float()
+    return data
+
 class CosineDecayScheduler:
     def __init__(self, max_val, warmup_steps, total_steps):
         self.max_val = max_val
@@ -138,6 +171,27 @@ class CosineDecayScheduler:
                                               (self.total_steps - self.warmup_steps))) / 2 # décroit de façon lisse et progressive.
         else:
             raise ValueError('Step ({}) > total number of steps ({}).'.format(step, self.total_steps))
+
+# Edge dropout with adjacency matrix as input
+class DropAdj(nn.Module):
+    doscale: bool # whether to rescale edge weight
+    def __init__(self, dp: float = 0.0, doscale=True) -> None:
+        super().__init__()
+        self.dp = dp
+        self.register_buffer("ratio", torch.tensor(1/(1-dp)))
+        self.doscale = doscale
+
+    def forward(self, adj):
+        if self.dp < 1e-6 or not self.training:
+            return adj
+        mask = torch.rand_like(adj.storage.col(), dtype=torch.float) > self.dp
+        adj = torch_sparse.masked_select_nnz(adj, mask, layout="coo")
+        if self.doscale:
+            if adj.storage.has_value():
+                adj.storage.set_value_(adj.storage.value()*self.ratio, layout="coo")
+            else:
+                adj.fill_value_(1/(1-self.dp), dtype=torch.float)
+        return adj
 
 def store_res(test_res: dict[float], res_dict: dict[list[float]]):
     for key, result in test_res.items():

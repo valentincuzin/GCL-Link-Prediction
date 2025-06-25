@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Literal
 import torch
 from torch import nn
 from enum import Enum
@@ -85,7 +85,7 @@ class DecoderZoo:
     def filter_models(models: List[str]):
         return [model for model in models if model in DecoderZoo.models]
 
-    def check_model(self, model_name):
+    def check_model(self, model_name) -> Literal[True]:
         """Checks if a model with the given name exists.
         Raises an error if not.
         """

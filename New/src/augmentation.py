@@ -12,7 +12,7 @@ from torch_geometric.utils import degree, to_undirected, to_networkx, dropout_ad
 from torch_scatter import scatter
 from functools import partial
 
-from src.utils import get_commu_strength, gen_sbm, commu_repartition
+from src.utils import get_commu_strength, gen_sbm, commu_repartition, gen_sgf, gen_ba, gen_deg
 
 
 class Aug:
@@ -47,8 +47,8 @@ class Aug:
             feature_weights, drop_weights = self.commu_strength()
         elif 'sbm' in type:
             cd_algo = None
-            if '_' in type:
-                type, cd_algo = type.split('_')
+            if self.param['commu_detect']:
+                cd_algo = self.param['commu_detect']
             print(cd_algo, 'detection...')
             data = commu_repartition(data, cd_algo).to(self.device)
         elif '_d' in type:
@@ -70,7 +70,10 @@ class Aug:
             'evc': partial(self.gca, feature_weights, drop_weights),
             'scom': partial(self.csgcl, feature_weights, drop_weights),
             'sbm': self.sbm,
-            'sbm2': self.sbm_2
+            'sbm2': self.sbm_2,
+            'sgf': self.sgf,
+            'ba': self.ba,
+            'deg_seq': self.config_model
         }
         return data, types[type]
 
@@ -214,7 +217,7 @@ class Aug:
         for u, v in G.edges():
             G[u][v]['weight'] = 1.0 # not sure to put 1 if their is a link
 
-        to_reconstruct = int(data.edge_index.shape[1]*0.4)
+        to_reconstruct = int(data.edge_index.shape[1]*self.param['reconstruction_rate'])
         values_norm = sorted(values_norm, key=lambda x: x[2], reverse=True)
         for u, v, p in values_norm:
             if p >= mean_p:
@@ -324,6 +327,34 @@ class Aug:
         data_2.x = _drop_feature(data_2.x, self.param['drop_feature_rate_2'])
         return data_1.x, data_1.edge_index, data_2.x, data_2.edge_index
     
+    def sgf(self):
+        data_1 = gen_sgf(self.data, 0.5).to(self.device)
+        data_1.x = self.data.x
+        data_1.x = _drop_feature(data_1.x, self.param['drop_feature_rate_1'])
+        data_2 = gen_sgf(self.data, 0.5).to(self.device)
+        data_2.x = self.data.x
+        data_2.x = _drop_feature(data_2.x, self.param['drop_feature_rate_2'])
+        return data_1.x, data_1.edge_index, data_2.x, data_2.edge_index
+    
+    def ba(self):
+        data_1 = gen_ba(self.data).to(self.device)
+        data_1.x = self.data.x
+        data_1.x = _drop_feature(data_1.x, self.param['drop_feature_rate_1'])
+        data_2 = gen_ba(self.data).to(self.device)
+        data_2.x = self.data.x
+        data_2.x = _drop_feature(data_2.x, self.param['drop_feature_rate_2'])
+        return data_1.x, data_1.edge_index, data_2.x, data_2.edge_index
+
+    def config_model(self):
+        data_1 = gen_deg(self.data).to(self.device)
+        data_1.x = self.data.x
+        data_1.x = _drop_feature(data_1.x, self.param['drop_feature_rate_1'])
+        data_2 = gen_deg(self.data).to(self.device)
+        data_2.x = self.data.x
+        data_2.x = _drop_feature(data_2.x, self.param['drop_feature_rate_2'])
+        return data_1.x, data_1.edge_index, data_2.x, data_2.edge_index
+
+
     def reconstruct(self):
         edge_index_1 = _drop_edge_weighted(self.data.edge_index, self.data.weight, self.param['drop_edge_rate_1']).to(self.device)
         edge_index_2 = _drop_edge_weighted(self.data.edge_index, self.data.weight, self.param['drop_edge_rate_2']).to(self.device)

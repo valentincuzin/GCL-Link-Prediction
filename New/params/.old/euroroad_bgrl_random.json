@@ -1,0 +1,18 @@
+{
+    "drop_edge_rate_1": 0.7000000000000001,
+    "drop_edge_rate_2": 0.1,
+    "drop_feature_rate_1": 0.8,
+    "drop_feature_rate_2": 0.4,
+    "gnn_lr": 0.04220358691061658,
+    "pre_lr": 0.08481140163291934,
+    "batch_size": 1600,
+    "epochs": 40,
+    "mask_input": true,
+    "n_layers": 1,
+    "ct_epochs": 1240,
+    "1_layer_size": 384,
+    "batch_layer_norm": true,
+    "batchnorm_mm": 0.9200000000000002,
+    "weight_standardization": true,
+    "weight_decay": 4.643319220954948e-05
+}
