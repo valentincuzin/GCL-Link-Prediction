@@ -1,0 +1,8 @@
+metrics;bgrl_enc:gcn_grace_pred:inner_deg_mean;bgrl_enc:gcn_grace_pred:inner_deg;bgrl_enc:gcn_grace_pred:inner_deg+scom_mean;bgrl_enc:gcn_grace_pred:inner_deg+scom;bgrl_enc:gcn_bgrl_pred:inner_deg_mean;bgrl_enc:gcn_bgrl_pred:inner_deg
+Hits@10;2.51$\pm$0.0;[0.02512465];2.0$\pm$0.0;[0.02000907];3.61$\pm$0.0;[0.03608971]
+Hits@20;3.93$\pm$0.0;[0.03930583];3.12$\pm$0.0;[0.03121155];4.31$\pm$0.0;[0.04306158]
+Hits@50;5.43$\pm$0.0;[0.05428565];4.35$\pm$0.0;[0.04351486];7.35$\pm$0.0;[0.07345291]
+Hits@100;7.64$\pm$0.0;[0.07636685];5.78$\pm$0.0;[0.05782555];11.0$\pm$0.0;[0.11003907]
+ROCAUC;88.82$\pm$0.0;[0.88817156];88.65$\pm$0.0;[0.88651666];89.84$\pm$0.0;[0.89843065]
+AP;79.88$\pm$0.0;[0.7988498];79.09$\pm$0.0;[0.7909481];82.13$\pm$0.0;[0.82132207]
+pretrain_time;242.89$\pm$0.0;[242.89499617];260.46$\pm$0.0;[260.45867443];294.59$\pm$0.0;[294.59248471]

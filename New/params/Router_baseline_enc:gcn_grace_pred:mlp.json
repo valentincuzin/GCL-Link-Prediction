@@ -1,0 +1,16 @@
+{
+    "gnn_lr": 0.08926671909276085,
+    "batch_size": 2368,
+    "use_valedges_as_input": false,
+    "epochs": 130,
+    "pre_lr": 0.06433339779983004,
+    "loss_func": "bce",
+    "mask_input": true,
+    "weight_decay": 2.7336193902717617e-05,
+    "n_layers": 2,
+    "hidden": 448,
+    "activation": "prelu",
+    "skip": false,
+    "proj_hidden": 320,
+    "tau": 0.1
+}

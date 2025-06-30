@@ -1,0 +1,22 @@
+{
+    "gnn_lr": 0.08748016137283188,
+    "batch_size": 1216,
+    "use_valedges_as_input": false,
+    "epochs": 120,
+    "pre_lr": 0.013631995175948833,
+    "loss_func": "log_sig",
+    "predp": 0.39,
+    "preedp": 0.77,
+    "lnnn": true,
+    "use_xlin": false,
+    "tailact": true,
+    "twolayerlin": true,
+    "mask_input": false,
+    "weight_decay": 2.1872863816819547e-05,
+    "n_layers": 2,
+    "hidden": 384,
+    "activation": "identity",
+    "skip": false,
+    "proj_hidden": 448,
+    "tau": 0.4
+}
