@@ -1,5 +1,6 @@
 from copy import copy
 import time
+from networkx import to_undirected
 from tqdm import tqdm
 import torch
 import matplotlib.pyplot as plt
@@ -18,19 +19,17 @@ from src.train import pred_train
 writer = SummaryWriter()
 
 
-def valid_hits50(model, data, split_edge, predictor, param):
+def valid_hits50(model, data, split_edge, param, split = 'valid'):
     if isinstance(model, torch.nn.Module):
         model.eval()
-    if isinstance(predictor, torch.nn.Module):
-        pred_train(model, predictor, data, split_edge, param)
     device = data.adj_t.device()
     adj_t = data.adj_t
     h = None if model is None else model(data.x, adj_t)
-    # predictor = InnerProd()
+    predictor = InnerProd()
     def test_split(split):
         # pred positive edges and negatives edges for nodes in the split
         pos_test_edge = split_edge[split]['edge'].to(device)
-        neg_test_edge = split_edge[split]['edge_neg'].to(device)
+        neg_test_edge = split_edge[split]['edge_neg'].to(device)# negative_sampling(to_undirected(pos_test_edge)).to(device)
         pos_test_preds = []
         for perm in DataLoader(range(pos_test_edge.size(0)), param['batch_size']):
             edge = pos_test_edge[perm].t()
@@ -45,7 +44,7 @@ def valid_hits50(model, data, split_edge, predictor, param):
         neg_test_pred = torch.cat(neg_test_preds, dim=0)
         return pos_test_pred, neg_test_pred
     
-    pos_valid_pred, neg_valid_pred = test_split('valid')
+    pos_valid_pred, neg_valid_pred = test_split(split)
     evaluator = get_evaluator()
     evaluator.eval_metric = 'hits@k'
     evaluator.K = 50
@@ -98,30 +97,31 @@ def pretrain_grace(model, aug, param):
         if epoch % 10 == 0:
             loss_res.append(round(float(loss), 2))
             # valid part
-            # with torch.no_grad():
-            #     model.eval()
-            #     val_inner_score = valid_hits50(model, aug.data, aug.split_edge, param)
-            # val_inner_score = round(val_inner_score, 4)
-            # if val_inner_score >= best_val:
-            #     patience = 100
-            #     best_val = val_inner_score
-            #     print(f"best model at ep {epoch} with val score {val_inner_score}, loss {loss}")
-            #     best_model = model.state_dict()
-            # else:
-            #     patience -= 1
-            # writer.add_scalars("grace", {'tr_loss':loss, 'val_inner_score': val_inner_score}, epoch)
-            # if patience == 0:
-            #     break
             with torch.no_grad():
                 model.eval()
-                inner = get_predictor('inner', param)
-                val_inner_score = valid_hits50(model, aug.data, aug.split_edge, inner, param)
-            mlp = get_predictor('mlp', param).to(aug.device)
-            val_mlp_score = valid_hits50(model, aug.data, aug.split_edge, mlp, param)
-            ncn = get_predictor('ncn', param).to(aug.device)
-            val_ncn_score = valid_hits50(model, aug.data, aug.split_edge, ncn, param)
-            writer.add_scalars("grace", {'tr_loss':loss, 'val_inner_score': val_inner_score, 
-                                         'val_mlp_score': val_mlp_score, 'val_ncn_score': val_ncn_score})
+                val_inner_score = valid_hits50(model, aug.data, aug.split_edge, param)
+                test_inner_score = valid_hits50(model, aug.data, aug.split_edge, param, 'test')
+            val_inner_score = round(val_inner_score, 4)
+            if val_inner_score >= best_val:
+                patience = 100
+                best_val = val_inner_score
+                print(f"best model at ep {epoch} with val score {val_inner_score}, loss {loss}")
+                best_model = model.state_dict()
+            else:
+                pass # patience -= 1
+            writer.add_scalars("grace", {'tr_loss':loss, 'val_inner_score': val_inner_score, 'test_inner_score': test_inner_score}, epoch)
+            if patience == 0:
+                break
+            # with torch.no_grad():
+            #     model.eval()
+            #     inner = get_predictor('inner', param)
+            #     val_inner_score = valid_hits50(model, aug.data, aug.split_edge, inner, param)
+            # mlp = get_predictor('mlp', param).to(aug.device)
+            # val_mlp_score = valid_hits50(model, aug.data, aug.split_edge, mlp, param)
+            # ncn = get_predictor('ncn', param).to(aug.device)
+            # val_ncn_score = valid_hits50(model, aug.data, aug.split_edge, ncn, param)
+            # writer.add_scalars("grace", {'tr_loss':loss, 'val_inner_score': val_inner_score, 
+            #                              'val_mlp_score': val_mlp_score, 'val_ncn_score': val_ncn_score})
     model.load_state_dict(best_model)
 
     print('pretrain loss: ', loss_res)
