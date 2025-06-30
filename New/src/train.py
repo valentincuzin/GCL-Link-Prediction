@@ -59,7 +59,6 @@ def pred_train(encoder: nn.Module,
     optimizer = torch.optim.Adam(params=predictor.parameters(), lr=hp["pre_lr"])
     encoder.eval()
     predictor.train()
-    print(predictor)
     return _train(encoder, predictor, data, split_edge, optimizer, hp)
 
 def baseline_train(encoder: nn.Module,
