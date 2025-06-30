@@ -4,7 +4,6 @@ from src.utils import DropAdj
 from torch_sparse.matmul import spmm_add
 from torch_sparse import SparseTensor
 
-
 def get_predictor(predictor_name: str, hp):
     if predictor_name == 'inner':
         predictor = InnerProd()
@@ -12,6 +11,8 @@ def get_predictor(predictor_name: str, hp):
         predictor = MlpProdDecoder(hp['hidden'], hp['hidden'])
     elif predictor_name == "ncn":
         predictor = CNLinkPredictor(hp['hidden'], hp['hidden'], hp['predp'], hp['preedp'], hp['lnnn'], hp['use_xlin'], hp['tailact'], hp['twolayerlin'])
+    elif predictor_name == "mplp":
+        predictor = MPLP(hp['hidden'], hp['feat_dropout'], hp['label_dropout'], hp['prop_type'], hp['use_degree'], hp['signature_dim'], hp['minimum_degree_onehot'], hp['batchnorm_affine'])
     return predictor
 
 class InnerProd:

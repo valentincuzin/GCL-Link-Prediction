@@ -27,7 +27,7 @@ MODELS = ["baseline",
           "bgrl", "lbgrl", "a2bgrl"]
 AUGMENTATIONS = ["random", "rjc", "rjc2", "raa", "rra", "deg", "pr", "evc", "scom", "sbm", "sbm2", "sgf"]
 LOSS = ["log_sig", "bce", "auc", "hinge_auc"]
-ENCODER = ['grace', 'bgrl', 'ncn', 'mplp']
+ENCODER = ['grace', 'bgrl', 'ncn']
 PREDICTOR = ['inner', 'mlp', 'ncn']
 
 def arguments():
@@ -56,7 +56,6 @@ def arguments():
     args.augmentation = multiparse(args.augmentation, AUGMENTATIONS)
     args.encoder = multiparse(args.encoder, ENCODER)
     args.predictor = multiparse(args.predictor, PREDICTOR)
-    print(args)
     return args
 
 def synthetic_pred(data_split, evaluator, hp):
@@ -81,7 +80,6 @@ def synthetic_pred(data_split, evaluator, hp):
 
 def train_test_run(model, predictor, data, split_edge, model_name, augmentation, evaluator, hp, res_dict, valid = False):
     if model_name != "baseline":
-        print(f"..{augmentation}..")
         aug = Aug(data, split_edge, hp, augmentation)
         pre_time = pretrain(model_name, model, aug, hp)
         res_dict['pretrain_time'].append(pre_time)
@@ -108,9 +106,9 @@ if __name__ == "__main__":
         for model_name in args.model:
             for encoder_name in args.encoder:
                 for predictor_name in args.predictor:
-                    print(f"...{model_name}...")
                     for augmentation in args.augmentation:
-                        
+                        save_name = f"{model_name}_enc:{encoder_name}_pred:{predictor_name}{'_'+augmentation if model_name != "baseline" else ""}"
+                        print(f"...{dataset}_{save_name}...")
                         if args.hp_search == 0:
                             hp = hp_load(dataset, model_name, augmentation, encoder_name, predictor_name)
                         else:
@@ -141,7 +139,7 @@ if __name__ == "__main__":
                         if args.hp_search != 0:
                             study = optuna.create_study(direction='maximize')
                             study.optimize(_objective, n_trials=args.hp_search)
-                            hp = update_hp(study, hp, f"params/{dataset}_{model_name}_enc:{encoder_name}_pred:{predictor_name}{'_'+augmentation if model_name != "baseline" else ""}")
+                            hp = update_hp(study, hp, f"params/{dataset}_{save_name}")
                         if "sbm" in augmentation:
                             full_res.append(synthetic_pred(data_split, evaluator, hp))
                         for r in range(args.runs):
@@ -150,7 +148,6 @@ if __name__ == "__main__":
                             model = get_model(encoder_name, model_name, data, hp)
                             predictor = get_predictor(predictor_name, hp)
                             res_dict = train_test_run(model, predictor, data, split_edge, model_name,augmentation, evaluator, hp, res_dict)
-                        save_name = f"{model_name}_enc:{encoder_name}_pred:{predictor_name}{'_'+augmentation if model_name != "baseline" else ""}"
                         df_res, res_latex = compute_table(res_dict, save_name)
                         print(df_res)
                         full_res.append(df_res)
@@ -158,4 +155,3 @@ if __name__ == "__main__":
                         df.to_csv(f'output/{args.name}_{dataset}_res.csv', sep=';')
                         if model_name == "baseline":
                             break
-        

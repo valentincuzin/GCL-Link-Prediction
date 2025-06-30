@@ -14,6 +14,7 @@ from cdlib import algorithms
 from cdlib.utils import convert_graph_formats
 from torch_geometric.utils import to_networkx, from_networkx, to_undirected
 from networkx.generators.community import stochastic_block_model
+# from graph_tool.generation import generate_maxent_sbm
 
 def community_detection(name):
     algs = {
@@ -125,6 +126,33 @@ def gen_sbm(sizes, probs):
     data.num_features = data.num_nodes
     data.x = F.one_hot(torch.arange(0, data.num_nodes)).float()
     return data
+
+def graph_tool_to_networkx(g):
+    # Créer un graphe NetworkX vide
+    G_nx = nx.Graph()
+
+    # Ajouter les nœuds
+    for v in g.vertices():
+        G_nx.add_node(v)
+
+    # Ajouter les arêtes
+    for e in g.edges():
+        G_nx.add_edge(e.source(), e.target())
+
+    return G_nx
+
+# def gen_sbm_fast(sizes, probs, degree):
+#     gtG = generate_maxent_sbm(sizes, probs, degree)
+#     G = graph_tool_to_networkx(gtG)
+#     G.remove_edges_from(nx.selfloop_edges(G)) # remove self loops
+#     data = from_networkx(G)
+#     data.edge_index = to_undirected(data.edge_index)
+#     data.num_nodes = sum(sizes)
+#     data.sizes = sizes
+#     data.probs = probs
+#     data.num_features = data.num_nodes
+#     data.x = F.one_hot(torch.arange(0, data.num_nodes)).float()
+#     return data
 
 def gen_sgf(data, alpha, transformation='identity'):
     G = to_networkx(data, to_undirected=True)

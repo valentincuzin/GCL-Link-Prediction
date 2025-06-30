@@ -66,10 +66,17 @@ def hp_train(predictor, trial, hp):
     hp['batch_size'] = trial.suggest_int('batch_size', 64, 6400, 64)
     hp['use_valedges_as_input'] = trial.suggest_categorical('use_valedges_as_input', [True, False])
 
-    hp['epochs'] = trial.suggest_int('epochs', 10, 190, 10)
+    hp['epochs'] = 100 # trial.suggest_int('epochs', 10, 190, 10)
     if predictor != 'inner':
         hp['pre_lr'] = trial.suggest_float('pre_lr', 0.001, 0.1)
         hp['loss_func'] = trial.suggest_categorical('loss_func', ['log_sig', 'bce'])
+    if predictor == 'ncn':
+        hp["predp"] = trial.suggest_categorical("predp", np.arange(0.1, 0.91, 0.01))
+        hp["preedp"] = trial.suggest_categorical("preedp", np.arange(0.1, 0.91, 0.01))
+        hp["lnnn"] = trial.suggest_categorical("lnnn", [True, False])
+        hp["use_xlin"] = trial.suggest_categorical("use_xlin", [True, False])
+        hp["tailact"] = trial.suggest_categorical("tailact", [True, False])
+        hp["twolayerlin"] = trial.suggest_categorical("twolayerlin", [True, False])
     hp['mask_input'] = trial.suggest_categorical('mask_input', [True, False])
 
     hp['weight_decay'] = trial.suggest_float('weight_decay', 1e-6, 1e-4)
@@ -91,7 +98,7 @@ def hp_bgrl_gcn(trial, hp):
 def hp_grace_gcn(trial, hp):
     hp['n_layers'] = trial.suggest_int('n_layers', 2, 4)
     hp['hidden'] = trial.suggest_int('hidden', 32, 512, 32)
-    hp['activation'] = trial.suggest_categorical('activation', ['identity', 'relu', 'prelu', 'rrelu'])
+    hp['activation'] = trial.suggest_categorical('activation', ['identity', 'relu', 'prelu'])
     hp['skip'] = trial.suggest_categorical('skip', [True, False])
 
     hp['proj_hidden'] = trial.suggest_int('proj_hidden', 32, 512, 32)

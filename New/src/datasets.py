@@ -180,7 +180,7 @@ def _LFR_gen(n, tau1, tau2, mu, average_degree, min_community, max_community = N
     data.probs = probs
     data.num_features = data.num_nodes
     data.x = F.one_hot(torch.arange(0, data.num_nodes)).float()
-    print(np.round(probs, 5))
+    # print(np.round(probs, 5))
     return data
 
 def _get_sizes_probs(data, G, communities):

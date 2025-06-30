@@ -16,7 +16,7 @@ class BGRL_GCN(nn.Module):
         batchnorm_mm=param['batchnorm_mm']
         layernorm=not param['batch_layer_norm']
         weight_standardization=param['weight_standardization']
-        print(batchnorm, layernorm)
+        # print(batchnorm, layernorm)
         assert batchnorm != layernorm
         assert len(layer_sizes) >= 1
         self.input_size, self.representation_size = in_channels, layer_sizes[-1]
@@ -168,7 +168,6 @@ class GRACE_GCN(nn.Module):
             'identity': nn.Identity(),
             'relu': F.relu,
             'prelu': nn.PReLU(),
-            'rrelu': F.rrelu
         }
         activation = switch[param['activation']]
         base_model=GCNConv
@@ -268,69 +267,6 @@ convdict = {
         "none":
         None
     }
-
-class MPLP_GCN(torch.nn.Module):
-    def __init__(self, in_channels, hidden_channels, out_channels, num_layers,
-                 dropout, xdropout, use_feature=True, jk=False, gcn_name='gcn', embedding=None):
-        super(MPLP_GCN, self).__init__()
-
-        self.use_feature = use_feature
-        self.embedding = embedding
-        self.dropout = dropout
-        self.xdropout = xdropout
-        self.input_size = 0
-        self.jk = jk
-        if jk:
-            self.register_parameter("jkparams", nn.Parameter(torch.randn((num_layers,))))
-        if self.use_feature:
-            self.input_size += in_channels
-        if self.embedding is not None:
-            self.input_size += embedding.embedding_dim
-        self.convs = torch.nn.ModuleList()
-        
-        if self.input_size > 0:
-            if gcn_name == 'gcn':
-                conv_func = partial(GCNConv, cached=False)
-            elif 'pure' in gcn_name:
-                conv_func = partial(PureConv, aggr='gcn')
-            self.xemb = nn.Sequential(nn.Dropout(xdropout)) # nn.Identity()
-            if ("pure" in gcn_name or num_layers==0):
-                self.xemb.append(nn.Linear(self.input_size, hidden_channels))
-                self.xemb.append(nn.Dropout(dropout, inplace=True) if dropout > 1e-6 else nn.Identity())
-                self.input_size = hidden_channels
-            self.convs.append(conv_func(self.input_size, hidden_channels))
-            for _ in range(num_layers - 2):
-                self.convs.append(
-                    conv_func(hidden_channels, hidden_channels))
-            self.convs.append(conv_func(hidden_channels, out_channels))
-
-
-    def reset_parameters(self):
-        for m in self.modules():
-            if isinstance(m, nn.Linear) or isinstance(m, nn.BatchNorm1d):
-                m.reset_parameters()
-
-    def forward(self, x, adj_t):
-        if self.input_size > 0:
-            xs = []
-            if self.use_feature:
-                xs.append(x)
-            if self.embedding is not None:
-                xs.append(self.embedding.weight)
-            x = torch.cat(xs, dim=1)
-            x = self.xemb(x)
-            jkx = []
-            for conv in self.convs:
-                x = conv(x, adj_t)
-                # x = F.relu(x) # FIXME: not using nonlinearity in Sketching
-                if self.jk:
-                    jkx.append(x)
-            if self.jk: # JumpingKnowledge Connection
-                jkx = torch.stack(jkx, dim=0)
-                sftmax = self.jkparams.reshape(-1, 1, 1)
-                x = torch.sum(jkx*sftmax, dim=0)
-        return x
-
 
 class NCN_GCN(nn.Module):
     

@@ -112,13 +112,13 @@ class Aug:
         def degree_drop_weights(edge_index):
             edge_index_ = to_undirected(edge_index)
             deg = degree(edge_index_[1])
-            print('deg', deg)
+            # print('deg', deg)
             deg_col = deg[edge_index[1]].to(torch.float32)
-            print('deg_col', deg_col)
+            # print('deg_col', deg_col)
             s_col = torch.log(deg_col)
-            print('s_col', s_col)
+            # print('s_col', s_col)
             weights = (s_col.max() - s_col) / (s_col.max() - s_col.mean())
-            print('weights', weights)
+            # print('weights', weights)
             return weights
         drop_weights = degree_drop_weights(self.data.edge_index).to(self.device)
         edge_index_ = to_undirected(self.data.edge_index)
@@ -225,14 +225,14 @@ class Aug:
                 G.add_edge(v, u, weight=p)
                 nb_add += 1
                 if nb_add >= to_reconstruct:
-                    print('min de prob added: ', p)
+                    print('min prob added: ', p)
                     break
         print('add', nb_add, 'edges')
 
         tmp = from_networkx(G).to(self.device)
         data.edge_index = tmp.edge_index
         data.weight = tmp.weight
-        print(tmp.weight)
+        # print(tmp.weight)
         return data
 
     def gca(self, feature_weights, drop_weights):

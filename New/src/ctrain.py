@@ -10,20 +10,23 @@ import networkx as nx
 from torch.utils.tensorboard import SummaryWriter
 import numpy as np
 
-from src.predictor import InnerProd
+from src.predictor import InnerProd, get_predictor
 from src.utils import CosineDecayScheduler, get_commu_strength, commu_repartition, visu_tsne
 from src.datasets import get_evaluator
+from src.train import pred_train
 
 writer = SummaryWriter()
 
 
-def valid_hits50(model, data, split_edge, param):
+def valid_hits50(model, data, split_edge, predictor, param):
     if isinstance(model, torch.nn.Module):
         model.eval()
+    if isinstance(predictor, torch.nn.Module):
+        pred_train(model, predictor, data, split_edge, param)
     device = data.adj_t.device()
     adj_t = data.adj_t
     h = None if model is None else model(data.x, adj_t)
-    predictor = InnerProd()
+    # predictor = InnerProd()
     def test_split(split):
         # pred positive edges and negatives edges for nodes in the split
         pos_test_edge = split_edge[split]['edge'].to(device)
@@ -95,20 +98,30 @@ def pretrain_grace(model, aug, param):
         if epoch % 10 == 0:
             loss_res.append(round(float(loss), 2))
             # valid part
+            # with torch.no_grad():
+            #     model.eval()
+            #     val_inner_score = valid_hits50(model, aug.data, aug.split_edge, param)
+            # val_inner_score = round(val_inner_score, 4)
+            # if val_inner_score >= best_val:
+            #     patience = 100
+            #     best_val = val_inner_score
+            #     print(f"best model at ep {epoch} with val score {val_inner_score}, loss {loss}")
+            #     best_model = model.state_dict()
+            # else:
+            #     patience -= 1
+            # writer.add_scalars("grace", {'tr_loss':loss, 'val_inner_score': val_inner_score}, epoch)
+            # if patience == 0:
+            #     break
             with torch.no_grad():
                 model.eval()
-                val_score = valid_hits50(model, aug.data, aug.split_edge, param)
-            val_score = round(val_score, 4)
-            if val_score >= best_val:
-                patience = 100
-                best_val = val_score
-                print(f"best model at ep {epoch} with val score {val_score}, loss {loss}")
-                best_model = model.state_dict()
-            else:
-                patience -= 1
-            writer.add_scalars("grace", {'tr_loss':loss, 'val_score': val_score}, epoch)
-            if patience == 0:
-                break
+                inner = get_predictor('inner', param)
+                val_inner_score = valid_hits50(model, aug.data, aug.split_edge, inner, param)
+            mlp = get_predictor('mlp', param).to(aug.device)
+            val_mlp_score = valid_hits50(model, aug.data, aug.split_edge, mlp, param)
+            ncn = get_predictor('ncn', param).to(aug.device)
+            val_ncn_score = valid_hits50(model, aug.data, aug.split_edge, ncn, param)
+            writer.add_scalars("grace", {'tr_loss':loss, 'val_inner_score': val_inner_score, 
+                                         'val_mlp_score': val_mlp_score, 'val_ncn_score': val_ncn_score})
     model.load_state_dict(best_model)
 
     print('pretrain loss: ', loss_res)
@@ -160,16 +173,16 @@ def pretrain_lgrace(model, aug, param):
             # valid part
             with torch.no_grad():
                 model.eval()
-                val_score = valid_hits50(model, aug.data, aug.split_edge, param)
-            val_score = round(val_score, 4)
-            if val_score >= best_val:
+                val_inner_score = valid_hits50(model, aug.data, aug.split_edge, param)
+            val_inner_score = round(val_inner_score, 4)
+            if val_inner_score >= best_val:
                 patience = 100
-                best_val = val_score
-                print(f"best model at ep {epoch} with val score {val_score}, loss {loss}")
+                best_val = val_inner_score
+                print(f"best model at ep {epoch} with val score {val_inner_score}, loss {loss}")
                 best_model = model.state_dict()
             else:
                 patience -= 1
-            writer.add_scalars("lgrace", {'tr_loss':loss, 'val_score': val_score}, epoch)
+            writer.add_scalars("lgrace", {'tr_loss':loss, 'val_inner_score': val_inner_score}, epoch)
             if patience == 0:
                 break
     model.load_state_dict(best_model)
@@ -208,16 +221,16 @@ def pretrain_csgcl(model, aug, param):
             # valid part
             with torch.no_grad():
                 model.eval()
-                val_score = valid_hits50(model, aug.data, aug.split_edge, param)
-            val_score = round(val_score, 4)
-            if val_score >= best_val:
+                val_inner_score = valid_hits50(model, aug.data, aug.split_edge, param)
+            val_inner_score = round(val_inner_score, 4)
+            if val_inner_score >= best_val:
                 patience = 100
-                best_val = val_score
-                print(f"best model at ep {epoch} with val score {val_score}, loss {loss}")
+                best_val = val_inner_score
+                print(f"best model at ep {epoch} with val score {val_inner_score}, loss {loss}")
                 best_model = model.state_dict()
             else:
                 patience -= 1
-            writer.add_scalars("csgcl", {'tr_loss':loss, 'val_score': val_score}, epoch)
+            writer.add_scalars("csgcl", {'tr_loss':loss, 'val_inner_score': val_inner_score}, epoch)
             if patience == 0:
                 break
     model.load_state_dict(best_model)
@@ -260,20 +273,31 @@ def pretrain_bgrl(model, aug, param):
         model.update_target_network(mm)
         if epoch % 10 == 0:
             loss_res.append(round(float(loss), 2))
+            # with torch.no_grad():
+            #     model.eval()
+            #     val_inner_score = valid_hits50(model, aug.data, aug.split_edge, param)
+            # val_inner_score = round(val_inner_score, 4)
+            # if val_inner_score >= best_val:
+            #     patience = 100
+            #     best_val = val_inner_score
+            #     print(f"best model at ep {epoch} with val score {val_inner_score}, loss {loss}")
+            #     best_model = model.state_dict()
+            # else:
+            #     patience -= 1
+            # writer.add_scalars("bgrl", {'tr_loss':loss, 'val_inner_score': val_inner_score}, epoch)
+            # if patience == 0:
+            #     break
+            #valid part
             with torch.no_grad():
                 model.eval()
-                val_score = valid_hits50(model, aug.data, aug.split_edge, param)
-            val_score = round(val_score, 4)
-            if val_score >= best_val:
-                patience = 100
-                best_val = val_score
-                print(f"best model at ep {epoch} with val score {val_score}, loss {loss}")
-                best_model = model.state_dict()
-            else:
-                patience -= 1
-            writer.add_scalars("bgrl", {'tr_loss':loss, 'val_score': val_score}, epoch)
-            if patience == 0:
-                break
+                inner = get_predictor('inner', param)
+                val_inner_score = valid_hits50(model, aug.data, aug.split_edge, inner, param)
+            mlp = get_predictor('mlp', param).to(aug.device)
+            val_mlp_score = valid_hits50(model, aug.data, aug.split_edge, mlp, param)
+            ncn = get_predictor('ncn', param).to(aug.device)
+            val_ncn_score = valid_hits50(model, aug.data, aug.split_edge, ncn, param)
+            writer.add_scalars("bgrl", {'tr_loss':loss, 'val_inner_score': val_inner_score, 
+                                         'val_mlp_score': val_mlp_score, 'val_ncn_score': val_ncn_score})
     model.load_state_dict(best_model)
     print('pretrain loss: ', loss_res, ' s')
     pre_time = time.time()-t1
@@ -294,7 +318,7 @@ def pretrain_lbgrl(model, aug, param):
     nb_jump = 0
     best_model = model.state_dict()
     best_val = 0
-    patience = 100
+    patience = 10000
     for epoch in tqdm(range(1, param['ct_epochs'] + 1)):
 
         lr = lr_scheduler.get(epoch)
@@ -307,6 +331,12 @@ def pretrain_lbgrl(model, aug, param):
 
         edge_index_1 = edge_index_1.T
         edge_index_2 = edge_index_2.T
+        # set_ei_1 = set([tuple(edge_index_1[i]) for i in range(len(edge_index_1))])
+        # set_ei_2 = set([tuple(edge_index_2[i]) for i in range(len(edge_index_2))])
+        # print("set_ei_1", set_ei_1, len(set_ei_1))
+        # print("set_ei_2", set_ei_2, len(set_ei_2))
+        # set_ei_i = set_ei_1.intersection(set_ei_2)
+        # print("set_ei_i", set_ei_i, len(set_ei_i))
         eq = torch.eq(edge_index_1[:, None], edge_index_2[None, :]).all(dim=2)
         intersection_idx = torch.nonzero(eq)
         and_edge_index = edge_index_1[intersection_idx[:, 0]].T
@@ -329,19 +359,24 @@ def pretrain_lbgrl(model, aug, param):
             #valid part
             with torch.no_grad():
                 model.eval()
-
-                val_score = valid_hits50(model, aug.data, aug.split_edge, param)
-            val_score = round(val_score, 4)
-            if val_score >= best_val:
-                patience = 100
-                best_val = val_score
-                print(f"best model at ep {epoch} with val score {val_score}, loss {loss}")
-                best_model = model.state_dict()
-            else:
-                patience -= 1
-            writer.add_scalars("lbgrl", {'tr_loss':loss, 'val_score': val_score}, epoch)
-            if patience == 0:
-                break
+                inner = get_predictor('inner', param)
+                val_inner_score = valid_hits50(model, aug.data, aug.split_edge, inner, param)
+            mlp = get_predictor('mlp', param).to(aug.device)
+            val_mlp_score = valid_hits50(model, aug.data, aug.split_edge, mlp, param)
+            ncn = get_predictor('ncn', param).to(aug.device)
+            val_ncn_score = valid_hits50(model, aug.data, aug.split_edge, ncn, param)
+            # val_inner_score = round(val_inner_score, 4)
+            # if val_inner_score >= best_val:
+            #     patience = 10000
+            #     best_val = val_inner_score
+            #     print(f"best model at ep {epoch} with val score {val_inner_score}, loss {loss}")
+            #     best_model = model.state_dict()
+            # else:
+            #     patience -= 1
+            writer.add_scalars("lbgrl", {'tr_loss':loss, 'val_inner_score': val_inner_score, 
+                                         'val_mlp_score': val_mlp_score, 'val_ncn_score': val_ncn_score}, epoch)
+            # if patience == 0:
+            #     break
     model.load_state_dict(best_model)
 
     print('real epochs: ', param['ct_epochs']-nb_jump)
@@ -523,16 +558,16 @@ def pretrain_a2grace(model, aug, param):
             # valid part
             with torch.no_grad():
                 model.eval()
-                val_score = valid_hits50(model, aug.data, aug.split_edge, param)
-            val_score = round(val_score, 4)
-            if val_score >= best_val:
+                val_inner_score = valid_hits50(model, aug.data, aug.split_edge, param)
+            val_inner_score = round(val_inner_score, 4)
+            if val_inner_score >= best_val:
                 patience = 100
-                best_val = val_score
-                print(f"best model at ep {epoch} with val score {val_score}, loss {loss}")
+                best_val = val_inner_score
+                print(f"best model at ep {epoch} with val score {val_inner_score}, loss {loss}")
                 best_model = model.state_dict()
             else:
                 patience -= 1
-            writer.add_scalars("a2grace", {'tr_loss':loss, 'val_score': val_score}, epoch)
+            writer.add_scalars("a2grace", {'tr_loss':loss, 'val_inner_score': val_inner_score}, epoch)
             if patience == 0:
                 break
     model.load_state_dict(best_model)
@@ -718,16 +753,16 @@ def pretrain_a2bgrl(model, aug, param):
             loss_res.append(round(float(loss), 2))
             with torch.no_grad():
                 model.eval()
-                val_score = valid_hits50(model, aug.data, aug.split_edge, param)
-            val_score = round(val_score, 4)
-            if val_score >= best_val:
+                val_inner_score = valid_hits50(model, aug.data, aug.split_edge, param)
+            val_inner_score = round(val_inner_score, 4)
+            if val_inner_score >= best_val:
                 patience = 100
-                best_val = val_score
-                print(f"best model at ep {epoch} with val score {val_score}, loss {loss}")
+                best_val = val_inner_score
+                print(f"best model at ep {epoch} with val score {val_inner_score}, loss {loss}")
                 best_model = model.state_dict()
             else:
                 patience -= 1
-            writer.add_scalars("a2bgrl", {'tr_loss':loss, 'val_score': val_score}, epoch)
+            writer.add_scalars("a2bgrl", {'tr_loss':loss, 'val_inner_score': val_inner_score}, epoch)
             if patience == 0:
                 break
 

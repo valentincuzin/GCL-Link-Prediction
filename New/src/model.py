@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from torch_geometric.nn import GCNConv, BatchNorm, LayerNorm, Sequential
 from torch_sparse.matmul import spmm_add
 from torch_sparse import SparseTensor
-from src.encoder import BGRL_GCN, TBGRL_GCN, GRACE_GCN, MPLP_GCN, NCN_GCN
+from src.encoder import BGRL_GCN, TBGRL_GCN, GRACE_GCN, NCN_GCN
 
 from functools import partial
 
@@ -16,7 +16,6 @@ def get_model(encoder_name: str, model_name: str, data, hp: dict):
         'gcn_bgrl': BGRL_GCN,
         'gcn_tbgrl': TBGRL_GCN,
         'gcn_grace': GRACE_GCN,
-        'mplp': MPLP_GCN,
         'ncn': NCN_GCN
     }
     _encoder = switch[encoder_name](data.num_features, hp).to(device)
