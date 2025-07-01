@@ -310,7 +310,7 @@ class Aug:
 
     def sbm(self):
         sizes, probs = self.data.sizes, self.data.probs
-        data_1 = gen_sbm(sizes, probs).to(self.device)
+        data_1 = gen_sbm(sizes, probs, degree(self.data.edge_index)).to(self.device)
         data_1.x = self.data.x
         data_1.x = _drop_feature(data_1.x, self.param['drop_feature_rate_1'])
         data_2 = self.data
@@ -319,10 +319,10 @@ class Aug:
 
     def sbm_2(self):
         sizes, probs = self.data.sizes, self.data.probs
-        data_1 = gen_sbm(sizes, probs).to(self.device)
+        data_1 = gen_sbm(sizes, probs, degree(self.data.edge_index)).to(self.device)
         data_1.x = self.data.x
         data_1.x = _drop_feature(data_1.x, self.param['drop_feature_rate_1'])
-        data_2 = gen_sbm(sizes, probs).to(self.device)
+        data_2 = gen_sbm(sizes, probs, degree(self.data.edge_index)).to(self.device)
         data_2.x = self.data.x
         data_2.x = _drop_feature(data_2.x, self.param['drop_feature_rate_2'])
         return data_1.x, data_1.edge_index, data_2.x, data_2.edge_index

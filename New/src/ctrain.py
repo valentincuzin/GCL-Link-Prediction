@@ -100,7 +100,7 @@ def pretrain_grace(model, aug, param):
             with torch.no_grad():
                 model.eval()
                 val_inner_score = valid_hits50(model, aug.data, aug.split_edge, param)
-                test_inner_score = valid_hits50(model, aug.data, aug.split_edge, param, 'test')
+                # test_inner_score = valid_hits50(model, aug.data, aug.split_edge, param, 'test')
             val_inner_score = round(val_inner_score, 4)
             if val_inner_score >= best_val:
                 patience = 100
@@ -109,7 +109,7 @@ def pretrain_grace(model, aug, param):
                 best_model = model.state_dict()
             else:
                 pass # patience -= 1
-            writer.add_scalars("grace", {'tr_loss':loss, 'val_inner_score': val_inner_score, 'test_inner_score': test_inner_score}, epoch)
+            writer.add_scalars("grace", {'tr_loss':loss, 'val_inner_score': val_inner_score}, epoch)
             if patience == 0:
                 break
             # with torch.no_grad():
