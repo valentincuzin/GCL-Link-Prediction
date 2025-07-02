@@ -1,5 +1,6 @@
 from copy import copy
 import time
+from networkx import to_undirected
 from tqdm import tqdm
 import torch
 import matplotlib.pyplot as plt
@@ -23,18 +24,17 @@ from src.train import pred_train
 writer = SummaryWriter()
 
 
-def valid_hits50(model, data, split_edge, predictor, param):
+def valid_hits50(model, data, split_edge, param, split = 'valid'):
     if isinstance(model, torch.nn.Module):
         model.eval()
     device = data.adj_t.device()
     adj_t = data.adj_t
     h = None if model is None else model(data.x, adj_t)
-
-    # predictor = InnerProd()
+    predictor = InnerProd()
     def test_split(split):
         # pred positive edges and negatives edges for nodes in the split
-        pos_test_edge = split_edge[split]["edge"].to(device)
-        neg_test_edge = split_edge[split]["edge_neg"].to(device)
+        pos_test_edge = split_edge[split]['edge'].to(device)
+        neg_test_edge = split_edge[split]['edge_neg'].to(device)
         pos_test_preds = []
         for perm in DataLoader(range(pos_test_edge.size(0)), param["batch_size"]):
             edge = pos_test_edge[perm].t()
@@ -302,6 +302,7 @@ def pretrain_bgrl(model, aug, param):
             # writer.add_scalars("bgrl", {'tr_loss':loss, 'val_inner_score': val_inner_score}, epoch)
             # if patience == 0:
             #     break
+
             # valid part
     #         with torch.no_grad():
     #             model.eval()

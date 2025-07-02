@@ -12,9 +12,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 from cdlib import algorithms
 from cdlib.utils import convert_graph_formats
-from torch_geometric.utils import to_networkx, from_networkx, to_undirected
+from torch_geometric.utils import to_networkx, from_networkx, to_undirected, remove_self_loops
+from torch_geometric.data import Data
 from networkx.generators.community import stochastic_block_model
-# from graph_tool.generation import generate_maxent_sbm
+from graph_tool.generation import generate_sbm, generate_maxent_sbm, solve_sbm_fugacities
+from graph_tool.inference import BlockState
+import graph_tool.all as gt
 
 
 def community_detection(name):
@@ -141,37 +144,35 @@ def gen_sbm(sizes, probs):
     data.sizes = sizes
     data.probs = probs
     data.num_features = data.num_nodes
-    data.x = F.one_hot(torch.arange(0, data.num_nodes)).float()
     return data
 
-
-def graph_tool_to_networkx(g):
-    # Créer un graphe NetworkX vide
-    G_nx = nx.Graph()
+def torch_geometric_to_graph_tool(data):
+    # Créer un graphe graph-tool vide
+    G_gt = gt.Graph(directed=False)  # ou directed=True si vous avez un graphe orienté
 
     # Ajouter les nœuds
-    for v in g.vertices():
-        G_nx.add_node(v)
+    node_map = G_gt.new_vertex_property("int")  # Propriété pour stocker les identifiants des nœuds
+    for i in range(data.num_nodes):
+        v = G_gt.add_vertex()
+        node_map[v] = i  # Associer le nœud graph-tool à l'identifiant du nœud torch_geometric
 
     # Ajouter les arêtes
-    for e in g.edges():
-        G_nx.add_edge(e.source(), e.target())
+    for edge in data.edge_index.t().tolist():
+        G_gt.add_edge(G_gt.vertex(node_map[edge[0]]), G_gt.vertex(node_map[edge[1]]))
 
-    return G_nx
+    return G_gt
 
+def gen_sbm_fast(data):
+    gtG = generate_sbm(data.block, data.probs)
+    edge_index = torch.from_numpy(gtG.get_edges().T)
+    new_data = Data(edge_index=edge_index).to(data.edge_index.device)
+    new_data.edge_index = to_undirected(remove_self_loops(new_data.edge_index)[0])
+    new_data.num_nodes = sum(data.sizes)
+    new_data.sizes = data.sizes
+    new_data.probs = data.probs
+    new_data.num_features = data.num_nodes
+    return data
 
-# def gen_sbm_fast(sizes, probs, degree):
-#     gtG = generate_maxent_sbm(sizes, probs, degree)
-#     G = graph_tool_to_networkx(gtG)
-#     G.remove_edges_from(nx.selfloop_edges(G)) # remove self loops
-#     data = from_networkx(G)
-#     data.edge_index = to_undirected(data.edge_index)
-#     data.num_nodes = sum(sizes)
-#     data.sizes = sizes
-#     data.probs = probs
-#     data.num_features = data.num_nodes
-#     data.x = F.one_hot(torch.arange(0, data.num_nodes)).float()
-#     return data
 
 
 def gen_sgf(data, alpha, transformation="identity"):
