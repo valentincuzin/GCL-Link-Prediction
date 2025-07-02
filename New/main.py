@@ -12,17 +12,10 @@ from src.predictor import get_predictor, ProbDecoder
 from src.train import pred_train, baseline_train, test
 from src.ctrain import pretrain
 from src.utils import store_res, compute_table, full_output, commu_repartition
-from src.hp import (
-    hp_load,
-    update_hp,
-    hp_augmentation,
-    hp_train,
-    hp_bgrl_gcn,
-    hp_grace_gcn,
-    hp_ncn_gcn
-)
+import src.hp as hp
 
 SMALL_DATASETS = [
+    # from https://networks.skewed.de/
     "facebook_friends",
     "wiki_science",
     "crime",
@@ -35,6 +28,7 @@ SMALL_DATASETS = [
     "pol_robertson",
     "yeast",
     "netscience",
+    # from https://github.com/Barcavin/efficient-node-labelling
     "USAir",
     "NS",
     "PB",
@@ -48,6 +42,7 @@ DATASETS = [
     "synthetic_1",
     "synthetic_2",
     "synthetic_3",
+    # from https://pytorch-geometric.readthedocs.io/en/latest/cheatsheet/data_cheatsheet.html
     "cora",
     "citeseer",
     "pubmed",
@@ -55,6 +50,7 @@ DATASETS = [
     "physics",
     "computers",
     "photo",
+    # from https://ogb.stanford.edu/
     "collab",
     "ddi",
 ] + SMALL_DATASETS
@@ -73,7 +69,7 @@ AUGMENTATIONS = [
     "sbm2",
     "sgf",
 ]
-LOSS = ["log_sig", "bce", "auc", "hinge_auc"]
+LOSS = ["log_sig", "bce"]
 ENCODER = ["grace", "bgrl", "ncn"]
 PREDICTOR = ["inner", "mlp", "ncn"]
 
@@ -122,7 +118,7 @@ def arguments():
     return args
 
 
-def synthetic_pred(data_split, evaluator, hp):
+def commu_prob_pred(data_split, evaluator, param):
     res_dict = {
         "Hits@10": [],
         "Hits@20": [],
@@ -136,15 +132,15 @@ def synthetic_pred(data_split, evaluator, hp):
         seed_everything(r)
         data, split_edge = data_split.get(r)
         if not hasattr(data, "probs") and not hasattr(data, "sizes"):
-            data = commu_repartition(data, "louvain").to(data.x.device)
+            data = commu_repartition(data, param["commu_detect"]).to(data.x.device)
         # print('block', data.block)
         predictor = ProbDecoder(data.probs, data.block)
-        _, _, pos_test_pred, neg_test_pred = test(None, predictor, data, split_edge, hp)
+        _, _, pos_test_pred, neg_test_pred = test(None, predictor, data, split_edge, param)
         pos_test_pred += np.random.uniform(-0.0001, 0.0001, pos_test_pred.shape)
         neg_test_pred += np.random.uniform(-0.0001, 0.0001, neg_test_pred.shape)
         test_res = full_eval(evaluator, pos_test_pred, neg_test_pred)
         res_dict = store_res(test_res, res_dict)
-    save_name = "louvain_prob_pred"
+    save_name = f"{param['commu_detect']}_prob_pred"
     df_res, res_latex = compute_table(res_dict, save_name)
     print(df_res)
     return df_res
@@ -158,21 +154,21 @@ def train_test_run(
     model_name,
     augmentation,
     evaluator,
-    hp,
+    param,
     res_dict,
     valid=False,
 ):
     if model_name != "baseline":
-        aug = Aug(data, split_edge, hp, augmentation)
-        pre_time = pretrain(model_name, model, aug, hp)
+        aug = Aug(data, split_edge, param, augmentation)
+        pre_time = pretrain(model_name, model, aug, param)
         res_dict["pretrain_time"].append(pre_time)
         if isinstance(predictor, nn.Module):
             predictor = predictor.to(device)
-            pred_train(model, predictor, data, split_edge, hp)
+            pred_train(model, predictor, data, split_edge, param)
     else:
-        baseline_train(model, predictor, data, split_edge, hp)
+        baseline_train(model, predictor, data, split_edge, param)
     pos_valid_pred, neg_valid_pred, pos_test_pred, neg_test_pred = test(
-        model, predictor, data, split_edge, hp
+        model, predictor, data, split_edge, param
     )
     val_res = full_eval(evaluator, pos_valid_pred, neg_valid_pred)
     test_res = full_eval(evaluator, pos_test_pred, neg_test_pred)
@@ -198,7 +194,7 @@ if __name__ == "__main__":
                         save_name = f"{model_name}_enc:{encoder_name}_pred:{predictor_name}{'_' + augmentation if model_name != 'baseline' else ''}"
                         print(f"...{dataset}_{save_name}...")
                         if args.hp_search == 0:
-                            hp = hp_load(
+                            param = hp.hp_load(
                                 dataset,
                                 model_name,
                                 augmentation,
@@ -206,7 +202,7 @@ if __name__ == "__main__":
                                 predictor_name,
                             )
                         else:
-                            hp = {}
+                            param = {}
                         res_dict = {
                             "Hits@10": [],
                             "Hits@20": [],
@@ -229,23 +225,23 @@ if __name__ == "__main__":
                                 "pretrain_time": [],
                             }
                             seed_everything(0)
-                            global hp
+                            global param
                             if model_name != "baseline":
-                                hp = hp_augmentation(augmentation, trial, hp)
-                            hp = hp_train(predictor_name, trial, hp)
+                                param = hp.hp_augmentation(augmentation, trial, param)
+                            param = hp.hp_train(predictor_name, trial, param)
                             switch = {
-                                "gcn_bgrl": hp_bgrl_gcn,
-                                "gcn_grace": hp_grace_gcn,
-                                "gcn_ncn": hp_ncn_gcn,
+                                "gcn_bgrl": hp.hp_bgrl_gcn,
+                                "gcn_grace": hp.hp_grace_gcn,
+                                "gcn_ncn": hp.hp_ncn_gcn,
                             }
-                            hp = switch[encoder_name](trial, hp)
+                            param = switch[encoder_name](trial, param)
                             if "grace" in model_name:
-                                hp["tau"] = trial.suggest_categorical(
+                                param["tau"] = trial.suggest_categorical(
                                     "tau", np.arange(0.1, 0.91, 0.1)
                                 )
                             data, split_edge = data_split.get(0)
-                            model = get_model(encoder_name, model_name, data, hp)
-                            predictor = get_predictor(predictor_name, hp)
+                            model = get_model(encoder_name, model_name, data, param)
+                            predictor = get_predictor(predictor_name, param)
                             res_dict = train_test_run(
                                 model,
                                 predictor,
@@ -254,25 +250,27 @@ if __name__ == "__main__":
                                 model_name,
                                 augmentation,
                                 evaluator,
-                                hp,
+                                param,
                                 res_dict,
                                 valid=True,
                             )
                             hit50 = res_dict.pop("Hits@50")[0]
-                            trial.report(hit50, hp["ct_epochs"])
+                            trial.report(hit50, param["ct_epochs"])
                             return hit50
 
                         if args.hp_search != 0:
                             study = optuna.create_study(direction="maximize")
                             study.optimize(_objective, n_trials=args.hp_search)
-                            hp = update_hp(study, hp, f"params/{dataset}_{save_name}")
+                            param = hp.update_hp(
+                                study, param, f"params/{dataset}_{save_name}"
+                            )
                         if "sbm" in augmentation:
-                            full_res.append(synthetic_pred(data_split, evaluator, hp))
+                            full_res.append(commu_prob_pred(data_split, evaluator, param))
                         for r in range(args.runs):
                             seed_everything(r)
                             data, split_edge = data_split.get(r)
-                            model = get_model(encoder_name, model_name, data, hp)
-                            predictor = get_predictor(predictor_name, hp)
+                            model = get_model(encoder_name, model_name, data, param)
+                            predictor = get_predictor(predictor_name, param)
                             res_dict = train_test_run(
                                 model,
                                 predictor,
@@ -281,7 +279,7 @@ if __name__ == "__main__":
                                 model_name,
                                 augmentation,
                                 evaluator,
-                                hp,
+                                param,
                                 res_dict,
                             )
                         df_res, res_latex = compute_table(res_dict, save_name)

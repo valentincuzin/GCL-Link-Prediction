@@ -1,9 +1,6 @@
-from copy import copy
 import time
-from networkx import to_undirected
 from tqdm import tqdm
 import torch
-import matplotlib.pyplot as plt
 from torch_geometric.utils import negative_sampling, to_networkx
 from torch_geometric.data import DataLoader, Data
 import torch_sparse as spar
@@ -24,17 +21,18 @@ from src.train import pred_train
 writer = SummaryWriter()
 
 
-def valid_hits50(model, data, split_edge, param, split = 'valid'):
+def valid_hits50(model, data, split_edge, param, split="valid"):
     if isinstance(model, torch.nn.Module):
         model.eval()
     device = data.adj_t.device()
     adj_t = data.adj_t
     h = None if model is None else model(data.x, adj_t)
     predictor = InnerProd()
+
     def test_split(split):
         # pred positive edges and negatives edges for nodes in the split
-        pos_test_edge = split_edge[split]['edge'].to(device)
-        neg_test_edge = split_edge[split]['edge_neg'].to(device)
+        pos_test_edge = split_edge[split]["edge"].to(device)
+        neg_test_edge = split_edge[split]["edge_neg"].to(device)
         pos_test_preds = []
         for perm in DataLoader(range(pos_test_edge.size(0)), param["batch_size"]):
             edge = pos_test_edge[perm].t()

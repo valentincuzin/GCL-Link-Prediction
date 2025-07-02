@@ -137,8 +137,6 @@ def get_loss(loss_name: str, pos_outs, neg_outs):
     switch = {
         "log_sig": log_sig_loss,
         "bce": bce_loss,
-        "auc": auc_loss,
-        "hinge_auc": hinge_auc_loss,
     }
     return switch[loss_name](pos_outs, neg_outs)
 
@@ -155,15 +153,3 @@ def bce_loss(pos_out, neg_out):
         (torch.ones(pos_out.size()), torch.zeros(neg_out.size())), dim=0
     ).to(pos_out.device)
     return F.binary_cross_entropy_with_logits(out, label, reduction="mean")
-
-
-def auc_loss(pos_out, neg_out):
-    pos_out = torch.reshape(pos_out, (-1, 1))
-    neg_out = torch.reshape(neg_out, (-1, 1))
-    return torch.square(1 - (pos_out - neg_out)).sum()
-
-
-def hinge_auc_loss(pos_out, neg_out):
-    pos_out = torch.reshape(pos_out, (-1, 1))
-    neg_out = torch.reshape(neg_out, (-1, 1))
-    return (torch.square(torch.clamp(1 - (pos_out - neg_out), min=0))).sum()

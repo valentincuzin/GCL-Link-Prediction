@@ -12,10 +12,19 @@ import torch.nn as nn
 import torch.nn.functional as F
 from cdlib import algorithms
 from cdlib.utils import convert_graph_formats
-from torch_geometric.utils import to_networkx, from_networkx, to_undirected, remove_self_loops
+from torch_geometric.utils import (
+    to_networkx,
+    from_networkx,
+    to_undirected,
+    remove_self_loops,
+)
 from torch_geometric.data import Data
 from networkx.generators.community import stochastic_block_model
-from graph_tool.generation import generate_sbm, generate_maxent_sbm, solve_sbm_fugacities
+from graph_tool.generation import (
+    generate_sbm,
+    generate_maxent_sbm,
+    solve_sbm_fugacities,
+)
 from graph_tool.inference import BlockState
 import graph_tool.all as gt
 
@@ -146,21 +155,27 @@ def gen_sbm(sizes, probs):
     data.num_features = data.num_nodes
     return data
 
+
 def torch_geometric_to_graph_tool(data):
     # Créer un graphe graph-tool vide
     G_gt = gt.Graph(directed=False)  # ou directed=True si vous avez un graphe orienté
 
     # Ajouter les nœuds
-    node_map = G_gt.new_vertex_property("int")  # Propriété pour stocker les identifiants des nœuds
+    node_map = G_gt.new_vertex_property(
+        "int"
+    )  # Propriété pour stocker les identifiants des nœuds
     for i in range(data.num_nodes):
         v = G_gt.add_vertex()
-        node_map[v] = i  # Associer le nœud graph-tool à l'identifiant du nœud torch_geometric
+        node_map[v] = (
+            i  # Associer le nœud graph-tool à l'identifiant du nœud torch_geometric
+        )
 
     # Ajouter les arêtes
     for edge in data.edge_index.t().tolist():
         G_gt.add_edge(G_gt.vertex(node_map[edge[0]]), G_gt.vertex(node_map[edge[1]]))
 
     return G_gt
+
 
 def gen_sbm_fast(data):
     gtG = generate_sbm(data.block, data.probs)
@@ -172,7 +187,6 @@ def gen_sbm_fast(data):
     new_data.probs = data.probs
     new_data.num_features = data.num_nodes
     return data
-
 
 
 def gen_sgf(data, alpha, transformation="identity"):
