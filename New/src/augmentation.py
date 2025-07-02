@@ -12,7 +12,9 @@ from torch_geometric.utils import degree, to_undirected, to_networkx, dropout_ad
 from torch_scatter import scatter
 from functools import partial
 
-from src.utils import get_commu_strength, gen_sbm, commu_repartition, gen_sgf, gen_ba, gen_deg
+from src.utils import get_commu_strength, gen_sbm, gen_sbm_fast, commu_repartition, gen_sgf, gen_ba, gen_deg, torch_geometric_to_graph_tool
+from graph_tool.inference import BlockState
+import graph_tool.all as gt
 
 
 class Aug:
@@ -51,6 +53,13 @@ class Aug:
                 cd_algo = self.param['commu_detect']
             print(cd_algo, 'detection...')
             data = commu_repartition(data, cd_algo).to(self.device)
+            if 'fast' in type:
+                gtG = torch_geometric_to_graph_tool(data)
+                state = BlockState(gtG, data.block)
+                data.block = state.b.a
+                data.probs = state.get_matrix()
+                data.out_degs = gtG.degree_property_map("out").a
+                data.in_degs = gtG.degree_property_map("in").a
         elif '_d' in type:
             type, delta = type.split('_d')
             print(type, " with variance: ", delta)
@@ -70,6 +79,8 @@ class Aug:
             'evc': partial(self.gca, feature_weights, drop_weights),
             'scom': partial(self.csgcl, feature_weights, drop_weights),
             'sbm': self.sbm,
+            'sbm_fast': self.sbm_fast,
+            'sbm_fast2': self.sbm_fast2,
             'sbm2': self.sbm_2,
             'sgf': self.sgf,
             'ba': self.ba,
@@ -314,6 +325,22 @@ class Aug:
         data_1.x = self.data.x
         data_1.x = _drop_feature(data_1.x, self.param['drop_feature_rate_1'])
         data_2 = self.data
+        data_2.x = _drop_feature(data_2.x, self.param['drop_feature_rate_2'])
+        return data_1.x, data_1.edge_index, data_2.x, data_2.edge_index
+
+    def sbm_fast(self):
+        data_1 = gen_sbm_fast(self.data).to(self.device)
+        data_1.x = self.data.x
+        data_1.x = _drop_feature(data_1.x, self.param['drop_feature_rate_1'])
+        data_2 = self.data
+        data_2.x = _drop_feature(data_2.x, self.param['drop_feature_rate_2'])
+        return data_1.x, data_1.edge_index, data_2.x, data_2.edge_index
+
+    def sbm_fast2(self):
+        data_1 = gen_sbm_fast(self.data).to(self.device)
+        data_1.x = self.data.x
+        data_1.x = _drop_feature(data_1.x, self.param['drop_feature_rate_1'])
+        data_2 = gen_sbm_fast(self.data).to(self.device)
         data_2.x = _drop_feature(data_2.x, self.param['drop_feature_rate_2'])
         return data_1.x, data_1.edge_index, data_2.x, data_2.edge_index
 

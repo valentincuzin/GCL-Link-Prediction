@@ -13,7 +13,7 @@
     "mask_input": true,
 	"use_valedges_as_input": true,
     "n_layers": 2,
-    "ct_epochs": 5000,
+    "ct_epochs": 1000,
 	"hidden": 256,
 	"weight_decay": 1e-5,
     "loss_func": "log_sig",

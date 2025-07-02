@@ -291,13 +291,13 @@ def pretrain_bgrl(model, aug, param):
             with torch.no_grad():
                 model.eval()
                 inner = get_predictor('inner', param)
-                val_inner_score = valid_hits50(model, aug.data, aug.split_edge, inner, param)
-            mlp = get_predictor('mlp', param).to(aug.device)
-            val_mlp_score = valid_hits50(model, aug.data, aug.split_edge, mlp, param)
-            ncn = get_predictor('ncn', param).to(aug.device)
-            val_ncn_score = valid_hits50(model, aug.data, aug.split_edge, ncn, param)
-            writer.add_scalars("bgrl", {'tr_loss':loss, 'val_inner_score': val_inner_score, 
-                                         'val_mlp_score': val_mlp_score, 'val_ncn_score': val_ncn_score})
+                val_inner_score = valid_hits50(model, aug.data, aug.split_edge, param)
+            # mlp = get_predictor('mlp', param).to(aug.device)
+            # val_mlp_score = valid_hits50(model, aug.data, aug.split_edge, mlp, param)
+            # ncn = get_predictor('ncn', param).to(aug.device)
+            # val_ncn_score = valid_hits50(model, aug.data, aug.split_edge, ncn, param)
+            # writer.add_scalars("bgrl", {'tr_loss':loss, 'val_inner_score': val_inner_score, 
+            #                              'val_mlp_score': val_mlp_score, 'val_ncn_score': val_ncn_score})
     model.load_state_dict(best_model)
     print('pretrain loss: ', loss_res, ' s')
     pre_time = time.time()-t1
