@@ -19,25 +19,27 @@ from graph_tool.generation import generate_sbm, generate_maxent_sbm, solve_sbm_f
 from graph_tool.inference import BlockState
 import graph_tool.all as gt
 
+
 def community_detection(name):
     algs = {
         # non-overlapping algorithms
-        'louvain': algorithms.louvain,
-        'leiden': algorithms.leiden,
-        'combo': algorithms.pycombo,
-        'infomap': algorithms.infomap,
+        "louvain": algorithms.louvain,
+        "leiden": algorithms.leiden,
+        "combo": algorithms.pycombo,
+        "infomap": algorithms.infomap,
         # overlapping algorithms
         # 'demon': algorithms.demon,
         # 'lemon': algorithms.lemon,
     }
     return algs[name]
 
+
 def commu_repartition(data, cd_algo: str = None):
     if hasattr(data, "probs") and hasattr(data, "sizes") and cd_algo is None:
         print("already communities")
         return data
     if cd_algo == None:
-        cd_algo = 'louvain'
+        cd_algo = "louvain"
     G = to_networkx(data, to_undirected=True)
     communities = community_detection(cd_algo)(G).communities
     probs = np.zeros((len(communities), len(communities)))
@@ -47,18 +49,26 @@ def commu_repartition(data, cd_algo: str = None):
         sizes.append(len(c))
         for n in c:
             block[n] = idx
-            G.nodes[n]["com"] = idx # get com label
-    for u, v in zip(data.edge_index[0], data.edge_index[1]): # count number of edge per com
+            G.nodes[n]["com"] = idx  # get com label
+    for u, v in zip(
+        data.edge_index[0], data.edge_index[1]
+    ):  # count number of edge per com
         u = float(u)
         v = float(v)
         probs[G.nodes[u]["com"], G.nodes[v]["com"]] += 1
-    for x in range(len(probs)): # make the probs
+    for x in range(len(probs)):  # make the probs
         for y in range(len(probs)):
             if x == y:
-                probs[x,x] = probs[x,x]/(sizes[x]*(sizes[x]-1))/2 if sizes[x] > 1 else probs[x,x]
+                probs[x, x] = (
+                    probs[x, x] / (sizes[x] * (sizes[x] - 1)) / 2
+                    if sizes[x] > 1
+                    else probs[x, x]
+                )
             else:
-                probs[x,y] /= ((sizes[x]+sizes[y])*(sizes[x]+sizes[y]-1))/2 #complete graph formula
-    probs /= 2 # undirected graph
+                probs[x, y] /= (
+                    (sizes[x] + sizes[y]) * (sizes[x] + sizes[y] - 1)
+                ) / 2  # complete graph formula
+    probs /= 2  # undirected graph
     data.block = block
     data.communities = communities
     data.probs = probs
@@ -67,20 +77,23 @@ def commu_repartition(data, cd_algo: str = None):
     print("sizes, ", sizes)
     return data
 
+
 def average_precision(y_pred_pos, y_pred_neg):
     if isinstance(y_pred_pos, torch.Tensor):
-            y_pred_pos_np = y_pred_pos.cpu().numpy()
-            y_pred_neg_np = y_pred_neg.cpu().numpy()
+        y_pred_pos_np = y_pred_pos.cpu().numpy()
+        y_pred_neg_np = y_pred_neg.cpu().numpy()
     else:
         y_pred_pos_np = y_pred_pos
         y_pred_neg_np = y_pred_neg
 
-    y_true = np.concatenate([np.ones(len(y_pred_pos_np)), np.zeros(len(y_pred_neg_np))]).astype(np.int32)
+    y_true = np.concatenate(
+        [np.ones(len(y_pred_pos_np)), np.zeros(len(y_pred_neg_np))]
+    ).astype(np.int32)
     y_pred = np.concatenate([y_pred_pos_np, y_pred_neg_np])
     return average_precision_score(y_true, y_pred)
 
-def community_strength(graph: nx.Graph,
-                            communities) -> (np.ndarray, np.ndarray):
+
+def community_strength(graph: nx.Graph, communities) -> (np.ndarray, np.ndarray):
     graph = convert_graph_formats(graph, nx.Graph)
     coms = {}
     for cid, com in enumerate(communities):
@@ -104,7 +117,9 @@ def community_strength(graph: nx.Graph,
             pass
     com_cs = []
     for idx, com in enumerate(set(coms.values())):
-        com_cs.append((inc.get(com, 0.0) / links) - (deg.get(com, 0.0) / (2.0 * links)) ** 2)
+        com_cs.append(
+            (inc.get(com, 0.0) / links) - (deg.get(com, 0.0) / (2.0 * links)) ** 2
+        )
     com_cs = np.asarray(com_cs)
     node_cs = np.zeros(graph.number_of_nodes(), dtype=np.float32)
     for i, w in enumerate(com_cs):
@@ -112,15 +127,17 @@ def community_strength(graph: nx.Graph,
             node_cs[j] = com_cs[i]
     return com_cs, node_cs
 
+
 def get_commu_strength(data):
     g = to_networkx(data, to_undirected=True)
-    communities = community_detection('leiden')(g).communities
+    communities = community_detection("leiden")(g).communities
     com_cs, node_cs = community_strength(g, communities)
     return communities, com_cs, node_cs
 
+
 def gen_sbm(sizes, probs):
     G = stochastic_block_model(sizes, probs)
-    G.remove_edges_from(nx.selfloop_edges(G)) # remove self loops
+    G.remove_edges_from(nx.selfloop_edges(G))  # remove self loops
     data = from_networkx(G)
     data.edge_index = to_undirected(data.edge_index)
     data.num_nodes = sum(sizes)
@@ -156,7 +173,9 @@ def gen_sbm_fast(data):
     new_data.num_features = data.num_nodes
     return data
 
-def gen_sgf(data, alpha, transformation='identity'):
+
+
+def gen_sgf(data, alpha, transformation="identity"):
     G = to_networkx(data, to_undirected=True)
     new_G = nx.spectral_graph_forge(G, alpha, transformation)
     data = from_networkx(new_G)
@@ -165,6 +184,7 @@ def gen_sgf(data, alpha, transformation='identity'):
     data.num_features = data.num_nodes
     data.x = F.one_hot(torch.arange(0, data.num_nodes)).float()
     return data
+
 
 def gen_ba(data):
     G = to_networkx(data, to_undirected=True)
@@ -175,6 +195,7 @@ def gen_ba(data):
     data.num_features = data.num_nodes
     data.x = F.one_hot(torch.arange(0, data.num_nodes)).float()
     return data
+
 
 def gen_deg(data):
     G = to_networkx(data, to_undirected=True)
@@ -187,6 +208,7 @@ def gen_deg(data):
     data.x = F.one_hot(torch.arange(0, data.num_nodes)).float()
     return data
 
+
 class CosineDecayScheduler:
     def __init__(self, max_val, warmup_steps, total_steps):
         self.max_val = max_val
@@ -195,20 +217,36 @@ class CosineDecayScheduler:
 
     def get(self, step):
         if step < self.warmup_steps:
-            return self.max_val * step / self.warmup_steps # augmentation de plus en plus grande
+            return (
+                self.max_val * step / self.warmup_steps
+            )  # augmentation de plus en plus grande
         elif self.warmup_steps <= step <= self.total_steps:
-            return self.max_val * (1 + np.cos((step - self.warmup_steps) * np.pi /
-                                              (self.total_steps - self.warmup_steps))) / 2 # décroit de façon lisse et progressive.
+            return (
+                self.max_val
+                * (
+                    1
+                    + np.cos(
+                        (step - self.warmup_steps)
+                        * np.pi
+                        / (self.total_steps - self.warmup_steps)
+                    )
+                )
+                / 2
+            )  # décroit de façon lisse et progressive.
         else:
-            raise ValueError('Step ({}) > total number of steps ({}).'.format(step, self.total_steps))
+            raise ValueError(
+                "Step ({}) > total number of steps ({}).".format(step, self.total_steps)
+            )
+
 
 # Edge dropout with adjacency matrix as input
 class DropAdj(nn.Module):
-    doscale: bool # whether to rescale edge weight
+    doscale: bool  # whether to rescale edge weight
+
     def __init__(self, dp: float = 0.0, doscale=True) -> None:
         super().__init__()
         self.dp = dp
-        self.register_buffer("ratio", torch.tensor(1/(1-dp)))
+        self.register_buffer("ratio", torch.tensor(1 / (1 - dp)))
         self.doscale = doscale
 
     def forward(self, adj):
@@ -218,16 +256,31 @@ class DropAdj(nn.Module):
         adj = torch_sparse.masked_select_nnz(adj, mask, layout="coo")
         if self.doscale:
             if adj.storage.has_value():
-                adj.storage.set_value_(adj.storage.value()*self.ratio, layout="coo")
+                adj.storage.set_value_(adj.storage.value() * self.ratio, layout="coo")
             else:
-                adj.fill_value_(1/(1-self.dp), dtype=torch.float)
+                adj.fill_value_(1 / (1 - self.dp), dtype=torch.float)
         return adj
+
+
+# Edge dropout
+class DropEdge(nn.Module):
+    def __init__(self, dp: float = 0.0) -> None:
+        super().__init__()
+        self.dp = dp
+
+    def forward(self, edge_index):
+        if self.dp == 0:
+            return edge_index
+        mask = torch.rand_like(edge_index[0], dtype=torch.float) > self.dp
+        return edge_index[:, mask]
+
 
 def store_res(test_res: dict[float], res_dict: dict[list[float]]):
     for key, result in test_res.items():
         if key in res_dict.keys():
             res_dict[key].append(result)
     return res_dict
+
 
 def compute_table(res_dict: dict[str, list | float], name: str):
     # Compute the mean and std from a dict return tab and latex table
@@ -237,34 +290,38 @@ def compute_table(res_dict: dict[str, list | float], name: str):
             new_tab.append({"metrics": key, name: result})
         elif isinstance(result, list):
             result = np.array(result)
-            unit = 100 if key != 'pretrain_time' else 1
+            unit = 100 if key != "pretrain_time" else 1
             mean = round(unit * np.mean(result), 2)
             std = round(unit * np.std(result), 2)
-            new_tab.append({"metrics": key, name+'_mean': fr"{mean}$\pm${std}", name: result})
+            new_tab.append(
+                {"metrics": key, name + "_mean": rf"{mean}$\pm${std}", name: result}
+            )
     df = pd.DataFrame(data=new_tab)
-    df.set_index('metrics')
+    df.set_index("metrics")
     res_latex = df.to_latex(
         index=False, formatters={"name": str.upper}, float_format="{:.1f}".format
     )
     return df, res_latex
 
+
 def full_output(full_res: list):
     # concat full result to one dataframe, then print with latex
     full_res = pd.concat(full_res, axis=1)
     full_res = full_res.loc[:, ~full_res.columns.duplicated()]
-    full_res.set_index('metrics', inplace=True)
+    full_res.set_index("metrics", inplace=True)
     full_latex = full_res.to_latex(
         index=True, formatters={"name": str.upper}, float_format="{:.1f}".format
     )
     return full_res, full_latex
 
-def visu_tsne(h, partition=None, name=None): # TODO color by groups
+
+def visu_tsne(h, partition=None, name=None):  # TODO color by groups
     tsne = TSNE(n_components=2, verbose=1, random_state=0, perplexity=40, n_iter=300)
     h = h.cpu()
     tsne_results = tsne.fit_transform(h)
-    df = pd.DataFrame()    
-    df['tsne-2d-one'] = tsne_results[:,0]
-    df['tsne-2d-two'] = tsne_results[:,1]
+    df = pd.DataFrame()
+    df["tsne-2d-one"] = tsne_results[:, 0]
+    df["tsne-2d-two"] = tsne_results[:, 1]
     labels = [-1] * len(df)
     if partition is not None:
         for group_id, group_nodes in enumerate(partition):
@@ -275,21 +332,22 @@ def visu_tsne(h, partition=None, name=None): # TODO color by groups
                     print(f"index {node} doesn't exist in h.")
     else:
         partition = []
-    df['group'] = labels
-    markers_list = ['o', 's', 'D', 'v', '^', '<', '>', 'P', 'X', '*']
-    df['marker'] = df['group'].apply(lambda g: markers_list[g % 10] if g >= 0 else 'o')
-    fig, ax = plt.subplots(figsize=(16,10))
+    df["group"] = labels
+    markers_list = ["o", "s", "D", "v", "^", "<", ">", "P", "X", "*"]
+    df["marker"] = df["group"].apply(lambda g: markers_list[g % 10] if g >= 0 else "o")
+    fig, ax = plt.subplots(figsize=(16, 10))
     sns.scatterplot(
-        x="tsne-2d-one", y="tsne-2d-two",
+        x="tsne-2d-one",
+        y="tsne-2d-two",
         hue="group" if len(partition) > 0 else None,
         style="marker",
         palette=sns.color_palette("hls", len(partition)),
         data=df,
         legend=False,
         alpha=0.5,
-        ax=ax
+        ax=ax,
     )
     if name is not None:
         ax.set_title(name)
-        plt.savefig(name, bbox_inches='tight', dpi=300)
+        plt.savefig(name, bbox_inches="tight", dpi=300)
     plt.show()

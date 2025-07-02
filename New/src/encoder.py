@@ -3,19 +3,19 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch_geometric.nn import GCNConv, BatchNorm, LayerNorm, Sequential
 from torch_geometric.data import Data
-from torch_sparse.matmul import spmm_max, spmm_mean, spmm_add
-from functools import partial
+from torch_sparse import SparseTensor
 
-from src.utils import DropAdj
+from src.utils import DropAdj, DropEdge
+
 
 class BGRL_GCN(nn.Module):
     def __init__(self, in_channels: int, param):
         super().__init__()
-        layer_sizes=param['layer_sizes']
-        batchnorm=param['batch_layer_norm']
-        batchnorm_mm=param['batchnorm_mm']
-        layernorm=not param['batch_layer_norm']
-        weight_standardization=param['weight_standardization']
+        layer_sizes = param["layer_sizes"]
+        batchnorm = param["batch_layer_norm"]
+        batchnorm_mm = param["batchnorm_mm"]
+        layernorm = not param["batch_layer_norm"]
+        weight_standardization = param["weight_standardization"]
         # print(batchnorm, layernorm)
         assert batchnorm != layernorm
         assert len(layer_sizes) >= 1
@@ -25,7 +25,7 @@ class BGRL_GCN(nn.Module):
 
         layers = []
         for in_dim, out_dim in zip(layer_sizes[:-1], layer_sizes[1:]):
-            layers.append((GCNConv(in_dim, out_dim), 'x, edge_index -> x'))
+            layers.append((GCNConv(in_dim, out_dim), "x, edge_index -> x"))
 
             if batchnorm:
                 layers.append(BatchNorm(out_dim, momentum=batchnorm_mm))
@@ -34,7 +34,7 @@ class BGRL_GCN(nn.Module):
 
             layers.append(nn.PReLU())
         print(layers)
-        self.model = Sequential('x, edge_index', layers)
+        self.model = Sequential("x, edge_index", layers)
 
     def forward(self, x, edge_index):
         if self.weight_standardization:
@@ -94,7 +94,7 @@ class TBGRL_GCN(nn.Module):
                     batchnorms.append(BatchNorm(out_dim, momentum=batchnorm_mm))
             else:
                 layers.append(
-                    (GCNConv(in_dim, out_dim), 'x, edge_index -> x'),
+                    (GCNConv(in_dim, out_dim), "x, edge_index -> x"),
                 )
 
                 if batchnorm:
@@ -109,7 +109,7 @@ class TBGRL_GCN(nn.Module):
             self.relus = nn.ModuleList(relus)
             self.batchnorms = nn.ModuleList(batchnorms)
         else:
-            self.model = Sequential('x, edge_index', layers)
+            self.model = Sequential("x, edge_index", layers)
 
         self.use_feat = use_feat
         if not self.use_feat:
@@ -151,7 +151,7 @@ class TBGRL_GCN(nn.Module):
                 m.lin.weight.data = weight
 
     def get_node_feats(self):
-        if hasattr(self, 'node_feats'):
+        if hasattr(self, "node_feats"):
             return self.node_feats
         return None
 
@@ -163,16 +163,16 @@ class TBGRL_GCN(nn.Module):
 class GRACE_GCN(nn.Module):
     def __init__(self, in_channels: int, param):
         super(GRACE_GCN, self).__init__()
-        out_channels: int = param['hidden']
+        out_channels: int = param["hidden"]
         switch = {
-            'identity': nn.Identity(),
-            'relu': F.relu,
-            'prelu': nn.PReLU(),
+            "identity": nn.Identity(),
+            "relu": F.relu,
+            "prelu": nn.PReLU(),
         }
-        activation = switch[param['activation']]
-        base_model=GCNConv
-        k = param['n_layers']
-        skip=param['skip']
+        activation = switch[param["activation"]]
+        base_model = GCNConv
+        k = param["n_layers"]
+        skip = param["skip"]
         self.base_model = base_model
         self.out_channels = out_channels
 
@@ -208,7 +208,7 @@ class GRACE_GCN(nn.Module):
                 u = sum(hs)
                 hs.append(self.activation(self.conv[i](u, edge_index)))
             return hs[-1]
-    
+
     def reset_parameters(self):
         for conv in self.conv:
             conv.reset_parameters()
@@ -216,147 +216,113 @@ class GRACE_GCN(nn.Module):
             self.fc_skip.reset_parameters()
 
 
-class PureConv(nn.Module):
-    aggr: str
-    def __init__(self, indim, outdim, aggr="gcn") -> None:
-        super().__init__()
-        self.aggr = aggr
-        if indim == outdim:
-            self.lin = nn.Identity()
-        else:
-            raise NotImplementedError
-
-    def forward(self, x, adj_t):
-        x = self.lin(x)
-        if self.aggr == "mean":
-            return spmm_mean(adj_t, x)
-        elif self.aggr == "max":
-            return spmm_max(adj_t, x)[0]
-        elif self.aggr == "sum":
-            return spmm_add(adj_t, x)
-        elif self.aggr == "gcn":
-            norm = torch.rsqrt_((1+adj_t.sum(dim=-1))).reshape(-1, 1)
-            x = norm * x
-            x = spmm_add(adj_t, x) + x
-            x = norm * x
-            return x
-
-
-convdict = {
-        "gcn":
-        GCNConv,
-        "gcn_cached":
-        lambda indim, outdim: GCNConv(indim, outdim, cached=True),
-        "sage":
-        lambda indim, outdim: GCNConv(
-            indim, outdim, aggr="mean", normalize=False, add_self_loops=False),
-        "gin":
-        lambda indim, outdim: GCNConv(
-            indim, outdim, aggr="sum", normalize=False, add_self_loops=False),
-        "max":
-        lambda indim, outdim: GCNConv(
-            indim, outdim, aggr="max", normalize=False, add_self_loops=False),
-        "puremax": 
-        lambda indim, outdim: PureConv(indim, outdim, aggr="max"),
-        "puresum": 
-        lambda indim, outdim: PureConv(indim, outdim, aggr="sum"),
-        "puremean": 
-        lambda indim, outdim: PureConv(indim, outdim, aggr="mean"),
-        "puregcn": 
-        lambda indim, outdim: PureConv(indim, outdim, aggr="gcn"),
-        "none":
-        None
-    }
-
 class NCN_GCN(nn.Module):
-    
-    def __init__(self,
-                 in_channels,
-                 hidden_channels,
-                 out_channels,
-                 num_layers,
-                 dropout,
-                 ln=False,
-                 res=False,
-                 max_x=-1,
-                 conv_fn="gcn",
-                 jk=False,
-                 edrop=0.0,
-                 xdropout=0.0,
-                 taildropout=0.0,
-                 noinputlin=False):
+    def __init__(self, in_channels, param):
         super().__init__()
-        
+
+        hidden_channels = param["hidden"]
+        out_channels = param["hidden"]
+        num_layers = param["n_layers"]
+        dropout = param["gnn_dp"]
+        ln = param["layer_norm"]
+        res = param["res"]
+        jk = param["jk"]
+        edrop = param["edrop"]
+        xdropout = param["xdropout"]
+        taildropout = param["taildropout"]
+
+        self.eidrop = DropEdge(edrop)
         self.adjdrop = DropAdj(edrop)
-        
-        if max_x >= 0:
-            tmp = nn.Embedding(max_x + 1, hidden_channels)
-            nn.init.orthogonal_(tmp.weight)
-            self.xemb = nn.Sequential(tmp, nn.Dropout(dropout))
-            in_channels = hidden_channels
-        else:
-            self.xemb = nn.Sequential(nn.Dropout(xdropout)) #nn.Identity()
-            if not noinputlin and ("pure" in conv_fn or num_layers==0):
-                self.xemb.append(nn.Linear(in_channels, hidden_channels))
-                self.xemb.append(nn.Dropout(dropout, inplace=True) if dropout > 1e-6 else nn.Identity())
-        
+
+        self.xemb = nn.Sequential(nn.Dropout(xdropout))  # nn.Identity()
+        if "pure" in param["conv_fn"] or num_layers == 0:
+            self.xemb.append(nn.Linear(in_channels, hidden_channels))
+            self.xemb.append(
+                nn.Dropout(dropout, inplace=True) if dropout > 1e-6 else nn.Identity()
+            )
+
         self.res = res
         self.jk = jk
         if jk:
-            self.register_parameter("jkparams", nn.Parameter(torch.randn((num_layers,))))
-            
-        if num_layers == 0 or conv_fn =="none":
-            self.jk = False
-            return
-        
-        convfn = convdict[conv_fn]
+            self.register_parameter(
+                "jkparams", nn.Parameter(torch.randn((num_layers,)))
+            )
+
         lnfn = lambda dim, ln: nn.LayerNorm(dim) if ln else nn.Identity()
 
         if num_layers == 1:
             hidden_channels = out_channels
 
+        convfn = GCNConv
+
         self.convs = nn.ModuleList()
         self.lins = nn.ModuleList()
-        if "pure" in conv_fn:
+        if "pure" in param["conv_fn"]:
             self.convs.append(convfn(hidden_channels, hidden_channels))
-            for i in range(num_layers-1):
+            for i in range(num_layers - 1):
                 self.lins.append(nn.Identity())
                 self.convs.append(convfn(hidden_channels, hidden_channels))
             self.lins.append(nn.Dropout(taildropout, True))
         else:
             self.convs.append(convfn(in_channels, hidden_channels))
             self.lins.append(
-                nn.Sequential(lnfn(hidden_channels, ln), nn.Dropout(dropout, True),
-                            nn.ReLU(True)))
+                nn.Sequential(
+                    lnfn(hidden_channels, ln), nn.Dropout(dropout, True), nn.ReLU(True)
+                )
+            )
             for i in range(num_layers - 1):
                 self.convs.append(
                     convfn(
                         hidden_channels,
-                        hidden_channels if i == num_layers - 2 else out_channels))
+                        hidden_channels if i == num_layers - 2 else out_channels,
+                    )
+                )
                 if i < num_layers - 2:
                     self.lins.append(
                         nn.Sequential(
                             lnfn(
-                                hidden_channels if i == num_layers -
-                                2 else out_channels, ln),
-                            nn.Dropout(dropout, True), nn.ReLU(True)))
+                                hidden_channels
+                                if i == num_layers - 2
+                                else out_channels,
+                                ln,
+                            ),
+                            nn.Dropout(dropout, True),
+                            nn.ReLU(True),
+                        )
+                    )
                 else:
                     self.lins.append(nn.Identity())
-        
 
     def forward(self, x, adj_t):
+        if isinstance(adj_t, torch.Tensor):
+            drop = self.eidrop
+        elif isinstance(adj_t, SparseTensor):
+            drop = self.adjdrop
         x = self.xemb(x)
         jkx = []
         for i, conv in enumerate(self.convs):
-            x1 = self.lins[i](conv(x, self.adjdrop(adj_t)))
-            if self.res and x1.shape[-1] == x.shape[-1]: # residual connection
+            x1 = self.lins[i](conv(x, drop(adj_t)))
+            if self.res and x1.shape[-1] == x.shape[-1]:  # residual connection
                 x = x1 + x
             else:
                 x = x1
             if self.jk:
                 jkx.append(x)
-        if self.jk: # JumpingKnowledge Connection
+        if self.jk:  # JumpingKnowledge Connection
             jkx = torch.stack(jkx, dim=0)
             sftmax = self.jkparams.reshape(-1, 1, 1)
-            x = torch.sum(jkx*sftmax, dim=0)
+            x = torch.sum(jkx * sftmax, dim=0)
         return x
+
+    def reset_parameters(self):
+        for layer in self.xemb:
+            if hasattr(layer, "reset_parameters"):
+                layer.reset_parameters()
+
+        for conv in self.convs:
+            if hasattr(conv, "reset_parameters"):
+                conv.reset_parameters()
+
+        for lin in self.lins:
+            if hasattr(lin, "reset_parameters"):
+                lin.reset_parameters()

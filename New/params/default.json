@@ -13,7 +13,7 @@
     "mask_input": true,
 	"use_valedges_as_input": true,
     "n_layers": 2,
-    "ct_epochs": 1000,
+    "ct_epochs": 3000,
 	"hidden": 256,
 	"weight_decay": 1e-5,
     "loss_func": "log_sig",
@@ -33,5 +33,14 @@
 	"layer_sizes": [512, 256],
 	"batch_layer_norm": true,
 	"batchnorm_mm": 0.9,
-	"weight_standardization" : false
+	"weight_standardization" : false,
+
+    "gnn_dp": 0.3,
+    "layer_norm": true,
+    "res": false,
+    "conv_fn": "puregcn",
+    "jk": true,
+    "edrop": 0.0,
+    "xdropout": 0.3,
+    "taildropout": 0.0
 }
