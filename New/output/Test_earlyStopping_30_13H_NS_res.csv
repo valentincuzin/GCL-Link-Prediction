@@ -1,0 +1,8 @@
+metrics;grace_enc:gcn_ncn_pred:inner_random_mean;grace_enc:gcn_ncn_pred:inner_random
+Hits@10;73.72$\pm$0.0;[0.73722628]
+Hits@20;76.64$\pm$0.0;[0.76642336]
+Hits@50;81.2$\pm$0.0;[0.8120438]
+Hits@100;85.04$\pm$0.0;[0.85036496]
+ROCAUC;91.1$\pm$0.0;[0.91102017]
+AP;93.65$\pm$0.0;[0.93651394]
+pretrain_time;591.61$\pm$0.0;[591.60856628]
