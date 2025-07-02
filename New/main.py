@@ -125,9 +125,12 @@ if __name__ == "__main__":
                             hp = hp_train(predictor_name, trial, hp)
                             switch = {
                                 'gcn_bgrl': hp_bgrl_gcn,
-                                'gcn_grace': hp_grace_gcn
+                                'gcn_grace': hp_grace_gcn,
+                                'gcn_ncn': hp_ncn_gcn
                             }
                             hp = switch[encoder_name](trial, hp)
+                            if 'grace' in model_name:
+                                hp['tau'] = trial.suggest_categorical('tau', np.arange(0.1, 0.91, 0.1))
                             data, split_edge = data_split.get(0)
                             model = get_model(encoder_name, model_name, data, hp)
                             predictor = get_predictor(predictor_name, hp)

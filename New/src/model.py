@@ -16,7 +16,7 @@ def get_model(encoder_name: str, model_name: str, data, hp: dict):
         'gcn_bgrl': BGRL_GCN,
         'gcn_tbgrl': TBGRL_GCN,
         'gcn_grace': GRACE_GCN,
-        'ncn': NCN_GCN
+        'gcn_ncn': NCN_GCN
     }
     _encoder = switch[encoder_name](data.num_features, hp).to(device)
     # _encoder = GCN(data.num_features, hp['hidden'], hp['n_layers'], hp['gnn_dp'], conv_fn='gcn', res=hp['gnn_res'], jk=hp['gnn_jk'], xdropout=hp['gnn_xdp']).to(device)
@@ -24,24 +24,24 @@ def get_model(encoder_name: str, model_name: str, data, hp: dict):
     if model_name == "baseline":
         return _encoder
     elif model_name == "grace":
-        model = GRACE(_encoder, hp['hidden'], hp['hidden'], hp['tau']).to(device)
+        model = GRACE(_encoder, hp['hidden'], hp['proj_hidden'], hp['tau']).to(device)
     elif model_name == "lgrace":
-        model = LinkGRACE(_encoder, hp['hidden'], hp['hidden'], hp['tau']).to(device)
+        model = LinkGRACE(_encoder, hp['hidden'], hp['proj_hidden'], hp['tau']).to(device)
     elif model_name == "csgcl":
         model = CSGCL(_encoder,
                         hp['hidden'],
-                        hp['hidden'],
+                        hp['proj_hidden'],
                         hp['tau']).to(device)
     elif model_name in "bgrl":
-        _predictor = MLP_Head_BGRL(hp['hidden'], hp['hidden']).to(device)
+        _predictor = MLP_Head_BGRL(hp['hidden'], hp['hidden'], hp['proj_hidden']).to(device)
         model = BGRL(_encoder, _predictor).to(device)
     elif model_name in "lbgrl":
-        _predictor = MLP_Head_BGRL(hp['hidden'], hp['hidden']).to(device)
+        _predictor = MLP_Head_BGRL(hp['hidden'], hp['hidden'], hp['proj_hidden']).to(device)
         model = LinkBGRL(_encoder, _predictor).to(device)
     elif model_name in  "a2grace":
         model = A2GRACE(_encoder, hp['hidden'], hp['hidden'], hp['tau']).to(device)
     elif model_name in "a2bgrl":
-        _predictor = MLP_Head_BGRL(hp['hidden'], hp['hidden'], hp['tau']).to(device)
+        _predictor = MLP_Head_BGRL(hp['hidden'], hp['hidden'], hp['proj_hidden']).to(device)
         model = A2BGRL(_encoder, _predictor).to(device)
     """ ### Â loss
     elif model_name in  ["agrace", "ândgrace", "âorgrace", "extagrace"]:

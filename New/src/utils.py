@@ -221,6 +221,19 @@ class DropAdj(nn.Module):
                 adj.fill_value_(1/(1-self.dp), dtype=torch.float)
         return adj
 
+# Edge dropout
+class DropEdge(nn.Module):
+
+    def __init__(self, dp: float = 0.0) -> None:
+        super().__init__()
+        self.dp = dp
+
+    def forward(self, edge_index):
+        if self.dp == 0:
+            return edge_index
+        mask = torch.rand_like(edge_index[0], dtype=torch.float) > self.dp
+        return edge_index[:, mask]
+
 def store_res(test_res: dict[float], res_dict: dict[list[float]]):
     for key, result in test_res.items():
         if key in res_dict.keys():

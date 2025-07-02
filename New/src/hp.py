@@ -61,7 +61,9 @@ def hp_augmentation(augmentation, trial, hp):
     return hp
 
 def hp_train(predictor, trial, hp):
-    hp['ct_epochs'] = 5000
+    hp['ct_epochs'] = trial.suggest_categorical('ct_epochs', [500, 1000, 3000, 5000])
+    hp['proj_hidden'] = trial.suggest_int('proj_hidden', 32, 512, 32)
+
     hp['gnn_lr'] = trial.suggest_float('gnn_lr', 0.001, 0.1)
     hp['batch_size'] = trial.suggest_int('batch_size', 64, 6400, 64)
     hp['use_valedges_as_input'] = trial.suggest_categorical('use_valedges_as_input', [True, False])
@@ -101,6 +103,17 @@ def hp_grace_gcn(trial, hp):
     hp['activation'] = trial.suggest_categorical('activation', ['identity', 'relu', 'prelu'])
     hp['skip'] = trial.suggest_categorical('skip', [True, False])
 
-    hp['proj_hidden'] = trial.suggest_int('proj_hidden', 32, 512, 32)
-    hp['tau'] = trial.suggest_categorical('tau', np.arange(0.1, 0.91, 0.1))
+    return hp
+
+def hp_ncn_gcn(trial, hp):
+    hp['n_layers'] = trial.suggest_int('n_layers', 1, 4)
+    hp['hidden'] = trial.suggest_int('hidden', 32, 512, 32)
+    hp['gnn_dp'] = trial.suggest_categorical("gnn_dp", np.arange(0.1, 0.91, 0.01))
+    hp['layer_norm'] = trial.suggest_categorical('layer_norm', [True, False])
+    hp['res'] = trial.suggest_categorical('res', [True, False])
+    hp['conv_fn'] = trial.suggest_categorical('conv_fn', ['gcn', 'puregcn'])
+    hp['jk'] = trial.suggest_categorical('jk', [True, False])
+    hp['edrop'] = trial.suggest_categorical("edrop", np.arange(0.1, 0.91, 0.01))
+    hp['xdropout'] = trial.suggest_categorical("xdropout", np.arange(0.1, 0.91, 0.01))
+    hp['taildropout'] = trial.suggest_categorical("taildropout", np.arange(0.1, 0.91, 0.01))
     return hp
