@@ -4,14 +4,15 @@ import numpy as np
 from optuna.trial import TrialState
 
 
-def hp_load(dataset: str, model: str, augmentation: str, encoder: str, predictor: str):
+def hp_load(dataset: str, save_name: str):
     print(f"....{dataset}....")
     if "synthetic" in dataset:
         hp_files = "params/synthetic.json"
     elif os.path.exists(
-        f"params/{dataset}_{model}_enc:{encoder}_pred:{predictor}_{augmentation}.json"
+        f"params/{dataset}/{save_name}.json"
     ):
-        hp_files = f"params/{dataset}_{model}_enc:{encoder}_pred:{predictor}_{augmentation}.json"
+        hp_files = f"params/{dataset}/{save_name}.json"
+        print('hp loaded !')
     else:
         hp_files = "params/default.json"
         print("no hp file, default setting load...")
@@ -39,20 +40,10 @@ def update_hp(study, hp, name):
     print("  Params: ")
     for key, value in trial.params.items():
         print("    {}: {}".format(key, value))
-        if key in [
-            "drop_edge_rate_1",
-            "drop_edge_rate_2",
-            "drop_feature_rate_1",
-            "drop_feature_rate_2",
-            "commu_detect",
-            "reconstruction_rate",
-        ]:
-            hp[key] = value
-        else:
-            hp[key] = value
+        hp[key] = value
 
     with open(f"{name}.json", "w", encoding="utf-8") as fichier:
-        json.dump(trial.params, fichier, ensure_ascii=False, indent=4)
+        json.dump(hp, fichier, ensure_ascii=False, indent=4)
     return hp
 
 

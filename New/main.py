@@ -101,8 +101,8 @@ def arguments():
     parser.add_argument("--augmentation", type=str, default="random")
     parser.add_argument("--encoder", type=str, default="gcn_grace")
     parser.add_argument("--predictor", type=str, default="mlp")
+    parser.add_argument("--save", type=str, default="test")
     parser.add_argument("--runs", type=int, default=10)
-    parser.add_argument("--name", type=str, default="")
     parser.add_argument(
         "--hp_search",
         type=int,
@@ -110,6 +110,7 @@ def arguments():
         help="enter the number of trials, for the search",
     )
     args = parser.parse_args()
+    print(args)
     args.dataset = multiparse(args.dataset, DATASETS)
     args.model = multiparse(args.model, MODELS)
     args.augmentation = multiparse(args.augmentation, AUGMENTATIONS)
@@ -191,15 +192,12 @@ if __name__ == "__main__":
             for encoder_name in args.encoder:
                 for predictor_name in args.predictor:
                     for augmentation in args.augmentation:
-                        save_name = f"{model_name}_enc:{encoder_name}_pred:{predictor_name}{'_' + augmentation if model_name != 'baseline' else ''}"
-                        print(f"...{dataset}_{save_name}...")
+                        save_name = f"{model_name},enc:{encoder_name},pred:{predictor_name}{',' + augmentation if model_name != 'baseline' else ''}"
+                        print(f"...{dataset},{save_name}...")
                         if args.hp_search == 0:
                             param = hp.hp_load(
                                 dataset,
-                                model_name,
-                                augmentation,
-                                encoder_name,
-                                predictor_name,
+                                save_name
                             )
                         else:
                             param = {}
@@ -262,7 +260,7 @@ if __name__ == "__main__":
                             study = optuna.create_study(direction="maximize")
                             study.optimize(_objective, n_trials=args.hp_search)
                             param = hp.update_hp(
-                                study, param, f"params/{dataset}_{save_name}"
+                                study, param, f"params/{dataset}/{save_name}"
                             )
                         if "sbm" in augmentation:
                             full_res.append(commu_prob_pred(data_split, evaluator, param))
@@ -286,6 +284,6 @@ if __name__ == "__main__":
                         print(df_res)
                         full_res.append(df_res)
                         df, tex = full_output(full_res)
-                        df.to_csv(f"output/{args.name}_{dataset}_res.csv", sep=";")
+                        df.to_csv(f"output/{args.save}/{dataset}_res.csv", sep=";")
                         if model_name == "baseline":
                             break
