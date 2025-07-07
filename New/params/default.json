@@ -3,7 +3,7 @@
     "drop_edge_rate_2": 0.4,
     "drop_feature_rate_1": 0.1,
     "drop_feature_rate_2": 0.0,
-	"commu_detect": "louvain",
+	"commu_detect": "leiden",
 	"reconstruction_rate": 0.5,
 
 	"gnn_lr": 0.005,
@@ -13,7 +13,7 @@
     "mask_input": true,
 	"use_valedges_as_input": true,
     "n_layers": 2,
-    "ct_epochs": 3000,
+    "ct_epochs": 1000,
 	"hidden": 256,
 	"weight_decay": 1e-5,
     "loss_func": "log_sig",

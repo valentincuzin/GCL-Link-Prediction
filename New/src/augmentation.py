@@ -26,7 +26,7 @@ from src.utils import (
     gen_sgf,
     gen_ba,
     gen_deg,
-    torch_geometric_to_graph_tool,
+    to_graph_tool,
 )
 from graph_tool.inference import BlockState
 import graph_tool.all as gt
@@ -69,12 +69,11 @@ class Aug:
             print(cd_algo, "detection...")
             data = commu_repartition(data, cd_algo).to(self.device)
             if "fast" in type:
-                gtG = torch_geometric_to_graph_tool(data)
-                state = BlockState(gtG, data.block)
+                gtG, block_map = to_graph_tool(data)
+                state = BlockState(gtG, block_map)
                 data.block = state.b.a
                 data.probs = gt.adjacency(state.get_bg(), state.get_ers()).T
                 data.out_degs = gtG.degree_property_map("out").a
-                data.in_degs = gtG.degree_property_map("in").a
         elif "_d" in type:
             type, delta = type.split("_d")
             print(type, " with variance: ", delta)
@@ -410,6 +409,7 @@ class Aug:
         data_1.x = self.data.x
         data_1.x = _drop_feature(data_1.x, self.param["drop_feature_rate_1"])
         data_2 = gen_sbm_fast(self.data).to(self.device)
+        data_2.x = self.data.x
         data_2.x = _drop_feature(data_2.x, self.param["drop_feature_rate_2"])
         return data_1.x, data_1.edge_index, data_2.x, data_2.edge_index
 

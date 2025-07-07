@@ -196,8 +196,8 @@ if __name__ == "__main__":
         for model_name in args.model:
             for encoder_name in args.encoder:
                 for predictor_name in args.predictor:
-                    for augmentation in args.augmentation:
-                        save_name = f"{model_name},enc:{encoder_name},pred:{predictor_name}{',' + augmentation if model_name != 'baseline' else ''}"
+                    for augmentation_name in args.augmentation:
+                        save_name = f"{model_name},enc:{encoder_name},pred:{predictor_name}{',' + augmentation_name if model_name != 'baseline' else ''}"
                         print(f"...{dataset},{save_name}...")
 
                         # hyperparameter search then classic runs
@@ -222,7 +222,7 @@ if __name__ == "__main__":
                                 seed_everything(0)
                                 global param
                                 if model_name != "baseline":
-                                    param = hp.hp_augmentation(augmentation, trial, param)
+                                    param = hp.hp_augmentation(augmentation_name, trial, param)
                                 param = hp.hp_train(predictor_name, trial, param)
                                 switch = {
                                     "gcn_bgrl": hp.hp_bgrl_gcn,
@@ -242,7 +242,7 @@ if __name__ == "__main__":
                                     data,
                                     split_edge,
                                     model_name,
-                                    augmentation,
+                                    augmentation_name,
                                     evaluator,
                                     param,
                                     res_dict,
@@ -266,7 +266,7 @@ if __name__ == "__main__":
                             "AP": [],
                             "pretrain_time": [],
                         }
-                        if "sbm" in augmentation:
+                        if "sbm" in augmentation_name and model_name != 'baseline':
                             full_res.append(commu_prob_pred(data_split, evaluator, param))
                         for r in range(args.runs):
                             seed_everything(r)
@@ -279,7 +279,7 @@ if __name__ == "__main__":
                                 data,
                                 split_edge,
                                 model_name,
-                                augmentation,
+                                augmentation_name,
                                 evaluator,
                                 param,
                                 res_dict,

@@ -77,13 +77,13 @@ def commu_repartition(data, cd_algo: str = None):
                 probs[x, y] /= (
                     (sizes[x] + sizes[y]) * (sizes[x] + sizes[y] - 1)
                 ) / 2  # complete graph formula
-    # probs /= 2  # undirected graph
+    probs /= 2  # undirected graph
     data.block = block
     data.communities = communities
     data.probs = probs
-    print("probs, ", probs)
+    # print("probs, ", probs)
     data.sizes = sizes
-    print("sizes, ", sizes)
+    # print("sizes, ", sizes)
     return data
 
 
@@ -157,7 +157,7 @@ def gen_sbm(sizes, probs):
     return data
 
 
-def torch_geometric_to_graph_tool(data):
+def to_graph_tool(data):
     ei = to_undirected(data.edge_index)
     ei = ei[:, ei[0] < ei[1]]
 
@@ -166,20 +166,24 @@ def torch_geometric_to_graph_tool(data):
     node_map = G_gt.new_vertex_property(
         "int"
     )
+    block_map = G_gt.new_vertex_property(
+        "int"
+    )
     for i in range(data.num_nodes):
         v = G_gt.add_vertex()
         node_map[v] = (
             i
         )
+        block_map[v] = data.block[i]
 
     for edge in ei.t().tolist():
         G_gt.add_edge(G_gt.vertex(node_map[edge[0]]), G_gt.vertex(node_map[edge[1]]))
 
-    return G_gt
+    return G_gt, block_map
 
 
 def gen_sbm_fast(data):
-    gtG = generate_sbm(data.block, data.probs, micro_ers=True)
+    gtG = generate_sbm(data.block, data.probs, data.out_degs, micro_ers=True)
     edge_index = torch.from_numpy(gtG.get_edges().T)
     new_data = Data(edge_index=edge_index).to(data.edge_index.device)
     new_data.edge_index = to_undirected(remove_self_loops(new_data.edge_index)[0])
