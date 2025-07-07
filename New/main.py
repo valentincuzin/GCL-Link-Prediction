@@ -1,4 +1,5 @@
 import argparse
+from random import choice
 import optuna
 import numpy as np
 import torch
@@ -99,7 +100,7 @@ def arguments():
     )
     parser.add_argument("--model", type=str, default="baseline")
     parser.add_argument("--augmentation", type=str, default="random")
-    parser.add_argument("--encoder", type=str, default="gcn_grace")
+    parser.add_argument("--encoder", type=str, default="gcn_ncn")
     parser.add_argument("--predictor", type=str, default="mlp")
     parser.add_argument("--save", type=str, default="test")
     parser.add_argument("--runs", type=int, default=10)
@@ -109,6 +110,10 @@ def arguments():
         default=0,
         help="enter the number of trials, for the search",
     )
+    parser.add_argument("--hp_metric", 
+                        type=str, 
+                        default='Hits@50', 
+                        choices=['Hits@20', 'Hits@50', 'Hits@100', 'AUC', 'AP'])
     args = parser.parse_args()
     print(args)
     args.dataset = multiparse(args.dataset, DATASETS)
@@ -194,6 +199,8 @@ if __name__ == "__main__":
                     for augmentation in args.augmentation:
                         save_name = f"{model_name},enc:{encoder_name},pred:{predictor_name}{',' + augmentation if model_name != 'baseline' else ''}"
                         print(f"...{dataset},{save_name}...")
+
+                        # hyperparameter search then classic runs
                         if args.hp_search == 0:
                             param = hp.hp_load(
                                 dataset,
@@ -201,6 +208,55 @@ if __name__ == "__main__":
                             )
                         else:
                             param = {}
+                        if args.hp_search != 0:
+                            def _objective(trial):
+                                res_dict = {
+                                    "Hits@10": [],
+                                    "Hits@20": [],
+                                    "Hits@50": [],
+                                    "Hits@100": [],
+                                    "ROCAUC": [],
+                                    "AP": [],
+                                    "pretrain_time": [],
+                                }
+                                seed_everything(0)
+                                global param
+                                if model_name != "baseline":
+                                    param = hp.hp_augmentation(augmentation, trial, param)
+                                param = hp.hp_train(predictor_name, trial, param)
+                                switch = {
+                                    "gcn_bgrl": hp.hp_bgrl_gcn,
+                                    "gcn_grace": hp.hp_grace_gcn,
+                                    "gcn_ncn": hp.hp_ncn_gcn,
+                                }
+                                param = switch[encoder_name](trial, param)
+                                if "grace" in model_name:
+                                    param["tau"] = trial.suggest_float(
+                                        "tau", 0.1, 0.9, step=0.1)
+                                data, split_edge = data_split.get(0)
+                                model = get_model(encoder_name, model_name, data, param)
+                                predictor = get_predictor(predictor_name, param)
+                                res_dict = train_test_run(
+                                    model,
+                                    predictor,
+                                    data,
+                                    split_edge,
+                                    model_name,
+                                    augmentation,
+                                    evaluator,
+                                    param,
+                                    res_dict,
+                                    valid=True,
+                                )
+                                score = res_dict.pop(args.hp_metric)[0]
+                                return score
+                            sampler = optuna.samplers.TPESampler(multivariate=True)
+                            study = optuna.create_study(sampler=sampler, direction="maximize")
+                            study.optimize(_objective, n_trials=args.hp_search)
+                            param = hp.update_hp(
+                                study, param, f"params/{dataset}/{save_name}"
+                            )
+
                         res_dict = {
                             "Hits@10": [],
                             "Hits@20": [],
@@ -210,58 +266,6 @@ if __name__ == "__main__":
                             "AP": [],
                             "pretrain_time": [],
                         }
-
-                        # hyperparameter search then classic runs
-                        def _objective(trial):
-                            res_dict = {
-                                "Hits@10": [],
-                                "Hits@20": [],
-                                "Hits@50": [],
-                                "Hits@100": [],
-                                "ROCAUC": [],
-                                "AP": [],
-                                "pretrain_time": [],
-                            }
-                            seed_everything(0)
-                            global param
-                            if model_name != "baseline":
-                                param = hp.hp_augmentation(augmentation, trial, param)
-                            param = hp.hp_train(predictor_name, trial, param)
-                            switch = {
-                                "gcn_bgrl": hp.hp_bgrl_gcn,
-                                "gcn_grace": hp.hp_grace_gcn,
-                                "gcn_ncn": hp.hp_ncn_gcn,
-                            }
-                            param = switch[encoder_name](trial, param)
-                            if "grace" in model_name:
-                                param["tau"] = trial.suggest_categorical(
-                                    "tau", np.arange(0.1, 0.91, 0.1)
-                                )
-                            data, split_edge = data_split.get(0)
-                            model = get_model(encoder_name, model_name, data, param)
-                            predictor = get_predictor(predictor_name, param)
-                            res_dict = train_test_run(
-                                model,
-                                predictor,
-                                data,
-                                split_edge,
-                                model_name,
-                                augmentation,
-                                evaluator,
-                                param,
-                                res_dict,
-                                valid=True,
-                            )
-                            hit50 = res_dict.pop("Hits@50")[0]
-                            trial.report(hit50, param["ct_epochs"])
-                            return hit50
-
-                        if args.hp_search != 0:
-                            study = optuna.create_study(direction="maximize")
-                            study.optimize(_objective, n_trials=args.hp_search)
-                            param = hp.update_hp(
-                                study, param, f"params/{dataset}/{save_name}"
-                            )
                         if "sbm" in augmentation:
                             full_res.append(commu_prob_pred(data_split, evaluator, param))
                         for r in range(args.runs):

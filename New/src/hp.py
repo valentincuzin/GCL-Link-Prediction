@@ -48,18 +48,14 @@ def update_hp(study, hp, name):
 
 
 def hp_augmentation(augmentation, trial, hp):
-    hp["drop_edge_rate_1"] = trial.suggest_categorical(
-        "drop_edge_rate_1", np.arange(0.0, 0.91, 0.1)
-    )
-    hp["drop_edge_rate_2"] = trial.suggest_categorical(
-        "drop_edge_rate_2", np.arange(0.0, 0.91, 0.1)
-    )
-    hp["drop_feature_rate_1"] = trial.suggest_categorical(
-        "drop_feature_rate_1", np.arange(0.0, 0.91, 0.1)
-    )
-    hp["drop_feature_rate_2"] = trial.suggest_categorical(
-        "drop_feature_rate_2", np.arange(0.0, 0.91, 0.1)
-    )
+    hp["drop_edge_rate_1"] = trial.suggest_float(
+        "drop_edge_rate_1", 0.0, 0.9, step=0.1)
+    hp["drop_edge_rate_2"] = trial.suggest_float(
+        "drop_edge_rate_2", 0.0, 0.9, step=0.1)
+    hp["drop_feature_rate_1"] = trial.suggest_float(
+        "drop_feature_rate_1", 0.0, 0.9, step=0.1)
+    hp["drop_feature_rate_2"] = trial.suggest_float(
+        "drop_feature_rate_2", 0.0, 0.9, step=0.1)
 
     if "sbm" in augmentation:
         hp["commu_detect"] = trial.suggest_categorical(
@@ -67,9 +63,8 @@ def hp_augmentation(augmentation, trial, hp):
         )
 
     if any(x in augmentation for x in ["rjc", "raa", "rra"]):
-        hp["reconstruction_rate"] = trial.suggest_categorical(
-            "reconstruction_rate", np.arange(0.1, 0.91, 0.1)
-        )
+        hp["reconstruction_rate"] = trial.suggest_float(
+            "reconstruction_rate", 0.1, 0.90, step=0.1)
     return hp
 
 
@@ -77,19 +72,17 @@ def hp_train(predictor, trial, hp):
     hp["ct_epochs"] = trial.suggest_categorical("ct_epochs", [500, 1000, 3000, 5000])
     hp["proj_hidden"] = trial.suggest_int("proj_hidden", 32, 512, 32)
 
-    hp["gnn_lr"] = trial.suggest_float("gnn_lr", 0.001, 0.1)
-    hp["batch_size"] = trial.suggest_int("batch_size", 64, 6400, 64)
-    hp["use_valedges_as_input"] = trial.suggest_categorical(
-        "use_valedges_as_input", [True, False]
-    )
+    hp["gnn_lr"] = trial.suggest_float("gnn_lr", 0.0001, 0.01, log=True)
+    hp["batch_size"] = trial.suggest_int("batch_size", 256, 6400, 64)
+    hp["use_valedges_as_input"] = False
 
-    hp["epochs"] = 100  # trial.suggest_int('epochs', 10, 190, 10)
+    hp["epochs"] = 100
+    hp["loss_func"] = trial.suggest_categorical("loss_func", ["log_sig", "bce"])
     if predictor != "inner":
-        hp["pre_lr"] = trial.suggest_float("pre_lr", 0.001, 0.1)
-        hp["loss_func"] = trial.suggest_categorical("loss_func", ["log_sig", "bce"])
+        hp["pre_lr"] = trial.suggest_float("pre_lr", 0.0001, 0.01, log=True)
     if predictor == "ncn":
-        hp["predp"] = trial.suggest_categorical("predp", np.arange(0.1, 0.91, 0.01))
-        hp["preedp"] = trial.suggest_categorical("preedp", np.arange(0.1, 0.91, 0.01))
+        hp["predp"] = trial.suggest_float("predp", 0.00, 0.90, step=0.01)
+        hp["preedp"] = trial.suggest_float("preedp", 0.00, 0.90, step=0.01)
         hp["lnnn"] = trial.suggest_categorical("lnnn", [True, False])
         hp["use_xlin"] = trial.suggest_categorical("use_xlin", [True, False])
         hp["tailact"] = trial.suggest_categorical("tailact", [True, False])
@@ -111,9 +104,8 @@ def hp_bgrl_gcn(trial, hp):
     hp["batch_layer_norm"] = trial.suggest_categorical(
         "batch_layer_norm", [True, False]
     )
-    hp["batchnorm_mm"] = trial.suggest_categorical(
-        "batchnorm_mm", np.arange(0.80, 1, 0.01)
-    )
+    hp["batchnorm_mm"] = trial.suggest_float(
+        "batchnorm_mm", 0.80, 1, step=0.01)
     hp["weight_standardization"] = trial.suggest_categorical(
         "weight_standardization", [True, False]
     )
@@ -134,14 +126,13 @@ def hp_grace_gcn(trial, hp):
 def hp_ncn_gcn(trial, hp):
     hp["n_layers"] = trial.suggest_int("n_layers", 1, 4)
     hp["hidden"] = trial.suggest_int("hidden", 32, 512, 32)
-    hp["gnn_dp"] = trial.suggest_categorical("gnn_dp", np.arange(0.1, 0.91, 0.01))
+    hp["gnn_dp"] = trial.suggest_float("gnn_dp", 0.00, 0.90, step=0.01)
     hp["layer_norm"] = trial.suggest_categorical("layer_norm", [True, False])
     hp["res"] = trial.suggest_categorical("res", [True, False])
     hp["conv_fn"] = trial.suggest_categorical("conv_fn", ["gcn", "puregcn"])
     hp["jk"] = trial.suggest_categorical("jk", [True, False])
-    hp["edrop"] = trial.suggest_categorical("edrop", np.arange(0.1, 0.91, 0.01))
-    hp["xdropout"] = trial.suggest_categorical("xdropout", np.arange(0.1, 0.91, 0.01))
-    hp["taildropout"] = trial.suggest_categorical(
-        "taildropout", np.arange(0.1, 0.91, 0.01)
-    )
+    hp["edrop"] = trial.suggest_float("edrop", 0.00, 0.90, step=0.01)
+    hp["xdropout"] = trial.suggest_float("xdropout", 0.00, 0.90, step=0.01)
+    hp["taildropout"] = trial.suggest_float(
+        "taildropout", 0.00, 0.90, step=0.01)
     return hp

@@ -1,0 +1,20 @@
+{
+    "drop_edge_rate_1": 0.30000000000000004,
+    "drop_edge_rate_2": 0.30000000000000004,
+    "drop_feature_rate_1": 0.1,
+    "drop_feature_rate_2": 0.8,
+    "ct_epochs": 5000,
+    "proj_hidden": 384,
+    "gnn_lr": 0.0010726945678565577,
+    "batch_size": 1920,
+    "use_valedges_as_input": false,
+    "epochs": 100,
+    "pre_lr": 0.04034914351329813,
+    "loss_func": "bce",
+    "mask_input": false,
+    "weight_decay": 4.409253801269689e-05,
+    "n_layers": 2,
+    "hidden": 32,
+    "activation": "prelu",
+    "skip": false
+}

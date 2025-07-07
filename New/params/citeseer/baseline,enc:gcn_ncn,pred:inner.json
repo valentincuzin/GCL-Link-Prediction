@@ -1,0 +1,21 @@
+{
+    "ct_epochs": 1000,
+    "proj_hidden": 256,
+    "gnn_lr": 0.0005439685956243676,
+    "batch_size": 3392,
+    "use_valedges_as_input": false,
+    "epochs": 100,
+    "loss_func": "bce",
+    "mask_input": true,
+    "weight_decay": 7.808760657004383e-06,
+    "n_layers": 1,
+    "hidden": 448,
+    "gnn_dp": 0.64,
+    "layer_norm": true,
+    "res": false,
+    "conv_fn": "puregcn",
+    "jk": false,
+    "edrop": 0.81,
+    "xdropout": 0.52,
+    "taildropout": 0.35000000000000003
+}

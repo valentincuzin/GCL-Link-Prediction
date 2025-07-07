@@ -4,14 +4,13 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch_geometric.nn import GCNConv, BatchNorm, LayerNorm, Sequential
-from src.encoder import BGRL_GCN, TBGRL_GCN, GRACE_GCN, NCN_GCN
+from src.encoder import BGRL_GCN, GRACE_GCN, NCN_GCN
 
 
 def get_model(encoder_name: str, model_name: str, data, hp: dict):
     device = data.x.device
     switch = {
         "gcn_bgrl": BGRL_GCN,
-        "gcn_tbgrl": TBGRL_GCN,
         "gcn_grace": GRACE_GCN,
         "gcn_ncn": NCN_GCN,
     }
