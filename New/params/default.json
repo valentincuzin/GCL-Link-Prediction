@@ -3,7 +3,7 @@
     "drop_edge_rate_2": 0.4,
     "drop_feature_rate_1": 0.1,
     "drop_feature_rate_2": 0.0,
-	"commu_detect": "leiden",
+	"commu_detect": "louvain",
 	"reconstruction_rate": 0.5,
 
 	"gnn_lr": 0.005,

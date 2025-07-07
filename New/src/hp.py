@@ -1,6 +1,5 @@
 import json
 import os
-import numpy as np
 from optuna.trial import TrialState
 
 
@@ -48,10 +47,11 @@ def update_hp(study, hp, name):
 
 
 def hp_augmentation(augmentation, trial, hp):
-    hp["drop_edge_rate_1"] = trial.suggest_float(
-        "drop_edge_rate_1", 0.0, 0.9, step=0.1)
-    hp["drop_edge_rate_2"] = trial.suggest_float(
-        "drop_edge_rate_2", 0.0, 0.9, step=0.1)
+    if not('sbm' in augmentation and '+' not in augmentation): 
+        hp["drop_edge_rate_1"] = trial.suggest_float(
+            "drop_edge_rate_1", 0.0, 0.9, step=0.1)
+        hp["drop_edge_rate_2"] = trial.suggest_float(
+            "drop_edge_rate_2", 0.0, 0.9, step=0.1)
     hp["drop_feature_rate_1"] = trial.suggest_float(
         "drop_feature_rate_1", 0.0, 0.9, step=0.1)
     hp["drop_feature_rate_2"] = trial.suggest_float(
