@@ -49,7 +49,6 @@ def randomsplit(dataset, val_ratio: float = 0.10, test_ratio: float = 0.2):
         return pos_edge_index, neg_edge_index
 
     data = dataset[0]
-    data.num_nodes = data.x.shape[0]
     transform = RandomLinkSplit(
         num_val=val_ratio,
         num_test=test_ratio,
@@ -300,6 +299,8 @@ class DataSplit:
                 data.communities = nx.community.louvain_communities(G, resolution=0.5)
                 data.sizes, data.probs = _get_sizes_probs(data, G, data.communities)
             data = gen_sbm(data.sizes, data.probs)
+            data.num_nodes = sum(data.sizes)
+            data.x = F.one_hot(torch.arange(0, data.num_nodes)).float()
             dataset = [data]
         self.device = device
         self.runs = runs

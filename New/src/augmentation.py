@@ -72,7 +72,7 @@ class Aug:
                 gtG = torch_geometric_to_graph_tool(data)
                 state = BlockState(gtG, data.block)
                 data.block = state.b.a
-                data.probs = state.get_matrix()
+                data.probs = gt.adjacency(state.get_bg(), state.get_ers()).T
                 data.out_degs = gtG.degree_property_map("out").a
                 data.in_degs = gtG.degree_property_map("in").a
         elif "_d" in type:

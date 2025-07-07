@@ -77,7 +77,7 @@ def commu_repartition(data, cd_algo: str = None):
                 probs[x, y] /= (
                     (sizes[x] + sizes[y]) * (sizes[x] + sizes[y] - 1)
                 ) / 2  # complete graph formula
-    probs /= 2  # undirected graph
+    # probs /= 2  # undirected graph
     data.block = block
     data.communities = communities
     data.probs = probs
@@ -145,6 +145,7 @@ def get_commu_strength(data):
 
 
 def gen_sbm(sizes, probs):
+    # probs_2 = probs * (np.eye(probs.shape[0]) * 2)
     G = stochastic_block_model(sizes, probs)
     G.remove_edges_from(nx.selfloop_edges(G))  # remove self loops
     data = from_networkx(G)
@@ -157,28 +158,28 @@ def gen_sbm(sizes, probs):
 
 
 def torch_geometric_to_graph_tool(data):
-    # Créer un graphe graph-tool vide
-    G_gt = gt.Graph(directed=False)  # ou directed=True si vous avez un graphe orienté
+    ei = to_undirected(data.edge_index)
+    ei = ei[:, ei[0] < ei[1]]
 
-    # Ajouter les nœuds
+    G_gt = gt.Graph(directed=False)
+
     node_map = G_gt.new_vertex_property(
         "int"
-    )  # Propriété pour stocker les identifiants des nœuds
+    )
     for i in range(data.num_nodes):
         v = G_gt.add_vertex()
         node_map[v] = (
-            i  # Associer le nœud graph-tool à l'identifiant du nœud torch_geometric
+            i
         )
 
-    # Ajouter les arêtes
-    for edge in data.edge_index.t().tolist():
+    for edge in ei.t().tolist():
         G_gt.add_edge(G_gt.vertex(node_map[edge[0]]), G_gt.vertex(node_map[edge[1]]))
 
     return G_gt
 
 
 def gen_sbm_fast(data):
-    gtG = generate_sbm(data.block, data.probs)
+    gtG = generate_sbm(data.block, data.probs, micro_ers=True)
     edge_index = torch.from_numpy(gtG.get_edges().T)
     new_data = Data(edge_index=edge_index).to(data.edge_index.device)
     new_data.edge_index = to_undirected(remove_self_loops(new_data.edge_index)[0])
@@ -186,7 +187,7 @@ def gen_sbm_fast(data):
     new_data.sizes = data.sizes
     new_data.probs = data.probs
     new_data.num_features = data.num_nodes
-    return data
+    return new_data
 
 
 def gen_sgf(data, alpha, transformation="identity"):
