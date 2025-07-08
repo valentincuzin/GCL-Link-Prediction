@@ -153,19 +153,15 @@ def pretrain_lgrace(model, aug, param):
         model.train()
         optimizer.zero_grad()
         x_1, edge_index_1, x_2, edge_index_2 = aug()
-        edge_index_1 = edge_index_1.T
-        edge_index_2 = edge_index_2.T
-        eq = torch.eq(edge_index_1[:, None], edge_index_2[None, :]).all(dim=2)
-        intersection_idx = torch.nonzero(eq)
-        and_edge_index = edge_index_1[intersection_idx[:, 0]].T
-        or_edge_index = torch.unique(torch.cat((edge_index_1, edge_index_2)), dim=0).T
-        edge_index_1 = edge_index_1.T
-        edge_index_2 = edge_index_2.T
+        combined_edges = torch.cat([edge_index_1, edge_index_2], dim=1)
+        unique_edges, counts = combined_edges.unique(dim=1, return_counts=True)
+        intersection_mask = counts > 1
+        and_edge_index = unique_edges[:, intersection_mask]
         if and_edge_index.size(1) == 0:
             nb_jump += 1
             continue
         neg_edge = negative_sampling(
-            or_edge_index, num_neg_samples=and_edge_index.size(1)
+            unique_edges, num_neg_samples=and_edge_index.size(1)
         )
         h1 = model(x_1, edge_index_1).to(aug.device)
         h2 = model(x_2, edge_index_2).to(aug.device)
@@ -351,21 +347,10 @@ def pretrain_lbgrl(model, aug, param):
 
         optimizer.zero_grad()
         x_1, edge_index_1, x_2, edge_index_2 = aug()
-
-        edge_index_1 = edge_index_1.T
-        edge_index_2 = edge_index_2.T
-        # set_ei_1 = set([tuple(edge_index_1[i]) for i in range(len(edge_index_1))])
-        # set_ei_2 = set([tuple(edge_index_2[i]) for i in range(len(edge_index_2))])
-        # print("set_ei_1", set_ei_1, len(set_ei_1))
-        # print("set_ei_2", set_ei_2, len(set_ei_2))
-        # set_ei_i = set_ei_1.intersection(set_ei_2)
-        # print("set_ei_i", set_ei_i, len(set_ei_i))
-        eq = torch.eq(edge_index_1[:, None], edge_index_2[None, :]).all(dim=2)
-        intersection_idx = torch.nonzero(eq)
-        and_edge_index = edge_index_1[intersection_idx[:, 0]].T
-
-        edge_index_1 = edge_index_1.T
-        edge_index_2 = edge_index_2.T
+        combined_edges = torch.cat([edge_index_1, edge_index_2], dim=1)
+        unique_edges, counts = combined_edges.unique(dim=1, return_counts=True)
+        intersection_mask = counts > 1
+        and_edge_index = unique_edges[:, intersection_mask]
         if and_edge_index.size(1) == 0:
             nb_jump += 1
             continue
