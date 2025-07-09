@@ -1,12 +1,12 @@
 import argparse
-from random import choice
+import sys
 import optuna
 import numpy as np
 import torch
 import torch.nn as nn
 from torch_geometric import seed_everything
 
-from src.augmentation import Aug
+from src.augmentation import Aug, gen_sbm_bank
 from src.model import get_model
 from src.datasets import DataSplit, get_evaluator, full_eval
 from src.predictor import get_predictor, ProbDecoder
@@ -162,10 +162,11 @@ def train_test_run(
     evaluator,
     param,
     res_dict,
+    bank=None,
     valid=False,
 ):
     if model_name != "baseline":
-        aug = Aug(data, split_edge, param, augmentation)
+        aug = Aug(data, split_edge, param, augmentation, bank)
         pre_time = pretrain(model_name, model, aug, param)
         res_dict["pretrain_time"].append(pre_time)
         if isinstance(predictor, nn.Module):
@@ -193,6 +194,9 @@ if __name__ == "__main__":
         )
         evaluator = get_evaluator(dataset)
         full_res = []
+        banks = None
+        if any('sbm' in element for element in args.augmentation):
+            banks = gen_sbm_bank(data_split, args.runs)
         for model_name in args.model:
             for encoder_name in args.encoder:
                 for predictor_name in args.predictor:
@@ -246,6 +250,7 @@ if __name__ == "__main__":
                                     evaluator,
                                     param,
                                     res_dict,
+                                    bank=banks[0] if "sbm" in augmentation_name else None,
                                     valid=True,
                                 )
                                 score = res_dict.pop(args.hp_metric)[0]
@@ -283,11 +288,12 @@ if __name__ == "__main__":
                                 evaluator,
                                 param,
                                 res_dict,
+                                bank=banks[r] if "sbm" in augmentation_name else None
                             )
                         df_res, res_latex = compute_table(res_dict, save_name)
                         print(df_res)
                         full_res.append(df_res)
                         df, tex = full_output(full_res)
-                        df.to_csv(f"output/{args.save}/{dataset}_res.csv", sep=";")
+                        df.to_csv(f"output/{args.save}_{dataset}.csv", sep=";")
                         if model_name == "baseline":
                             break

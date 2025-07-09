@@ -17,6 +17,8 @@ from torch_geometric.utils import (
 from torch_scatter import scatter
 from functools import partial
 
+from tqdm import tqdm
+
 
 from src.utils import (
     get_commu_strength,
@@ -33,11 +35,12 @@ import graph_tool.all as gt
 
 
 class Aug:
-    def __init__(self, data, split_edge, param, type: str = "random"):
+    def __init__(self, data: Data, split_edge: list, param: dict, type: str = "random", bank: list|None = None):
         self.data = copy.deepcopy(data)
         self.split_edge = split_edge
         self.device = self.data.x.device
         self.param = param
+        self.bank = bank
         self.type = type
         self.data = self.data.to(self.device)
         self.train_mode = True
@@ -63,11 +66,12 @@ class Aug:
         elif type == "scom":
             feature_weights, drop_weights = self.commu_strength()
         elif "sbm" in type:
-            cd_algo = None
-            if self.param["commu_detect"]:
-                cd_algo = self.param["commu_detect"]
-            print(cd_algo, "detection...")
-            data = commu_repartition(data, cd_algo).to(self.device)
+            # cd_algo = None
+            # if self.param["commu_detect"]:
+            #     cd_algo = self.param["commu_detect"]
+            # print(cd_algo, "detection...")
+            # data = commu_repartition(data, cd_algo).to(self.device)
+            # self.bank = gen_sbm_bank(data, self.param['ct_epochs'])
             if "fast" in type:
                 gtG, block_map = to_graph_tool(data)
                 state = BlockState(gtG, block_map)
@@ -388,11 +392,10 @@ class Aug:
         self.data.probs = _perturb_matrix(self.data.probs, delta)
 
     def sbm(self):
-        sizes, probs = self.data.sizes, self.data.probs
-        data_1 = gen_sbm(sizes, probs).to(self.device)
+        data_1, data_2 = random.sample(self.bank, 2)
         data_1.x = self.data.x
         data_1.x = _drop_feature(data_1.x, self.param["drop_feature_rate_1"])
-        data_2 = self.data
+        data_2.x = self.data.x
         data_2.x = _drop_feature(data_2.x, self.param["drop_feature_rate_2"])
         return data_1.x, data_1.edge_index, data_2.x, data_2.edge_index
 
@@ -720,3 +723,16 @@ def _drop_feature_weighted(x, w, p: float, threshold: float = 0.7):
     x = x.clone()
     x[:, drop_mask] = 0.0
     return x
+
+def gen_sbm_bank(data_split, runs):
+    banks = []
+    
+    for r in range(runs):
+        bank = []
+        data, _ = data_split.get(r)
+        data = commu_repartition(data).to(data.x.device)
+        sizes, probs = data.sizes, data.probs
+        for _ in tqdm(range(500), desc=f"sbm bank n{r+1}/{runs}"):
+            bank.append(gen_sbm(sizes, probs).to(data.x.device))
+        banks.append(bank)
+    return banks

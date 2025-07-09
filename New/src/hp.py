@@ -58,9 +58,10 @@ def hp_augmentation(augmentation, trial, hp):
         "drop_feature_rate_2", 0.0, 0.9, step=0.1)
 
     if "sbm" in augmentation:
-        hp["commu_detect"] = trial.suggest_categorical(
-            "commu_detect", ["louvain", "leiden", "infomap"]
-        )
+        # hp["commu_detect"] = trial.suggest_categorical(
+        #     "commu_detect", ["louvain", "leiden", "infomap"]
+        # )
+        hp["commu_detect"] = "louvain"
 
     if any(x in augmentation for x in ["rjc", "raa", "rra"]):
         hp["reconstruction_rate"] = trial.suggest_float(
