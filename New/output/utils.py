@@ -5,8 +5,8 @@ from sklearn.metrics import jaccard_score
 from cdlib.evaluation.internal.statistical_ranking import friedman_test,bonferroni_dunn_test
 
 
-def res_load(csv_name: str, folder = 'processed_csv'):
-    data = pd.read_csv(folder + '/' + csv_name + '.csv', sep=";").T
+def res_load(csv_name: str):
+    data = pd.read_csv(csv_name, sep=";").T
     data.columns = data.loc["metrics"]
     data.drop(index="metrics", inplace=True)
     if 'Hits@10' in data.columns:

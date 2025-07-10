@@ -141,9 +141,12 @@ def get_commu_strength(data):
     return communities, com_cs, node_cs
 
 
-def gen_sbm(sizes, probs):
+def gen_sbm(sizes, probs, block=None):
     # probs_2 = probs * (np.eye(probs.shape[0]) * 2)
-    G = stochastic_block_model(sizes, probs)
+    if block is not None:
+        G = stochastic_block_model(sizes, probs, block)
+    else:
+        G = stochastic_block_model(sizes, probs)
     G.remove_edges_from(nx.selfloop_edges(G))  # remove self loops
     data = from_networkx(G)
     data.edge_index = to_undirected(data.edge_index)

@@ -74,14 +74,9 @@ class Aug:
             # self.bank = gen_sbm_bank(data, self.param['ct_epochs'])
             if "fast" in type:
                 gtG, block_map = to_graph_tool(data)
-                state = BlockState(gtG, block_map)
+                state = BlockState(gtG, block_map, deg_corr=False)
                 data.block = state.b.a
                 data.probs = gt.adjacency(state.get_bg(), state.get_ers()).T
-                def fct(arr):
-                    for idx,v in enumerate(arr):
-                        arr[idx] = int(v/2)
-                    return arr
-                data.probs.data = fct(data.probs.data)
                 data.out_degs = gtG.degree_property_map("out").a
         elif "_d" in type:
             type, delta = type.split("_d")
