@@ -195,7 +195,7 @@ if __name__ == "__main__":
         evaluator = get_evaluator(dataset)
         full_res = []
         banks = None
-        if any('sbm' in element for element in args.augmentation):
+        if any(('sbm' in element and not 'fast' in element) for element in args.augmentation):
             banks = gen_sbm_bank(data_split, args.runs)
         for model_name in args.model:
             for encoder_name in args.encoder:
@@ -288,7 +288,7 @@ if __name__ == "__main__":
                                 evaluator,
                                 param,
                                 res_dict,
-                                bank=banks[r] if "sbm" in augmentation_name else None
+                                bank=None
                             )
                         df_res, res_latex = compute_table(res_dict, save_name)
                         print(df_res)

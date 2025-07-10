@@ -68,15 +68,12 @@ def commu_repartition(data, cd_algo: str = None):
     for x in range(len(probs)):  # make the probs
         for y in range(len(probs)):
             if x == y:
-                probs[x, x] = (
-                    probs[x, x] / (sizes[x] * (sizes[x] - 1)) / 2
-                    if sizes[x] > 1
-                    else probs[x, x]
-                )
+                if sizes[x] > 1:
+                    probs[x, x] = (probs[x, x] / ((sizes[x] * (sizes[x] - 1)) / 2))
             else:
                 probs[x, y] /= (
-                    (sizes[x] + sizes[y]) * (sizes[x] + sizes[y] - 1)
-                ) / 2  # complete graph formula
+                    ((sizes[x] + sizes[y]) * (sizes[x] + sizes[y] - 1)) / 2
+                    )
     probs /= 2  # undirected graph
     data.block = block
     data.communities = communities
@@ -183,7 +180,7 @@ def to_graph_tool(data):
 
 
 def gen_sbm_fast(data):
-    gtG = generate_sbm(data.block, data.probs, data.out_degs, micro_ers=True)
+    gtG = generate_sbm(data.block, data.probs)
     edge_index = torch.from_numpy(gtG.get_edges().T)
     new_data = Data(edge_index=edge_index).to(data.edge_index.device)
     new_data.edge_index = to_undirected(remove_self_loops(new_data.edge_index)[0])

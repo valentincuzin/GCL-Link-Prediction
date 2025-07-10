@@ -77,6 +77,11 @@ class Aug:
                 state = BlockState(gtG, block_map)
                 data.block = state.b.a
                 data.probs = gt.adjacency(state.get_bg(), state.get_ers()).T
+                def fct(arr):
+                    for idx,v in enumerate(arr):
+                        arr[idx] = int(v/2)
+                    return arr
+                data.probs.data = fct(data.probs.data)
                 data.out_degs = gtG.degree_property_map("out").a
         elif "_d" in type:
             type, delta = type.split("_d")
