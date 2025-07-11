@@ -9,7 +9,7 @@
     "batch_size": 1216,
     "use_valedges_as_input": false,
     "epochs": 100,
-    "loss_func": "log_sig",
+    "loss_func": "bce",
     "pre_lr": 0.0032315199045015544,
     "mask_input": true,
     "weight_decay": 4.794466899479866e-05,

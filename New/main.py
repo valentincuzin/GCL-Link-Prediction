@@ -55,22 +55,15 @@ DATASETS = [
     "collab",
     "ddi",
 ] + SMALL_DATASETS
-MODELS = ["baseline", "grace", "lgrace", "a2grace", "csgcl", "bgrl", "lbgrl", "a2bgrl"]
+MODELS = ["baseline", "grace", "lgrace", "agrace", "csgcl", "bgrl", "lbgrl", "abgrl"]
 AUGMENTATIONS = [
     "random",
-    "rjc",
-    "rjc2",
-    "raa",
-    "rra",
     "deg",
     "pr",
     "evc",
     "scom",
     "sbm",
-    "sbm2",
-    "sgf",
 ]
-LOSS = ["log_sig", "bce"]
 ENCODER = ["grace", "bgrl", "ncn"]
 PREDICTOR = ["inner", "mlp", "ncn"]
 
@@ -102,7 +95,7 @@ def arguments():
     parser.add_argument("--augmentation", type=str, default="random")
     parser.add_argument("--encoder", type=str, default="gcn_ncn")
     parser.add_argument("--predictor", type=str, default="mlp")
-    parser.add_argument("--save", type=str, default="test")
+    parser.add_argument("--save", type=str, default="test/")
     parser.add_argument("--runs", type=int, default=10)
     parser.add_argument(
         "--hp_search",
@@ -162,11 +155,11 @@ def train_test_run(
     evaluator,
     param,
     res_dict,
-    bank=None,
+    run=0,
     valid=False,
 ):
     if model_name != "baseline":
-        aug = Aug(data, split_edge, param, augmentation, bank)
+        aug = Aug(data, split_edge, param, augmentation, run)
         pre_time = pretrain(model_name, model, aug, param)
         res_dict["pretrain_time"].append(pre_time)
         if isinstance(predictor, nn.Module):
@@ -194,9 +187,8 @@ if __name__ == "__main__":
         )
         evaluator = get_evaluator(dataset)
         full_res = []
-        banks = None
         if any(('sbm' in element and not 'fast' in element) for element in args.augmentation):
-            banks = gen_sbm_bank(data_split, args.runs)
+            gen_sbm_bank(data_split, args.runs)
         for model_name in args.model:
             for encoder_name in args.encoder:
                 for predictor_name in args.predictor:
@@ -250,7 +242,7 @@ if __name__ == "__main__":
                                     evaluator,
                                     param,
                                     res_dict,
-                                    bank=banks[0] if "sbm" in augmentation_name else None,
+                                    run=0,
                                     valid=True,
                                 )
                                 score = res_dict.pop(args.hp_metric)[0]
@@ -288,7 +280,7 @@ if __name__ == "__main__":
                                 evaluator,
                                 param,
                                 res_dict,
-                                bank=None
+                                run=r,
                             )
                         df_res, res_latex = compute_table(res_dict, save_name)
                         print(df_res)

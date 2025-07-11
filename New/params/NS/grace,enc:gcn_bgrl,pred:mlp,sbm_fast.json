@@ -1,0 +1,28 @@
+{
+    "drop_feature_rate_1": 0.5,
+    "drop_feature_rate_2": 0.7000000000000001,
+    "commu_detect": "louvain",
+    "ct_epochs": 1000,
+    "proj_hidden": 96,
+    "gnn_lr": 0.0011633666372051837,
+    "batch_size": 704,
+    "use_valedges_as_input": false,
+    "epochs": 100,
+    "loss_func": "log_sig",
+    "pre_lr": 0.00038948400993299166,
+    "mask_input": true,
+    "weight_decay": 3.44000900578987e-05,
+    "n_layers": 2,
+    "layer_sizes": [
+        1589,
+        288,
+        416
+    ],
+    "hidden": 416,
+    "batch_layer_norm": true,
+    "batchnorm_mm": 0.8400000000000001,
+    "weight_standardization": false,
+    "tau": 0.30000000000000004,
+    "1_layer_size": 320,
+    "2_layer_size": 416
+}

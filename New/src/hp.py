@@ -97,9 +97,9 @@ def hp_train(predictor, trial, hp):
 # encoder
 def hp_bgrl_gcn(trial, hp):
     hp["n_layers"] = trial.suggest_int("n_layers", 1, 4)
-    hp["layer_sizes"] = []
-    for i in range(hp["n_layers"]):
-        hp["layer_sizes"].append(trial.suggest_int(f"{i + 1}_layer_size", 32, 512, 32))
+    hp["layer_sizes"] = [trial.suggest_int(f"{1}_layer_size", 32, 512, 32)]
+    for i in range(2, hp["n_layers"]+1):
+        hp["layer_sizes"].append(trial.suggest_int(f"{i}_layer_size", hp["layer_sizes"][-1]/2, hp["layer_sizes"][-1]*2, 32))
     print(hp["layer_sizes"])
     hp["hidden"] = hp["layer_sizes"][-1]
     hp["batch_layer_norm"] = trial.suggest_categorical(

@@ -44,6 +44,7 @@ def community_detection(name):
 
 
 def commu_repartition(data, cd_algo: str = None):
+    data.edge_index = to_undirected(removerepeated(data.edge_index))
     if hasattr(data, "probs") and hasattr(data, "sizes") and cd_algo is None:
         print("already communities")
         return data
@@ -54,6 +55,8 @@ def commu_repartition(data, cd_algo: str = None):
     probs = np.zeros((len(communities), len(communities)))
     sizes = []
     block = np.empty((len(G.nodes)))
+
+    # fill block list and com attr
     for idx, c in enumerate(communities):
         sizes.append(len(c))
         for n in c:
@@ -69,9 +72,9 @@ def commu_repartition(data, cd_algo: str = None):
         for y in range(len(probs)):
             if x == y:
                 if sizes[x] > 1:
-                    probs[x, x] = (probs[x, x] / ((sizes[x] * (sizes[x] - 1)) / 2))
+                    probs[x, x] = probs[x, x] / ((sizes[x] * (sizes[x] - 1)) / 2)
             else:
-                probs[x, y] /= (
+                probs[x, y] = probs[x, y] / (
                     ((sizes[x] + sizes[y]) * (sizes[x] + sizes[y] - 1)) / 2
                     )
     probs /= 2  # undirected graph
@@ -83,6 +86,11 @@ def commu_repartition(data, cd_algo: str = None):
     # print("sizes, ", sizes)
     return data
 
+def removerepeated(ei):
+    ei = to_undirected(ei)
+
+    ei = ei[:, ei[0] < ei[1]]
+    return ei
 
 def average_precision(y_pred_pos, y_pred_neg):
     if isinstance(y_pred_pos, torch.Tensor):
@@ -187,6 +195,17 @@ def gen_sbm_fast(data):
     edge_index = torch.from_numpy(gtG.get_edges().T)
     new_data = Data(edge_index=edge_index).to(data.edge_index.device)
     new_data.edge_index = to_undirected(remove_self_loops(new_data.edge_index)[0])
+    new_data.num_nodes = sum(data.sizes)
+    new_data.sizes = data.sizes
+    new_data.probs = data.probs
+    new_data.num_features = data.num_nodes
+    return new_data
+
+def gen_sbm_fast_2(data, state):
+    gtG = state.sample_graph(canonical=True, self_loops=False, multigraph=False)
+    edge_index = torch.from_numpy(gtG.get_edges().T)
+    new_data = Data(edge_index=edge_index).to(data.edge_index.device)
+    new_data.edge_index = to_undirected(new_data.edge_index)
     new_data.num_nodes = sum(data.sizes)
     new_data.sizes = data.sizes
     new_data.probs = data.probs

@@ -29,18 +29,24 @@ from src.utils import (
     gen_ba,
     gen_deg,
     to_graph_tool,
+    gen_sbm_fast_2,
+    removerepeated,
 )
 from graph_tool.inference import BlockState
 import graph_tool.all as gt
 
+banks = []
+
 
 class Aug:
-    def __init__(self, data: Data, split_edge: list, param: dict, type: str = "random", bank: list|None = None):
+    def __init__(self, data: Data, split_edge: list, param: dict, type: str = "random", run: int = 0):
         self.data = copy.deepcopy(data)
         self.split_edge = split_edge
         self.device = self.data.x.device
         self.param = param
-        self.bank = bank
+        global banks
+        if len(banks) > run:
+            self.bank = banks[run]
         self.type = type
         self.data = self.data.to(self.device)
         self.train_mode = True
@@ -70,11 +76,12 @@ class Aug:
             # if self.param["commu_detect"]:
             #     cd_algo = self.param["commu_detect"]
             # print(cd_algo, "detection...")
-            # data = commu_repartition(data, cd_algo).to(self.device)
+            data = commu_repartition(data).to(self.device)
             # self.bank = gen_sbm_bank(data, self.param['ct_epochs'])
             if "fast" in type:
                 gtG, block_map = to_graph_tool(data)
                 state = BlockState(gtG, block_map, deg_corr=False)
+                data.state = state
                 data.block = state.b.a
                 data.probs = gt.adjacency(state.get_bg(), state.get_ers()).T
                 data.out_degs = gtG.degree_property_map("out").a
@@ -89,6 +96,7 @@ class Aug:
         #     data.edge_index = _close_triangle(data.edge_index)
         types = {
             "random": self.random,
+            "random2": self.random_2,
             "reconstruct": self.reconstruct,
             # 'raa': self.raa,
             # 'rra': self.rra,
@@ -129,6 +137,28 @@ class Aug:
         return x_1, edge_index_1, x_2, edge_index_2
 
     def random(self):
+        edge_attr = self.data.edge_attr if "edge_attr" in self.data else None
+        edge_index_1 = dropout_adj(
+            self.data.edge_index,
+            edge_attr,
+            p=self.param[f"drop_edge_rate_{1}"],
+            force_undirected=True,
+        )[0].to(self.device)
+        edge_index_2 = dropout_adj(
+            self.data.edge_index,
+            edge_attr,
+            p=self.param[f"drop_edge_rate_{2}"],
+            force_undirected=True,
+        )[0].to(self.device)
+        x_1 = _drop_feature(self.data.x, self.param["drop_feature_rate_1"]).to(
+            self.device
+        )
+        x_2 = _drop_feature(self.data.x, self.param["drop_feature_rate_2"]).to(
+            self.device
+        )
+        return x_1, edge_index_1, x_2, edge_index_2
+    
+    def random_2(self):
         edge_attr = self.data.edge_attr if "edge_attr" in self.data else None
         edge_index_1 = dropout_adj(
             self.data.edge_index,
@@ -408,11 +438,10 @@ class Aug:
         return data_1.x, data_1.edge_index, data_2.x, data_2.edge_index
 
     def sbm_fast2(self):
-        data_1 = gen_sbm_fast(self.data).to(self.device)
+        data_1 = gen_sbm_fast_2(self.data, self.data.state).to(self.device)
         data_1.x = self.data.x
         data_1.x = _drop_feature(data_1.x, self.param["drop_feature_rate_1"])
-        data_2 = gen_sbm_fast(self.data).to(self.device)
-        data_2.x = self.data.x
+        data_2 = self.data
         data_2.x = _drop_feature(data_2.x, self.param["drop_feature_rate_2"])
         return data_1.x, data_1.edge_index, data_2.x, data_2.edge_index
 
@@ -725,8 +754,7 @@ def _drop_feature_weighted(x, w, p: float, threshold: float = 0.7):
     return x
 
 def gen_sbm_bank(data_split, runs):
-    banks = []
-    
+    global banks
     for r in range(runs):
         bank = []
         data, _ = data_split.get(r)
@@ -735,4 +763,3 @@ def gen_sbm_bank(data_split, runs):
         for _ in tqdm(range(500), desc=f"sbm bank n{r+1}/{runs}"):
             bank.append(gen_sbm(sizes, probs).to(data.x.device))
         banks.append(bank)
-    return banks
