@@ -11,20 +11,15 @@ from torch_geometric.utils import (
     to_networkx,
     dropout_adj,
     from_networkx,
-    negative_sampling,
-    k_hop_subgraph,
 )
 from torch_scatter import scatter
 from functools import partial
-
-from tqdm import tqdm
-
 
 from src.utils import (
     get_commu_strength,
     gen_sbm,
     gen_sbm_fast,
-    commu_repartition,
+    commu_distrib,
     gen_sgf,
     gen_ba,
     gen_deg,
@@ -39,7 +34,14 @@ banks = []
 
 
 class Aug:
-    def __init__(self, data: Data, split_edge: list, param: dict, type: str = "random", run: int = 0):
+    def __init__(
+        self,
+        data: Data,
+        split_edge: list,
+        param: dict,
+        type: str = "random",
+        run: int = 0,
+    ):
         self.data = copy.deepcopy(data)
         self.split_edge = split_edge
         self.device = self.data.x.device
@@ -77,7 +79,7 @@ class Aug:
             if self.param["commu_detect"]:
                 cd_algo = self.param["commu_detect"]
             print(cd_algo, "detection...")
-            data = commu_repartition(data, cd_algo).to(self.device)
+            data = commu_distrib(data, cd_algo).to(self.device)
             # self.bank = gen_sbm_bank(data, self.param['ct_epochs'])
             if "fast" in type:
                 gtG, block_map = to_graph_tool(data)
@@ -158,7 +160,7 @@ class Aug:
             self.device
         )
         return x_1, edge_index_1, x_2, edge_index_2
-    
+
     def random_2(self):
         edge_attr = self.data.edge_attr if "edge_attr" in self.data else None
         edge_index_1 = dropout_adj(
@@ -428,8 +430,6 @@ class Aug:
         data_1 = gen_sbm(sizes, probs).to(self.device)
         data_1.x = self.data.x
         data_1.x = _drop_feature(data_1.x, self.param["drop_feature_rate_1"])
-        G = to_networkx(data_1, to_undirected=True)
-        G.draw(node_size=30, )
         data_2 = self.data
         data_2.x = self.data.x
         data_2.x = _drop_feature(data_2.x, self.param["drop_feature_rate_2"])
@@ -759,13 +759,14 @@ def _drop_feature_weighted(x, w, p: float, threshold: float = 0.7):
     x[:, drop_mask] = 0.0
     return x
 
+
 def gen_sbm_bank(data_split, runs):
     pass
     # global banks
     # for r in range(runs):
     #     bank = []
     #     data, _ = data_split.get(r)
-    #     data = commu_repartition(data).to(data.x.device)
+    #     data = commu_distrib(data).to(data.x.device)
     #     sizes, probs = data.sizes, data.probs
     #     for _ in tqdm(range(500), desc=f"sbm bank n{r+1}/{runs}"):
     #         data_new = gen_sbm(sizes, probs).to(data.x.device)

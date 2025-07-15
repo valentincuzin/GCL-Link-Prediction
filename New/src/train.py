@@ -8,7 +8,7 @@ from torch_geometric.utils import negative_sampling
 from torch_sparse import SparseTensor
 import numpy as np
 
-from src.utils import visu_tsne, commu_repartition
+from src.utils import visu_tsne, commu_distrib
 
 
 @torch.no_grad()
@@ -21,7 +21,7 @@ def test(encoder: nn.Module, predictor: nn.Module, data, split_edge: dict, hp: d
     adj_t = data.adj_t
     h = None if encoder is None else encoder(data.x, adj_t)
 
-    # data2 = commu_repartition(data, 'louvain')
+    # data2 = commu_distrib(data, 'louvain')
     # print(len(data2.sizes))
     # visu_tsne(h, data2.communities, 'LBGRL raa euroroad')
     def test_split(split):

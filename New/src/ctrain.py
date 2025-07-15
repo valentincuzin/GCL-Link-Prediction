@@ -12,7 +12,7 @@ from src.predictor import InnerProd, get_predictor
 from src.utils import (
     CosineDecayScheduler,
     get_commu_strength,
-    commu_repartition,
+    commu_distrib,
     visu_tsne,
 )
 from src.datasets import get_evaluator

@@ -14,7 +14,7 @@ from src.datasets import DataSplit, get_evaluator, full_eval
 from src.predictor import get_predictor, ProbDecoder, InnerProd
 from src.train import pred_train, baseline_train, test
 from src.ctrain import pretrain
-from src.utils import store_res, compute_table, full_output, commu_repartition
+from src.utils import store_res, compute_table, full_output, commu_distrib
 import src.hp as hp
 
 SMALL_DATASETS = [
@@ -146,7 +146,7 @@ def commu_prob_pred(data_split: DataSplit, evaluator: Evaluator, param: dict):
         seed_everything(r)
         data, split_edge = data_split.get(r)
         if not hasattr(data, "probs") and not hasattr(data, "sizes"):
-            data = commu_repartition(data, param["commu_detect"]).to(data.x.device)
+            data = commu_distrib(data, param["commu_detect"]).to(data.x.device)
         predictor = ProbDecoder(data.probs, data.block)
         _, _, pos_test_pred, neg_test_pred = test(
             None, predictor, data, split_edge, param
