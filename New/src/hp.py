@@ -47,7 +47,7 @@ def update_hp(study, hp, name):
 
 
 def hp_augmentation(augmentation, trial, hp):
-    if not('sbm' in augmentation and '+' not in augmentation): 
+    if not('sbm' in augmentation and '+' not in augmentation):
         hp["drop_edge_rate_1"] = trial.suggest_float(
             "drop_edge_rate_1", 0.0, 0.9, step=0.1)
         hp["drop_edge_rate_2"] = trial.suggest_float(
@@ -61,7 +61,7 @@ def hp_augmentation(augmentation, trial, hp):
         # hp["commu_detect"] = trial.suggest_categorical(
         #     "commu_detect", ["louvain", "leiden", "infomap"]
         # )
-        hp["commu_detect"] = "leiden"
+        hp["commu_detect"] = "louvain"
 
     if any(x in augmentation for x in ["rjc", "raa", "rra"]):
         hp["reconstruction_rate"] = trial.suggest_float(
@@ -70,7 +70,7 @@ def hp_augmentation(augmentation, trial, hp):
 
 
 def hp_train(predictor, trial, hp):
-    hp["ct_epochs"] = trial.suggest_categorical("ct_epochs", [500, 1000, 3000, 5000])
+    hp["ct_epochs"] = trial.suggest_categorical("ct_epochs", [50, 500, 2500, 5000])
     hp["proj_hidden"] = trial.suggest_int("proj_hidden", 32, 512, 32)
 
     hp["gnn_lr"] = trial.suggest_float("gnn_lr", 0.0001, 0.01, log=True)
@@ -97,16 +97,19 @@ def hp_train(predictor, trial, hp):
 # encoder
 def hp_bgrl_gcn(trial, hp):
     hp["n_layers"] = trial.suggest_int("n_layers", 1, 4)
-    hp["layer_sizes"] = [trial.suggest_int(f"{1}_layer_size", 32, 512, 32)]
-    for i in range(2, hp["n_layers"]+1):
-        hp["layer_sizes"].append(trial.suggest_int(f"{i}_layer_size", hp["layer_sizes"][-1]/2, hp["layer_sizes"][-1]*2, 32))
+    hp["layer_sizes"] = []
+    for i in range(1, hp["n_layers"]+1):
+        hp["layer_sizes"].append(trial.suggest_int(f"{i}_layer_size",  32, 512, 32))
     print(hp["layer_sizes"])
     hp["hidden"] = hp["layer_sizes"][-1]
     hp["batch_layer_norm"] = trial.suggest_categorical(
         "batch_layer_norm", [True, False]
     )
-    hp["batchnorm_mm"] = trial.suggest_float(
-        "batchnorm_mm", 0.80, 1, step=0.01)
+    if hp["batch_layer_norm"]:
+        hp["batchnorm_mm"] = trial.suggest_float(
+            "batchnorm_mm", 0.80, 1, step=0.01)
+    else:
+        hp["batchnorm_mm"] = None
     hp["weight_standardization"] = trial.suggest_categorical(
         "weight_standardization", [True, False]
     )

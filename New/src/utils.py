@@ -52,9 +52,6 @@ def commu_distrib(data: Data, cd_algo: str = None) -> Data:
     Returns:
         Data: same Data but with commu distrib
     """
-    data.edge_index = to_undirected(
-        removerepeated(data.edge_index)
-    )  # TODO toujour obligé de faire ça ?
     if hasattr(data, "probs") and hasattr(data, "sizes") and cd_algo is None:
         print("already communities")
         return data
@@ -98,59 +95,37 @@ def commu_distrib(data: Data, cd_algo: str = None) -> Data:
 
 
 def commu_distrib_old(data: Data, cd_algo: str = None) -> Data:
-    """
-    detect and add community distribution
-
-    Args:
-        data (Data): input graph
-        cd_algo (str, optional): algorithm. Defaults to None.
-
-    Returns:
-        Data: same Data but with commu distrib
-    """
-    data.edge_index = to_undirected(
-        removerepeated(data.edge_index)
-    )  # TODO toujour obligé de faire ça ?
     if hasattr(data, "probs") and hasattr(data, "sizes") and cd_algo is None:
         print("already communities")
         return data
-    if cd_algo is None:
-        cd_algo = "louvain"
+    if cd_algo == None:
+        cd_algo = 'louvain'
     G = to_networkx(data, to_undirected=True)
     communities = community_detection(cd_algo)(G).communities
     probs = np.zeros((len(communities), len(communities)))
     sizes = []
     block = np.empty((len(G.nodes)))
-
-    # fill block list and com attr
     for idx, c in enumerate(communities):
         sizes.append(len(c))
         for n in c:
             block[n] = idx
-            G.nodes[n]["com"] = idx  # get com label
-    for u, v in zip(
-        data.edge_index[0], data.edge_index[1]
-    ):  # count number of edge per com
+            G.nodes[n]["com"] = idx # get com label
+    for u, v in zip(data.edge_index[0], data.edge_index[1]): # count number of edge per com
         u = float(u)
         v = float(v)
         probs[G.nodes[u]["com"], G.nodes[v]["com"]] += 1
-    for x in range(len(probs)):  # make the probs
+    for x in range(len(probs)): # make the probs
         for y in range(len(probs)):
             if x == y:
-                if sizes[x] > 1:
-                    probs[x, x] = probs[x, x] / (sizes[x] * (sizes[x] - 1)) / 2
+                probs[x,x] = probs[x,x]/(sizes[x]*(sizes[x]-1))/2 if sizes[x] > 1 else probs[x,x]
             else:
-                probs[x, y] = (
-                    probs[x, y]
-                    / ((sizes[x] + sizes[y]) * (sizes[x] + sizes[y] - 1))
-                    / 2
-                )
-    probs /= 2  # undirected graph
+                probs[x,y] /= ((sizes[x]+sizes[y])*(sizes[x]+sizes[y]-1))/2 #complete graph formula
+    probs /= 2 # undirected graph
     data.block = block
     data.communities = communities
     data.probs = probs
-    data.sizes = sizes
     # print("probs, ", probs)
+    data.sizes = sizes
     # print("sizes, ", sizes)
     return data
 
@@ -218,6 +193,7 @@ def gen_sbm(sizes: list, probs: np.ndarray, block: list = None) -> Data:
     data.sizes = sizes
     data.probs = probs
     data.num_features = data.num_nodes
+    data.x = F.one_hot(torch.arange(0, data.num_nodes)).float()
     return data
 
 

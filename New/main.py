@@ -95,7 +95,7 @@ def arguments():
     )
     parser.add_argument("--model", type=str, default="baseline")
     parser.add_argument("--augmentation", type=str, default="random")
-    parser.add_argument("--encoder", type=str, default="gcn_ncn")
+    parser.add_argument("--encoder", type=str, default="gcn_bgrl")
     parser.add_argument("--predictor", type=str, default="mlp")
     parser.add_argument("--save", type=str, default="test/")
     parser.add_argument("--runs", type=int, default=10)
@@ -222,11 +222,11 @@ if __name__ == "__main__":
         )
         evaluator = get_evaluator(dataset)
         full_res = []
-        if any(
+        if (any(
             ("sbm" in element and "fast" not in element)
             for element in args.augmentation
-        ):
-            gen_sbm_bank(data_split, args.runs)
+        ) and args.hp_search != 0):
+            gen_sbm_bank(data_split)
         for model_name in args.model:
             for encoder_name in args.encoder:
                 for predictor_name in args.predictor:

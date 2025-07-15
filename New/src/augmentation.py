@@ -14,21 +14,20 @@ from torch_geometric.utils import (
 from torch_scatter import scatter
 from functools import partial
 
+from tqdm import tqdm
+
 from src.utils import (
     get_commu_strength,
     gen_sbm,
     gen_sbm_fast,
     commu_distrib,
-    gen_sgf,
-    gen_ba,
-    gen_deg,
+    commu_distrib_old,
     to_graph_tool,
-    gen_sbm_fast_2,
 )
 from graph_tool.inference import BlockState
-import graph_tool.all as gt
 
-sbm_banks = []
+sbm_bank = []
+ct_epoch = 0
 
 class Aug:
     def __init__(
@@ -39,6 +38,8 @@ class Aug:
         type: str = "random",
         run: int = 0,
     ) -> None:
+        global ct_epoch
+        ct_epoch = 0
         self.data = copy.deepcopy(data)
         self.split_edge = split_edge
         self.device = data.x.device
@@ -71,17 +72,19 @@ class Aug:
             feature_weights, drop_weights = self.commu_strength()
         elif "sbm" in type:
             cd_algo = None
-            if self.param["commu_detect"]:
+            global sbm_bank
+            if len(sbm_bank) != 0 and "fast" not in type and self.run == 0:
+                type = "sbm_bank"
+            elif self.param["commu_detect"]:
                 cd_algo = self.param["commu_detect"]
-            print(cd_algo, "detection...")
-            data = commu_distrib(data, cd_algo).to(self.device)
-            if "fast" in type:
+                print(cd_algo, "detection...")
+                if type == "sbm_old":
+                    data = commu_distrib_old(data, cd_algo).to(self.device)
+                else:
+                    data = commu_distrib(data, cd_algo).to(self.device)
+            elif "fast" in type:
                 gtG, block_map = to_graph_tool(data)
-                state = BlockState(gtG, block_map, deg_corr=False)
-                data.state = state
-                data.block = state.b.a
-                data.probs = gt.adjacency(state.get_bg(), state.get_ers()).T
-                data.out_degs = gtG.degree_property_map("out").a
+                data.state = BlockState(gtG, block_map, deg_corr=False)
         elif type in ["rjc", "raa", "rra"]:
             data = self.pred(data, type)
             type = "reconstruct"
@@ -93,7 +96,9 @@ class Aug:
             "pr": partial(self.gca, feature_weights, drop_weights),
             "evc": partial(self.gca, feature_weights, drop_weights),
             "scom": partial(self.csgcl, feature_weights, drop_weights),
+            "sbm_bank": self.sbm_bank,
             "sbm": self.sbm,
+            "sbm_old": self.sbm,
             "sbm2": self.sbm_2,
             "sbm_fast": self.sbm_fast,
             "sbm_fast2": self.sbm_fast_2,
@@ -390,19 +395,29 @@ class Aug:
         return x_1, edge_index_1, x_2, edge_index_2
 
     def sbm(self):
-        global sbm_banks
         sizes, probs = self.data.sizes, self.data.probs
         data_1 = gen_sbm(sizes, probs).to(self.device)
         data_1.x = self.data.x
-        data_1.x = _drop_feature(data_1.x, self.param["drop_feature_rate_1"])
+        data_1.x = _drop_feature(data_1.x, self.param['drop_feature_rate_1'])
         data_2 = self.data
-        data_2.x = self.data.x
-        data_2.x = _drop_feature(data_2.x, self.param["drop_feature_rate_2"])
+        data_2.x = _drop_feature(data_2.x, self.param['drop_feature_rate_2'])
+        return data_1.x, data_1.edge_index, data_2.x, data_2.edge_index
+    
+    def sbm_bank(self):
+        global sbm_bank
+        global ct_epoch
+        data_1 = sbm_bank[ct_epoch].to(self.device)
+        data_1.x = self.data.x
+        data_1.x = _drop_feature(data_1.x, self.param['drop_feature_rate_1'])
+        data_2 = self.data
+        data_2.x = _drop_feature(data_2.x, self.param['drop_feature_rate_2'])
+        
+        ct_epoch += 1
         return data_1.x, data_1.edge_index, data_2.x, data_2.edge_index
 
     def sbm_2(self):
         sizes, probs = self.data.sizes, self.data.probs
-        data_1 = gen_sbm(sizes, probs, degree(self.data.edge_index)).to(self.device)
+        data_1 = gen_sbm(sizes, probs).to(self.device)
         data_1.x = self.data.x
         data_1.x = _drop_feature(data_1.x, self.param["drop_feature_rate_1"])
         data_2 = gen_sbm(sizes, probs).to(self.device)
@@ -478,16 +493,11 @@ def _drop_feature_weighted(x, w, p: float, threshold: float = 0.7):
     return x
 
 
-def gen_sbm_bank(data_split, runs):
-    pass
-    # global sbm_banks
-    # for r in range(runs):
-    #     bank = []
-    #     data, _ = data_split.get(r)
-    #     data = commu_distrib(data).to(data.x.device)
-    #     sizes, probs = data.sizes, data.probs
-    #     for _ in tqdm(range(500), desc=f"sbm bank n{r+1}/{runs}"):
-    #         data_new = gen_sbm(sizes, probs).to(data.x.device)
-    #         print(data_new.edge_index.shape)
-    #         bank.append(data_new)
-    #     sbm_banks.append(bank)
+def gen_sbm_bank(data_split):
+    global sbm_bank
+    data, _ = data_split.get(0)
+    data = commu_distrib(data).to(data.x.device)
+    sizes, probs = data.sizes, data.probs
+    for _ in tqdm(range(5000), desc="sbm bank hp"):
+        data_new = gen_sbm(sizes, probs).to(data.x.device)
+        sbm_bank.append(data_new)

@@ -26,7 +26,7 @@ from torch_geometric.transforms import RandomLinkSplit
 from src.utils import gen_sbm, average_precision, removerepeated
 
 
-def randomsplit(dataset: list[Data], val_ratio: float = 0.10, test_ratio: float = 0.2):
+def randomsplit(data: Data, val_ratio: float = 0.10, test_ratio: float = 0.2):
     """
     random split on edges in 3 sets train,val,test
 
@@ -43,7 +43,6 @@ def randomsplit(dataset: list[Data], val_ratio: float = 0.10, test_ratio: float 
         neg_edge_index = data.edge_label_index[:, neg_mask]
         return pos_edge_index, neg_edge_index
 
-    data = dataset[0]
     transform = RandomLinkSplit(
         num_val=val_ratio,
         num_test=test_ratio,
@@ -84,10 +83,14 @@ def loaddataset(
     Returns:
         tuple[Data, dict]: return the Data loaded and is split associated
     """
+
     if isinstance(name, list):  # already laoded, only need to format
         data = name[0]
+        data.edge_index = to_undirected(
+            removerepeated(data.edge_index)
+        )
         data.num_nodes = data.x.shape[0]
-        split_edge = randomsplit(name)
+        split_edge = randomsplit(data)
 
     elif name in [
         "facebook_friends",
@@ -106,17 +109,23 @@ def loaddataset(
         igG = ig.Graph.Read_GML(f"./small_gml/{name}.gml")  # read gml file
         G = igG.to_networkx()
         data = from_networkx(G)
+        data.edge_index = to_undirected(
+            removerepeated(data.edge_index)
+        )
         data.x = F.one_hot(torch.arange(0, len(G.nodes))).float()
         data.num_nodes = data.x.shape[0]
-        split_edge = randomsplit([data])
+        split_edge = randomsplit(data)
 
     elif name in ["USAir", "NS", "PB", "Yeast", "Celegans", "Power", "Router", "Ecoli"]:
         data_dir = f"./small_mat/{name}.mat"
         net = sio.loadmat(data_dir)
         edge_index, _ = from_scipy_sparse_matrix(net["net"])
+        edge_index = to_undirected(
+            removerepeated(edge_index)
+        )
         data = Data(edge_index=edge_index, num_nodes=torch.max(edge_index).item() + 1)
         data.x = F.one_hot(torch.arange(0, data.num_nodes)).float()
-        split_edge = randomsplit([data])
+        split_edge = randomsplit(data)
 
     elif name in ["collab"]:
         dataset = PygLinkPropPredDataset(name=f"ogbl-{name}")
@@ -132,24 +141,14 @@ def loaddataset(
             dataset = Amazon(root="dataset", name=name)
         data = dataset[0]
         data.num_nodes = data.x.shape[0]
-        split_edge = randomsplit(dataset)
+        split_edge = randomsplit(data)
 
     data.edge_index = to_undirected(
         split_edge["train"]["edge"].t()
-    )  # compare data.edge_index with and without val
+    )
 
     if data.edge_index.max().item() + 1 < data.num_nodes:
         data.edge_index = add_self_loops(data.edge_index, num_nodes=data.num_nodes)[0]
-
-    data.edge_weight = None
-    data.adj_t = SparseTensor.from_edge_index(
-        data.edge_index, sparse_sizes=(data.num_nodes, data.num_nodes)
-    )
-    data.adj_t = data.adj_t.to_symmetric().coalesce()
-    data.max_x = -1
-
-    val_edge_index = split_edge["valid"]["edge"].t()
-    full_edge_index = torch.cat([data.edge_index, val_edge_index], dim=-1)
 
     if reduce_feature is not None:
         if reduce_feature == 0:
@@ -159,6 +158,16 @@ def loaddataset(
     if only_feature:
         data.edge_index = torch.tensor([[], []], dtype=torch.long)
         data.edge_index = add_self_loops(data.edge_index, num_nodes=data.num_nodes)[0]
+
+    data.edge_weight = None
+    data.max_x = -1
+    data.adj_t = SparseTensor.from_edge_index(
+        data.edge_index, sparse_sizes=(data.num_nodes, data.num_nodes)
+    )
+    data.adj_t = data.adj_t.to_symmetric().coalesce()
+
+    val_edge_index = split_edge["valid"]["edge"].t()
+    full_edge_index = torch.cat([data.edge_index, val_edge_index], dim=-1)
 
     data.full_adj_t = SparseTensor.from_edge_index(
         full_edge_index, sparse_sizes=(data.num_nodes, data.num_nodes)
