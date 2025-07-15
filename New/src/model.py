@@ -36,9 +36,9 @@ def get_model(encoder_name: str, model_name: str, data, hp: dict):
             device
         )
         model = LinkBGRL(_encoder, _predictor).to(device)
-    elif model_name in "a2grace":
+    elif model_name in "agrace":
         model = A2GRACE(_encoder, hp["hidden"], hp["hidden"], hp["tau"]).to(device)
-    elif model_name in "a2bgrl":
+    elif model_name in "abgrl":
         _predictor = MLP_Head_BGRL(hp["hidden"], hp["hidden"], hp["proj_hidden"]).to(
             device
         )
