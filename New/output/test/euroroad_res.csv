@@ -1,0 +1,8 @@
+metrics;leiden_prob_pred_mean;leiden_prob_pred;grace,enc:gcn_ncn,pred:mlp,sbm_fast_mean;grace,enc:gcn_ncn,pred:mlp,sbm_fast
+Hits@10;23.67$\pm$0.0;[0.23674912];23.32$\pm$0.0;[0.23321555]
+Hits@20;27.56$\pm$0.0;[0.27561837];27.92$\pm$0.0;[0.27915194]
+Hits@50;35.69$\pm$0.0;[0.35689046];41.34$\pm$0.0;[0.41342756]
+Hits@100;49.47$\pm$0.0;[0.49469965];54.77$\pm$0.0;[0.54770318]
+ROCAUC;62.0$\pm$0.0;[0.61998527];63.45$\pm$0.0;[0.63446915]
+AP;67.01$\pm$0.0;[0.67012872];68.49$\pm$0.0;[0.68485552]
+pretrain_time;nan$\pm$nan;[];16.53$\pm$0.0;[16.52960825]

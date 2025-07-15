@@ -1,15 +1,17 @@
 import argparse
-import sys
 import optuna
 import numpy as np
 import torch
 import torch.nn as nn
 from torch_geometric import seed_everything
 
+from ogb.linkproppred import Evaluator
+from torch_geometric.data import Data
+
 from src.augmentation import Aug, gen_sbm_bank
 from src.model import get_model
 from src.datasets import DataSplit, get_evaluator, full_eval
-from src.predictor import get_predictor, ProbDecoder
+from src.predictor import get_predictor, ProbDecoder, InnerProd
 from src.train import pred_train, baseline_train, test
 from src.ctrain import pretrain
 from src.utils import store_res, compute_table, full_output, commu_repartition
@@ -103,21 +105,34 @@ def arguments():
         default=0,
         help="enter the number of trials, for the search",
     )
-    parser.add_argument("--hp_metric", 
-                        type=str, 
-                        default='Hits@50', 
-                        choices=['Hits@20', 'Hits@50', 'Hits@100', 'AUC', 'AP'])
+    parser.add_argument(
+        "--hp_metric",
+        type=str,
+        default="Hits@50",
+        choices=["Hits@20", "Hits@50", "Hits@100", "AUC", "AP"],
+    )
     args = parser.parse_args()
-    print(args)
     args.dataset = multiparse(args.dataset, DATASETS)
     args.model = multiparse(args.model, MODELS)
     args.augmentation = multiparse(args.augmentation, AUGMENTATIONS)
     args.encoder = multiparse(args.encoder, ENCODER)
     args.predictor = multiparse(args.predictor, PREDICTOR)
+    print(args)
     return args
 
 
-def commu_prob_pred(data_split, evaluator, param):
+def commu_prob_pred(data_split: DataSplit, evaluator: Evaluator, param: dict):
+    """
+    runs and test of the communities probs based predictor
+
+    Args:
+        data_split (DataSplit):
+        evaluator (Evaluator):
+        param (dict):
+
+    Returns:
+        pd.DataFrame: results
+    """
     res_dict = {
         "Hits@10": [],
         "Hits@20": [],
@@ -132,9 +147,10 @@ def commu_prob_pred(data_split, evaluator, param):
         data, split_edge = data_split.get(r)
         if not hasattr(data, "probs") and not hasattr(data, "sizes"):
             data = commu_repartition(data, param["commu_detect"]).to(data.x.device)
-        # print('block', data.block)
         predictor = ProbDecoder(data.probs, data.block)
-        _, _, pos_test_pred, neg_test_pred = test(None, predictor, data, split_edge, param)
+        _, _, pos_test_pred, neg_test_pred = test(
+            None, predictor, data, split_edge, param
+        )
         pos_test_pred += np.random.uniform(-0.0001, 0.0001, pos_test_pred.shape)
         neg_test_pred += np.random.uniform(-0.0001, 0.0001, neg_test_pred.shape)
         test_res = full_eval(evaluator, pos_test_pred, neg_test_pred)
@@ -146,20 +162,39 @@ def commu_prob_pred(data_split, evaluator, param):
 
 
 def train_test_run(
-    model,
-    predictor,
-    data,
-    split_edge,
-    model_name,
-    augmentation,
-    evaluator,
-    param,
-    res_dict,
-    run=0,
-    valid=False,
+    model: nn.Module,
+    predictor: nn.Module | InnerProd,
+    data: Data,
+    split_edge: dict,
+    model_name: str,
+    augmentation_name: str,
+    evaluator: Evaluator,
+    param: dict,
+    res_dict: dict,
+    run: int = 0,
+    valid: bool = False,
 ):
+    """
+    function to run a train then a test on link_prediction
+
+    Args:
+        model (nn.Module): GCN encoder
+        predictor (nn.Module | InnerProd): Link Predictor
+        data (Data): input graph
+        split_edge (dict):
+        model_name (str): Instance Discrimination learning method name
+        augmentation_name (str):
+        evaluator (Evaluator):
+        param (dict):
+        res_dict (dict):
+        run (int, optional): number of the current run. Defaults to 0.
+        valid (bool, optional): return valid score if true. Defaults to False.
+
+    Returns:
+        pd.DataFrame: results
+    """
     if model_name != "baseline":
-        aug = Aug(data, split_edge, param, augmentation, run)
+        aug = Aug(data, split_edge, param, augmentation_name, run)
         pre_time = pretrain(model_name, model, aug, param)
         res_dict["pretrain_time"].append(pre_time)
         if isinstance(predictor, nn.Module):
@@ -187,7 +222,10 @@ if __name__ == "__main__":
         )
         evaluator = get_evaluator(dataset)
         full_res = []
-        if any(('sbm' in element and not 'fast' in element) for element in args.augmentation):
+        if any(
+            ("sbm" in element and "fast" not in element)
+            for element in args.augmentation
+        ):
             gen_sbm_bank(data_split, args.runs)
         for model_name in args.model:
             for encoder_name in args.encoder:
@@ -198,13 +236,11 @@ if __name__ == "__main__":
 
                         # hyperparameter search then classic runs
                         if args.hp_search == 0:
-                            param = hp.hp_load(
-                                dataset,
-                                save_name
-                            )
+                            param = hp.hp_load(dataset, save_name)
                         else:
                             param = {}
                         if args.hp_search != 0:
+
                             def _objective(trial):
                                 res_dict = {
                                     "Hits@10": [],
@@ -218,7 +254,9 @@ if __name__ == "__main__":
                                 seed_everything(0)
                                 global param
                                 if model_name != "baseline":
-                                    param = hp.hp_augmentation(augmentation_name, trial, param)
+                                    param = hp.hp_augmentation(
+                                        augmentation_name, trial, param
+                                    )
                                 param = hp.hp_train(predictor_name, trial, param)
                                 switch = {
                                     "gcn_bgrl": hp.hp_bgrl_gcn,
@@ -228,7 +266,8 @@ if __name__ == "__main__":
                                 param = switch[encoder_name](trial, param)
                                 if "grace" in model_name:
                                     param["tau"] = trial.suggest_float(
-                                        "tau", 0.1, 0.9, step=0.1)
+                                        "tau", 0.1, 0.9, step=0.1
+                                    )
                                 data, split_edge = data_split.get(0)
                                 model = get_model(encoder_name, model_name, data, param)
                                 predictor = get_predictor(predictor_name, param)
@@ -247,8 +286,11 @@ if __name__ == "__main__":
                                 )
                                 score = res_dict.pop(args.hp_metric)[0]
                                 return score
+
                             sampler = optuna.samplers.TPESampler(multivariate=True)
-                            study = optuna.create_study(sampler=sampler, direction="maximize")
+                            study = optuna.create_study(
+                                sampler=sampler, direction="maximize"
+                            )
                             study.optimize(_objective, n_trials=args.hp_search)
                             param = hp.update_hp(
                                 study, param, f"params/{dataset}/{save_name}"
@@ -263,8 +305,11 @@ if __name__ == "__main__":
                             "AP": [],
                             "pretrain_time": [],
                         }
-                        if "sbm" in augmentation_name and model_name != 'baseline':
-                            full_res.append(commu_prob_pred(data_split, evaluator, param))
+                        if "sbm" in augmentation_name and model_name != "baseline":
+                            full_res.append(
+                                commu_prob_pred(data_split, evaluator, param)
+                            )
+                        # classic runs
                         for r in range(args.runs):
                             seed_everything(r)
                             data, split_edge = data_split.get(r)

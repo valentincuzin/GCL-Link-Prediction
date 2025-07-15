@@ -22,25 +22,18 @@ from torch_geometric.utils import (
     from_scipy_sparse_matrix,
 )
 from torch_geometric.transforms import RandomLinkSplit
-from torch_geometric.data.storage import GlobalStorage
-from torch_geometric.data.data import DataEdgeAttr, DataTensorAttr
-from numpy.core.multiarray import _reconstruct
 
-from src.utils import gen_sbm, average_precision
+from src.utils import gen_sbm, average_precision, removerepeated
 
-torch.serialization.add_safe_globals(
-    [_reconstruct, DataEdgeAttr, DataTensorAttr, GlobalStorage]
-)
+def randomsplit(dataset: list[Data], val_ratio: float = 0.10, test_ratio: float = 0.2):
+    """
+    random split on edges in 3 sets train,val,test
 
-
-
-def randomsplit(dataset, val_ratio: float = 0.10, test_ratio: float = 0.2):
-    def removerepeated(ei):
-        ei = to_undirected(ei)
-
-        ei = ei[:, ei[0] < ei[1]]
-        return ei
-
+    Args:
+        dataset (list[Data]): 
+        val_ratio (float, optional): . Defaults to 0.10.
+        test_ratio (float, optional): . Defaults to 0.2.
+    """
     def split_pos_neg(data):
         pos_mask = (data.edge_label == 1).bool()
         neg_mask = (data.edge_label == 0).bool()

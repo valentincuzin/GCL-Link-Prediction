@@ -1,0 +1,8 @@
+metrics;infomap_prob_pred_mean;infomap_prob_pred;grace,enc:gcn_ncn,pred:mlp,sbm_fast_mean;grace,enc:gcn_ncn,pred:mlp,sbm_fast
+Hits@10;72.8$\pm$0.0;[0.7279597];84.13$\pm$0.0;[0.84130982]
+Hits@20;85.89$\pm$0.0;[0.85894207];92.44$\pm$0.0;[0.92443325]
+Hits@50;91.44$\pm$0.0;[0.91435768];96.98$\pm$0.0;[0.9697733]
+Hits@100;95.47$\pm$0.0;[0.95465995];97.98$\pm$0.0;[0.97984887]
+ROCAUC;95.43$\pm$0.0;[0.95427292];97.52$\pm$0.0;[0.97518543]
+AP;95.54$\pm$0.0;[0.95536358];97.8$\pm$0.0;[0.97798777]
+pretrain_time;nan$\pm$nan;[];20.64$\pm$0.0;[20.64244175]
