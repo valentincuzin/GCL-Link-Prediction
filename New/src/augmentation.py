@@ -1,5 +1,4 @@
 import copy
-import random
 
 import torch
 import numpy as np
@@ -25,13 +24,11 @@ from src.utils import (
     gen_deg,
     to_graph_tool,
     gen_sbm_fast_2,
-    removerepeated,
 )
 from graph_tool.inference import BlockState
 import graph_tool.all as gt
 
-banks = []
-
+sbm_banks = []
 
 class Aug:
     def __init__(
@@ -41,18 +38,16 @@ class Aug:
         param: dict,
         type: str = "random",
         run: int = 0,
-    ):
+    ) -> None:
         self.data = copy.deepcopy(data)
         self.split_edge = split_edge
-        self.device = self.data.x.device
+        self.device = data.x.device
         self.param = param
         self.run = run
-        # global banks
-        # if len(banks) > run:
-        #     self.bank = banks[run]
+        if run == 0:
+            self.bank = True
         self.type = type
         self.data = self.data.to(self.device)
-        self.train_mode = True
         if "+" in type:
             type1, type2 = type.split("+")
             self.data1, aug_fct1 = self.precompute(self.data, type1)
@@ -62,7 +57,7 @@ class Aug:
             self.data, aug_fct = self.precompute(self.data, type)
             self.get = aug_fct
 
-    def precompute(self, data, type: str):
+    def precompute(self, data: Data, type: str):
         feature_weights = None
         drop_weights = None
         if type in ["deg", "pr", "evc"]:
@@ -80,7 +75,6 @@ class Aug:
                 cd_algo = self.param["commu_detect"]
             print(cd_algo, "detection...")
             data = commu_distrib(data, cd_algo).to(self.device)
-            # self.bank = gen_sbm_bank(data, self.param['ct_epochs'])
             if "fast" in type:
                 gtG, block_map = to_graph_tool(data)
                 state = BlockState(gtG, block_map, deg_corr=False)
@@ -88,55 +82,34 @@ class Aug:
                 data.block = state.b.a
                 data.probs = gt.adjacency(state.get_bg(), state.get_ers()).T
                 data.out_degs = gtG.degree_property_map("out").a
-        elif "_d" in type:
-            type, delta = type.split("_d")
-            print(type, " with variance: ", delta)
-            self.perturb_commu(delta)
         elif type in ["rjc", "raa", "rra"]:
             data = self.pred(data, type)
             type = "reconstruct"
-        # elif type == 'ctri':
-        #     data.edge_index = _close_triangle(data.edge_index)
         types = {
             "random": self.random,
             "random2": self.random_2,
             "reconstruct": self.reconstruct,
-            # 'raa': self.raa,
-            # 'rra': self.rra,
             "deg": partial(self.gca, feature_weights, drop_weights),
             "pr": partial(self.gca, feature_weights, drop_weights),
             "evc": partial(self.gca, feature_weights, drop_weights),
             "scom": partial(self.csgcl, feature_weights, drop_weights),
             "sbm": self.sbm,
-            "sbm_fast": self.sbm_fast,
-            "sbm_fast2": self.sbm_fast2,
             "sbm2": self.sbm_2,
-            "sgf": self.sgf,
-            "ba": self.ba,
-            "deg_seq": self.config_model,
+            "sbm_fast": self.sbm_fast,
+            "sbm_fast2": self.sbm_fast_2,
         }
         return data, types[type]
 
-    # def train(self):
-    #     if not self.train_mode:
-    #         self.data.edge_index = to_undirected(self.split_edge["train"]["edge"].t()).to(self.device)
-    #         self.train_mode = True
-
-    # def eval(self):
-    #     if self.train_mode:
-    #         self.data.edge_index = to_undirected(self.split_edge["valid"]["edge"].t()).to(self.device)
-    #         self.train_mode = False
-
     def __call__(self):
-        return self.get() if self.train_mode else self.get_val()
+        return self.get()
 
     def mix(self, aug_fct1, aug_fct2):
-        self.tmp = copy.deepcopy(self.data)
+        tmp = copy.deepcopy(self.data)
         self.data = self.data1
         x_1, edge_index_1, _, _ = aug_fct1()
         self.data = self.data2
         _, _, x_2, edge_index_2 = aug_fct2()
-        self.data = self.tmp
+        self.data = tmp
         return x_1, edge_index_1, x_2, edge_index_2
 
     def random(self):
@@ -416,38 +389,14 @@ class Aug:
         x_2 = cav(self.data.x, feature_weights, self.param["drop_feature_rate_2"])
         return x_1, edge_index_1, x_2, edge_index_2
 
-    def perturb_commu(self, delta):
-        if not (hasattr(self.data, "probs") and hasattr(self.data, "sizes")):
-            print("no community...")
-            return
-        delta = float(delta)
-        self.data.sizes = _permute_nodes(self.data.sizes, delta)
-        self.data.probs = _perturb_matrix(self.data.probs, delta)
-
     def sbm(self):
-        global banks
+        global sbm_banks
         sizes, probs = self.data.sizes, self.data.probs
         data_1 = gen_sbm(sizes, probs).to(self.device)
         data_1.x = self.data.x
         data_1.x = _drop_feature(data_1.x, self.param["drop_feature_rate_1"])
         data_2 = self.data
         data_2.x = self.data.x
-        data_2.x = _drop_feature(data_2.x, self.param["drop_feature_rate_2"])
-        return data_1.x, data_1.edge_index, data_2.x, data_2.edge_index
-
-    def sbm_fast(self):
-        data_1 = gen_sbm_fast(self.data).to(self.device)
-        data_1.x = self.data.x
-        data_1.x = _drop_feature(data_1.x, self.param["drop_feature_rate_1"])
-        data_2 = self.data
-        data_2.x = _drop_feature(data_2.x, self.param["drop_feature_rate_2"])
-        return data_1.x, data_1.edge_index, data_2.x, data_2.edge_index
-
-    def sbm_fast2(self):
-        data_1 = gen_sbm_fast_2(self.data, self.data.state).to(self.device)
-        data_1.x = self.data.x
-        data_1.x = _drop_feature(data_1.x, self.param["drop_feature_rate_1"])
-        data_2 = self.data
         data_2.x = _drop_feature(data_2.x, self.param["drop_feature_rate_2"])
         return data_1.x, data_1.edge_index, data_2.x, data_2.edge_index
 
@@ -461,30 +410,19 @@ class Aug:
         data_2.x = _drop_feature(data_2.x, self.param["drop_feature_rate_2"])
         return data_1.x, data_1.edge_index, data_2.x, data_2.edge_index
 
-    def sgf(self):
-        data_1 = gen_sgf(self.data, 0.5).to(self.device)
+    def sbm_fast(self):
+        data_1 = gen_sbm_fast(self.data, self.data.state).to(self.device)
         data_1.x = self.data.x
         data_1.x = _drop_feature(data_1.x, self.param["drop_feature_rate_1"])
-        data_2 = gen_sgf(self.data, 0.5).to(self.device)
-        data_2.x = self.data.x
+        data_2 = self.data
         data_2.x = _drop_feature(data_2.x, self.param["drop_feature_rate_2"])
         return data_1.x, data_1.edge_index, data_2.x, data_2.edge_index
 
-    def ba(self):
-        data_1 = gen_ba(self.data).to(self.device)
+    def sbm_fast_2(self):
+        data_1 = gen_sbm_fast(self.data, self.data.state).to(self.device)
         data_1.x = self.data.x
         data_1.x = _drop_feature(data_1.x, self.param["drop_feature_rate_1"])
-        data_2 = gen_ba(self.data).to(self.device)
-        data_2.x = self.data.x
-        data_2.x = _drop_feature(data_2.x, self.param["drop_feature_rate_2"])
-        return data_1.x, data_1.edge_index, data_2.x, data_2.edge_index
-
-    def config_model(self):
-        data_1 = gen_deg(self.data).to(self.device)
-        data_1.x = self.data.x
-        data_1.x = _drop_feature(data_1.x, self.param["drop_feature_rate_1"])
-        data_2 = gen_deg(self.data).to(self.device)
-        data_2.x = self.data.x
+        data_2 = gen_sbm_fast(self.data, self.data.state).to(self.device)
         data_2.x = _drop_feature(data_2.x, self.param["drop_feature_rate_2"])
         return data_1.x, data_1.edge_index, data_2.x, data_2.edge_index
 
@@ -502,226 +440,6 @@ class Aug:
             self.device
         )
         return x_1, edge_index_1, x_2, edge_index_2
-
-    """ predictor augmentation...
-    def rjc(self):
-        x_1, edge_index_1, x_2, edge_index_2 = self.random()
-        neg_edge = negative_sampling(self.data.edge_index).T.tolist()
-        
-        data_1 = Data(x=x_1, edge_index=edge_index_1)
-        G1 = to_networkx(data_1, to_undirected=True)
-        G1 = _reconstruction(G1, nx.jaccard_coefficient, 0.9, neg_edge)
-        data_2 = Data(x=x_2, edge_index=edge_index_2)
-        G2 = to_networkx(data_2, to_undirected=True)
-        G2 = _reconstruction(G2, nx.jaccard_coefficient, 0.9, neg_edge)
-
-        data_1 = from_networkx(G1).to(self.device)
-        data_2 = from_networkx(G2).to(self.device)
-        return x_1, data_1.edge_index, x_2, data_2.edge_index
-
-    def rjc2(self):
-        # x_1, edge_index_1, x_2, edge_index_2 = self.random()
-        # neg_edge = negative_sampling(self.data.edge_index).T.tolist()
-        
-        # data_1 = Data(x=x_1, edge_index=edge_index_1)
-        # G1 = to_networkx(data_1, to_undirected=True)
-        # G1 = _reconstruction(G1, nx.jaccard_coefficient, 0.9, neg_edge)
-        # data_2 = Data(x=x_2, edge_index=edge_index_2)
-        # G2 = to_networkx(data_2, to_undirected=True)
-        # G2 = _reconstruction(G2, nx.jaccard_coefficient, 0.9, neg_edge)
-
-        # data_1 = from_networkx(G1).to(self.device)
-        # data_2 = from_networkx(G2).to(self.device)
-        edge_index_1 = _drop_edge_weighted(self.data.edge_index, self.data.weight, self.param['drop_edge_rate_1']).to(self.device)
-        edge_index_2 = _drop_edge_weighted(self.data.edge_index, self.data.weight, self.param['drop_edge_rate_2']).to(self.device)
-        x_1 = _drop_feature(self.data.x, self.param['drop_feature_rate_1']).to(self.device)
-        x_2 = _drop_feature(self.data.x, self.param['drop_feature_rate_2']).to(self.device)
-        return x_1, edge_index_1, x_2, edge_index_2
-
-    def raa(self):
-        x_1, edge_index_1, x_2, edge_index_2 = self.random()
-        neg_edge = negative_sampling(self.data.edge_index).T.tolist()
-
-        data_1 = Data(x=x_1, edge_index=edge_index_1)
-        G1 = to_networkx(data_1, to_undirected=True)
-        G1 = _reconstruction(G1, nx.adamic_adar_index, 0.9, neg_edge)
-        data_2 = Data(x=x_2, edge_index=edge_index_2)
-        G2 = to_networkx(data_2, to_undirected=True)
-        G2 = _reconstruction(G2, nx.adamic_adar_index, 0.9, neg_edge)
-
-        data_1 = from_networkx(G1).to(self.device)
-        data_2 = from_networkx(G2).to(self.device)
-        return x_1, data_1.edge_index, x_2, data_2.edge_index
-
-    def rra(self):
-        x_1, edge_index_1, x_2, edge_index_2 = self.random()
-        data_1 = Data(x=x_1, edge_index=edge_index_1)
-        G1 = to_networkx(data_1, to_undirected=True)
-        neg_edge = negative_sampling(edge_index_1).T.tolist()
-        G1 = _reconstruction(G1, nx.resource_allocation_index, 0.9, neg_edge)    
-        data_2 = Data(x=x_2, edge_index=edge_index_2)
-        G2 = to_networkx(data_2, to_undirected=True)
-        neg_edge = negative_sampling(edge_index_2).T.tolist()
-        G2 = _reconstruction(G2, nx.resource_allocation_index, 0.9, neg_edge)
-
-        data_1 = from_networkx(G1).to(self.device)
-        data_2 = from_networkx(G2).to(self.device)
-        return x_1, data_1.edge_index, x_2, data_2.edge_index
-    
-    def close_triangle(self):
-        def exist_neight(u, v, edge_index):
-            mask = edge_index[0] == u
-            n_u = edge_index[1][mask]
-            mask = edge_index[0] == v
-            n_v = edge_index[1][mask]
-            mask = torch.eq(n_v[:, None], n_u[None, :])
-            if not mask.any():
-                # print('mask', mask)
-                return False
-            cn_uv = n_v[torch.nonzero(mask[:, 0])[:, 0]]
-            if cn_uv.shape[0] != 0:
-                # print('cn_uv', cn_uv)
-                return True
-            else:
-                return False
-
-        x_1, edge_index_1, x_2, edge_index_2 = self.random()
-        nb_sample = int(0.3*self.data.edge_index.size(1))
-        edge_index_1_close = copy.copy(edge_index_1)
-        edge_index_2_close = copy.copy(edge_index_2)
-        neg_edges = torch.cat((self.split_edge['test']['edge'], self.split_edge['test']['edge_neg'])) # to_undirected(negative_sampling(self.data.edge_index, num_neg_samples=nb_sample)).T
-        # neg_edges_1 = to_undirected(negative_sampling(edge_index_1, num_neg_samples=nb_sample)).T
-        nb_l1_add = 0
-        nb_l2_add = 0
-        # print('neg_edges_1', neg_edges_1.shape)
-        for neg_edge in neg_edges:
-            if exist_neight(neg_edge[0], neg_edge[1], edge_index_1):
-                nb_l1_add += 1
-                neg_edge_to_add = to_undirected(neg_edge.unsqueeze(dim=-1))
-                neg_edge_to_add = neg_edge_to_add.to(self.device)
-                edge_index_1_close = torch.cat((edge_index_1_close, neg_edge_to_add), dim=1)
-            if exist_neight(neg_edge[0], neg_edge[1], edge_index_2):
-                nb_l2_add += 1
-                neg_edge_to_add = to_undirected(neg_edge.unsqueeze(dim=-1))
-                neg_edge_to_add = neg_edge_to_add.to(self.device)
-                edge_index_2_close = torch.cat((edge_index_2_close, neg_edge_to_add), dim=1)
-        # neg_edges_2 = to_undirected(negative_sampling(edge_index_2, num_neg_samples=nb_sample)).T
-        # for neg_edge in neg_edges_2:
-        #     if exist_neight(neg_edge[0], neg_edge[1], edge_index_2):
-        #         nb_l2_add += 1
-        #         neg_edge = to_undirected(neg_edge.unsqueeze(dim=-1))
-        #         edge_index_2_close = torch.cat((edge_index_2_close, neg_edge), dim=1)
-        if nb_l1_add+nb_l2_add > 0:
-            print([nb_l1_add, nb_l2_add])
-        return x_1, edge_index_1_close, x_2, edge_index_2_close"""
-
-    def random_prob(self):
-        weight = self.data.weight if "weight" in self.data else None
-        edge_index_1 = _droupout_adj_prob(
-            self.data.edge_index,
-            weight,
-            p=self.param[f"drop_edge_rate_{1}"],
-            force_undirected=True,
-        )[0]
-        edge_index_2 = _droupout_adj_prob(
-            self.data.edge_index,
-            weight,
-            p=self.param[f"drop_edge_rate_{2}"],
-            force_undirected=True,
-        )[0]
-        x_1 = _drop_feature(self.data.x, self.param["drop_feature_rate_1"])
-        x_2 = _drop_feature(self.data.x, self.param["drop_feature_rate_2"])
-        return x_1, edge_index_1, x_2, edge_index_2
-
-
-def _droupout_adj_prob(
-    edge_index,
-    edge_weight,
-    p: float = 0.5,
-    force_undirected: bool = False,
-    num_nodes: int = None,
-    training: bool = True,
-):
-    def filter_adj(row, col, edge_weight, mask):
-        return row[mask], col[mask], None if edge_weight is None else edge_weight[mask]
-
-    if p < 0.0 or p > 1.0:
-        raise ValueError(f"Dropout probability has to be between 0 and 1 (got {p}")
-    if not training or p == 0.0:
-        return edge_index, edge_weight
-    row, col = edge_index
-    mask = torch.rand(row.size(0), device=edge_index.device) >= p * edge_weight
-    if force_undirected:
-        mask[row > col] = False
-    row, col, edge_weight = filter_adj(row, col, edge_weight, mask)
-    if force_undirected:
-        edge_index = torch.stack(
-            [torch.cat([row, col], dim=0), torch.cat([col, row], dim=0)], dim=0
-        )
-        if edge_weight is not None:
-            edge_weight = torch.cat([edge_weight, edge_weight], dim=0)
-    else:
-        edge_index = torch.stack([row, col], dim=0)
-    return edge_index, edge_weight
-
-
-"""
-def _reconstruction(G, algo: callable, threshold, edge_list = None):
-    new_G = nx.Graph()
-    new_G.add_node(G)
-    preds = algo(G, [tuple(pair) for pair in edge_list])
-    retains = []
-    for u, v, p in preds:
-        if p >= threshold:
-            retains.append((u, v))
-    new_G.add_edges_from(retains)
-    return new_G"""
-
-""" ### optimisation
-def _close_triangle(edge_index):
-    edge_index = to_undirected(edge_index)
-    link_to_add = [edge_index]
-    for u in edge_index[0].unique():
-        subset, sub_edge_index, _, _ = k_hop_subgraph(int(u), 2, edge_index)
-        n = len(subset)
-        num_samples = int((n*(n-1)/2)-len(sub_edge_index[0]))
-        if num_samples <= 0:
-            continue
-        neg_sampl = to_undirected(negative_sampling(sub_edge_index, num_neg_samples=num_samples))
-        link_to_add.append(neg_sampl)
-    return torch.cat(link_to_add, dim=1)
-"""
-
-
-def _permute_nodes(sizes, perm_rate):
-    sizes = copy.copy(sizes)
-    total_nodes = sum(sizes)
-    num_nodes_to_permute = int(total_nodes * perm_rate)
-    for _ in range(num_nodes_to_permute):
-        orig_community = random.randint(0, len(sizes) - 1)
-        dest_community = random.randint(0, len(sizes) - 1)
-        while dest_community == orig_community:
-            dest_community = random.randint(0, len(sizes) - 1)
-        sizes[orig_community] -= 1
-        sizes[dest_community] += 1
-    return sizes
-
-
-def _perturb_matrix(matrix, delta):
-    perturbed_matrix = matrix.copy()
-    difference = 0.0
-    while difference < delta:
-        i = np.random.randint(0, matrix.shape[0])
-        j = np.random.randint(i, matrix.shape[1])
-        epsilon = np.random.uniform(-0.1, 0.1)
-        perturbed_matrix[i, j] = np.clip(perturbed_matrix[i, j] + epsilon, 0, 1)
-        difference += np.abs(matrix[i, j] - perturbed_matrix[i, j])
-    upper_triangular = np.triu(perturbed_matrix)
-    perturbed_matrix = (
-        upper_triangular + upper_triangular.T - np.diag(np.diag(upper_triangular))
-    )
-    return perturbed_matrix
-
 
 def _drop_feature(x, drop_prob):
     drop_mask = (
@@ -762,7 +480,7 @@ def _drop_feature_weighted(x, w, p: float, threshold: float = 0.7):
 
 def gen_sbm_bank(data_split, runs):
     pass
-    # global banks
+    # global sbm_banks
     # for r in range(runs):
     #     bank = []
     #     data, _ = data_split.get(r)
@@ -772,4 +490,4 @@ def gen_sbm_bank(data_split, runs):
     #         data_new = gen_sbm(sizes, probs).to(data.x.device)
     #         print(data_new.edge_index.shape)
     #         bank.append(data_new)
-    #     banks.append(bank)
+    #     sbm_banks.append(bank)

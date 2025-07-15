@@ -76,14 +76,7 @@ def pretrain(model_name, model, aug, param):
         "csgcl": pretrain_csgcl,
         "bgrl": pretrain_bgrl,
         "lbgrl": pretrain_lbgrl,
-        #   "agrace": pretrain_agrace,
-        #   "ândgrace":pretrain_and_grace,
-        #   "âorgrace": pretrain_aor_grace,
-        #   "extagrace": pretrain_extend_agrace,
         "agrace": pretrain_a2grace,
-        #   "abgrl": pretrain_abgrl,
-        #   "âorbgrl": pretrain_or_bgrl,
-        #   "extabgrl": pretrain_extend_abgrl,
         "abgrl": pretrain_a2bgrl,
     }
     return switch[model_name](model, aug, param)
@@ -93,13 +86,9 @@ def pretrain_grace(model, aug, param):
     optimizer = torch.optim.Adam(
         model.parameters(),
         lr=param["gnn_lr"],
-        # weight_decay=param['weight_decay']
     )
     t1 = time.time()
     loss_res = []
-    # best_model = model.state_dict()
-    # best_val = 0
-    # patience = 100
     for epoch in tqdm(range(1, param["ct_epochs"] + 1)):
         model.train()
         optimizer.zero_grad()
@@ -111,22 +100,6 @@ def pretrain_grace(model, aug, param):
         optimizer.step()
         if epoch % 10 == 0:
             loss_res.append(round(float(loss), 2))
-            # valid part
-            # with torch.no_grad():
-            #     model.eval()
-            #     val_inner_score = valid_hits50(model, aug.data, aug.split_edge, param)
-            # val_inner_score = round(val_inner_score, 4)
-            # if val_inner_score >= best_val:
-            #     patience = 100
-            #     best_val = val_inner_score
-            #     print(f"best model at ep {epoch} with val score {val_inner_score}, loss {loss}")
-            #     best_model = model.state_dict()
-            # else:
-            #     patience -= 1
-            # writer.add_scalars("grace", {'tr_loss':loss, 'val_inner_score': val_inner_score}, epoch)
-            # if patience == 0:
-            #     break
-    # model.load_state_dict(best_model)
 
     print("pretrain loss: ", loss_res)
     pre_time = time.time() - t1
@@ -139,16 +112,12 @@ def pretrain_lgrace(model, aug, param):
     optimizer = torch.optim.Adam(
         model.parameters(),
         lr=param["gnn_lr"],
-        # weight_decay=param['weight_decay']
     )
     loss_res = []
     t1 = time.time()
 
     total_loss = []
     nb_jump = 0
-    # best_model = model.state_dict()
-    # best_val = 0
-    # patience = 100
     for epoch in tqdm(range(1, 1 + param["ct_epochs"])):
         model.train()
         optimizer.zero_grad()
@@ -173,23 +142,6 @@ def pretrain_lgrace(model, aug, param):
             _loss = np.average([_.item() for _ in total_loss])
             loss_res.append(round(float(_loss), 2))
 
-            # valid part
-    #         with torch.no_grad():
-    #             model.eval()
-    #             val_inner_score = valid_hits50(model, aug.data, aug.split_edge, param)
-    #         val_inner_score = round(val_inner_score, 4)
-    #         if val_inner_score >= best_val:
-    #             patience = 100
-    #             best_val = val_inner_score
-    #             print(f"best model at ep {epoch} with val score {val_inner_score}, loss {loss}")
-    #             best_model = model.state_dict()
-    #         else:
-    #             patience -= 1
-    #         writer.add_scalars("lgrace", {'tr_loss':loss, 'val_inner_score': val_inner_score}, epoch)
-    #         if patience == 0:
-    #             break
-    # model.load_state_dict(best_model)
-
     print("real epochs: ", param["ct_epochs"] - nb_jump)
     print("pretrain loss: ", loss_res)
     pre_time = time.time() - t1
@@ -202,13 +154,9 @@ def pretrain_csgcl(model, aug, param):
     optimizer = torch.optim.Adam(
         model.parameters(),
         lr=param["gnn_lr"],
-        #  weight_decay=param['weight_decay']
     )
     t1 = time.time()
     loss_res = []
-    # best_model = model.state_dict()
-    # best_val = 0
-    # patience = 100
     _, _, node_cs = get_commu_strength(aug.data)
     for epoch in tqdm(range(1, param["ct_epochs"] + 1)):
         model.train()
@@ -221,22 +169,6 @@ def pretrain_csgcl(model, aug, param):
         optimizer.step()
         if epoch % 10 == 0:
             loss_res.append(round(float(loss), 2))
-            # valid part
-    #         with torch.no_grad():
-    #             model.eval()
-    #             val_inner_score = valid_hits50(model, aug.data, aug.split_edge, param)
-    #         val_inner_score = round(val_inner_score, 4)
-    #         if val_inner_score >= best_val:
-    #             patience = 100
-    #             best_val = val_inner_score
-    #             print(f"best model at ep {epoch} with val score {val_inner_score}, loss {loss}")
-    #             best_model = model.state_dict()
-    #         else:
-    #             patience -= 1
-    #         writer.add_scalars("csgcl", {'tr_loss':loss, 'val_inner_score': val_inner_score}, epoch)
-    #         if patience == 0:
-    #             break
-    # model.load_state_dict(best_model)
 
     print("pretrain loss: ", loss_res, " s")
     pre_time = time.time() - t1
@@ -260,9 +192,7 @@ def pretrain_bgrl(model, aug, param):
 
     t1 = time.time()
     loss_res = []
-    # best_model = model.state_dict()
-    # best_val = 0
-    # patience = 100
+
     for epoch in tqdm(range(1, param["ct_epochs"] + 1)):
         model.train()
 
@@ -282,36 +212,7 @@ def pretrain_bgrl(model, aug, param):
         model.update_target_network(mm)
         if epoch % 50 == 0:
             loss_res.append(round(float(loss), 2))
-            # with torch.no_grad():
-            #     model.eval()
-            #     val_inner_score = valid_hits50(model, aug.data, aug.split_edge, param)
-            # val_inner_score = round(val_inner_score, 4)
-            # if val_inner_score >= best_val:
-            #     patience = 100
-            #     best_val = val_inner_score
-            #     print(f"best model at ep {epoch} with val score {val_inner_score}, loss {loss}")
-            #     best_model = model.state_dict()
-            # else:
-            #     patience -= 1
-            # writer.add_scalars("bgrl", {'tr_loss':loss, 'val_inner_score': val_inner_score}, epoch)
-            # if patience == 0:
-            #     break
 
-            # valid part
-    #         with torch.no_grad():
-    #             model.eval()
-    #             inner = get_predictor('inner', param)
-    #             val_inner_score, test_inner_score = valid_hits50(model, aug.data, aug.split_edge, inner, param)
-    #         mlp = get_predictor('mlp', param).to(aug.device)
-    #         pred_train(model, mlp, aug.data, aug.split_edge, param)
-    #         val_mlp_score, test_mlp_score = valid_hits50(model, aug.data, aug.split_edge, mlp, param)
-    #         ncn = get_predictor('ncn', param).to(aug.device)
-    #         pred_train(model, ncn, aug.data, aug.split_edge, param)
-    #         val_ncn_score, test_ncn_score = valid_hits50(model, aug.data, aug.split_edge, ncn, param)
-    #         writer.add_scalars("bgrl", {'tr_loss':loss, 'val_inner_score': val_inner_score, "test_inner_score": test_inner_score,
-    #                                      'val_mlp_score': val_mlp_score, 'test_mlp_score': test_mlp_score,
-    #                                      'val_ncn_score': val_ncn_score, 'test_ncn_score': test_ncn_score}, epoch)
-    # model.load_state_dict(best_model)
     print("pretrain loss: ", loss_res, " s")
     pre_time = time.time() - t1
     print(f"pretrain time: {pre_time:.2f} s")
@@ -336,9 +237,7 @@ def pretrain_lbgrl(model, aug, param):
     t1 = time.time()
     loss_res = []
     nb_jump = 0
-    # best_model = model.state_dict()
-    # best_val = 0
-    # patience = 100
+
     for epoch in tqdm(range(1, param["ct_epochs"] + 1)):
         lr = lr_scheduler.get(epoch)
         for param_group in optimizer.param_groups:
@@ -368,34 +267,107 @@ def pretrain_lbgrl(model, aug, param):
         model.update_target_network(mm)
         if epoch % 50 == 0:
             loss_res.append(round(float(loss), 2))
-            # valid part
-            # val_inner_score = round(val_inner_score, 4)
-            # if val_inner_score >= best_val:
-            #     patience = 10000
-            #     best_val = val_inner_score
-            #     print(f"best model at ep {epoch} with val score {val_inner_score}, loss {loss}")
-            #     best_model = model.state_dict()
-            # else:
-            #     patience -= 1
-            # if patience == 0:
-            #     break
-    #         with torch.no_grad():
-    #             model.eval()
-    #             inner = get_predictor('inner', param)
-    #             val_inner_score, test_inner_score = valid_hits50(model, aug.data, aug.split_edge, inner, param)
-    #         mlp = get_predictor('mlp', param).to(aug.device)
-    #         pred_train(model, mlp, aug.data, aug.split_edge, param)
-    #         val_mlp_score, test_mlp_score = valid_hits50(model, aug.data, aug.split_edge, mlp, param)
-    #         ncn = get_predictor('ncn', param).to(aug.device)
-    #         pred_train(model, ncn, aug.data, aug.split_edge, param)
-    #         val_ncn_score, test_ncn_score = valid_hits50(model, aug.data, aug.split_edge, ncn, param)
-    #         writer.add_scalars("l-bgrl", {'tr_loss':loss, 'val_inner_score': val_inner_score, "test_inner_score": test_inner_score,
-    #                                      'val_mlp_score': val_mlp_score, 'test_mlp_score': test_mlp_score,
-    #                                      'val_ncn_score': val_ncn_score, 'test_ncn_score': test_ncn_score}, epoch)
-
-    # model.load_state_dict(best_model)
 
     print("real epochs: ", param["ct_epochs"] - nb_jump)
+    print("pretrain loss: ", loss_res, " s")
+    pre_time = time.time() - t1
+    print(f"pretrain time: {pre_time:.2f} s")
+    writer.flush()
+    return pre_time
+
+
+
+def pretrain_a2grace(model, aug, param):
+    optimizer = torch.optim.Adam(
+        model.parameters(),
+        lr=param["gnn_lr"],
+    )
+    t1 = time.time()
+    loss_res = []
+
+    for epoch in tqdm(range(1, param["ct_epochs"] + 1)):
+        model.train()
+        optimizer.zero_grad()
+        x_1, edge_index_1, x_2, edge_index_2 = aug()
+        adj_t = spar.SparseTensor.from_edge_index(
+            edge_index_1, sparse_sizes=(aug.data.num_nodes, aug.data.num_nodes)
+        )
+        adj_t = adj_t.to_symmetric().coalesce()
+        A_hat_1 = adj_t.to_dense() + torch.eye(aug.data.x.shape[0]).to(aug.device)
+
+        adj_t = spar.SparseTensor.from_edge_index(
+            edge_index_2, sparse_sizes=(aug.data.num_nodes, aug.data.num_nodes)
+        )
+        adj_t = adj_t.to_symmetric().coalesce()
+        A_hat_2 = adj_t.to_dense() + torch.eye(aug.data.x.shape[0]).to(aug.device)
+
+        z1 = model(x_1, edge_index_1)
+        z2 = model(x_2, edge_index_2)
+
+        loss = model.loss(z1, z2, A_hat_1, A_hat_2)
+        loss.backward()
+        optimizer.step()
+        if epoch % 10 == 0:
+            loss_res.append(round(float(loss), 2))
+
+
+    print("pretrain loss: ", loss_res)
+    pre_time = time.time() - t1
+    print(f"pretrain time: {pre_time:.2f} s")
+    return pre_time
+
+
+def pretrain_a2bgrl(model, aug, param):
+    # optimizer
+    optimizer = torch.optim.AdamW(
+        model.trainable_parameters(),
+        lr=param["gnn_lr"],
+        weight_decay=param["weight_decay"],
+    )
+
+    # scheduler
+    lr_scheduler = CosineDecayScheduler(
+        param["gnn_lr"], int(param["ct_epochs"] / 10), param["ct_epochs"]
+    )
+    mm_scheduler = CosineDecayScheduler(1 - 0.99, 0, param["ct_epochs"])
+
+    t1 = time.time()
+    loss_res = []
+
+    for epoch in tqdm(range(1, param["ct_epochs"] + 1)):
+        model.train()
+        # aug.train()
+
+        lr = lr_scheduler.get(epoch)
+        for param_group in optimizer.param_groups:
+            param_group["lr"] = lr
+        mm = 1 - mm_scheduler.get(epoch)
+
+        optimizer.zero_grad()
+        x_1, edge_index_1, x_2, edge_index_2 = aug()
+        adj_t = spar.SparseTensor.from_edge_index(
+            edge_index_1, sparse_sizes=(aug.data.num_nodes, aug.data.num_nodes)
+        )
+        adj_t = adj_t.to_symmetric().coalesce()
+        A_hat_1 = adj_t.to_dense() + torch.eye(aug.data.x.shape[0]).to(aug.device)
+
+        adj_t = spar.SparseTensor.from_edge_index(
+            edge_index_2, sparse_sizes=(aug.data.num_nodes, aug.data.num_nodes)
+        )
+        adj_t = adj_t.to_symmetric().coalesce()
+        A_hat_2 = adj_t.to_dense() + torch.eye(aug.data.x.shape[0]).to(aug.device)
+
+        z1, y2 = model.train_forward((x_1, edge_index_1), (x_2, edge_index_2))
+        z2, y1 = model.train_forward((x_2, edge_index_2), (x_1, edge_index_1))
+
+        loss = model.loss(z1, z2, y1, y2, A_hat_1, A_hat_2)
+
+        loss.backward()
+        optimizer.step()
+        model.update_target_network(mm)
+        if epoch % 10 == 0:
+            loss_res.append(round(float(loss), 2))
+
     print("pretrain loss: ", loss_res, " s")
     pre_time = time.time() - t1
     print(f"pretrain time: {pre_time:.2f} s")
@@ -540,68 +512,8 @@ def pretrain_extend_agrace(model, aug, param):
     print(f"pretrain time: {pre_time:.2f} s")
     writer.flush()
     return pre_time
-"""
 
 
-def pretrain_a2grace(model, aug, param):
-    optimizer = torch.optim.Adam(
-        model.parameters(),
-        lr=param["gnn_lr"],
-        # weight_decay=param['weight_decay']
-    )
-    t1 = time.time()
-    loss_res = []
-    # best_model = model.state_dict()
-    # best_val = 0
-    # patience = 100
-    for epoch in tqdm(range(1, param["ct_epochs"] + 1)):
-        model.train()
-        optimizer.zero_grad()
-        x_1, edge_index_1, x_2, edge_index_2 = aug()
-        adj_t = spar.SparseTensor.from_edge_index(
-            edge_index_1, sparse_sizes=(aug.data.num_nodes, aug.data.num_nodes)
-        )
-        adj_t = adj_t.to_symmetric().coalesce()
-        A_hat_1 = adj_t.to_dense() + torch.eye(aug.data.x.shape[0]).to(aug.device)
-
-        adj_t = spar.SparseTensor.from_edge_index(
-            edge_index_2, sparse_sizes=(aug.data.num_nodes, aug.data.num_nodes)
-        )
-        adj_t = adj_t.to_symmetric().coalesce()
-        A_hat_2 = adj_t.to_dense() + torch.eye(aug.data.x.shape[0]).to(aug.device)
-
-        z1 = model(x_1, edge_index_1)
-        z2 = model(x_2, edge_index_2)
-
-        loss = model.loss(z1, z2, A_hat_1, A_hat_2)
-        loss.backward()
-        optimizer.step()
-        if epoch % 10 == 0:
-            loss_res.append(round(float(loss), 2))
-            # valid part
-    #         with torch.no_grad():
-    #             model.eval()
-    #             val_inner_score = valid_hits50(model, aug.data, aug.split_edge, param)
-    #         val_inner_score = round(val_inner_score, 4)
-    #         if val_inner_score >= best_val:
-    #             patience = 100
-    #             best_val = val_inner_score
-    #             print(f"best model at ep {epoch} with val score {val_inner_score}, loss {loss}")
-    #             best_model = model.state_dict()
-    #         else:
-    #             patience -= 1
-    #         writer.add_scalars("a2grace", {'tr_loss':loss, 'val_inner_score': val_inner_score}, epoch)
-    #         if patience == 0:
-    #             break
-    # model.load_state_dict(best_model)
-
-    print("pretrain loss: ", loss_res)
-    pre_time = time.time() - t1
-    print(f"pretrain time: {pre_time:.2f} s")
-    return pre_time
-
-
-"""
 def pretrain_abgrl(model, aug, param):
     # optimizer
     optimizer = torch.optim.AdamW(model.trainable_parameters(), lr=param['gnn_lr'], weight_decay=param['weight_decay'])
@@ -732,78 +644,3 @@ def pretrain_extend_abgrl(model, aug, param):
     writer.flush()
     return pre_time
 """
-
-
-def pretrain_a2bgrl(model, aug, param):
-    # optimizer
-    optimizer = torch.optim.AdamW(
-        model.trainable_parameters(),
-        lr=param["gnn_lr"],
-        weight_decay=param["weight_decay"],
-    )
-
-    # scheduler
-    lr_scheduler = CosineDecayScheduler(
-        param["gnn_lr"], int(param["ct_epochs"] / 10), param["ct_epochs"]
-    )
-    mm_scheduler = CosineDecayScheduler(1 - 0.99, 0, param["ct_epochs"])
-
-    t1 = time.time()
-    loss_res = []
-    # best_model = model.state_dict()
-    # best_val = 0
-    # patience = 100
-    for epoch in tqdm(range(1, param["ct_epochs"] + 1)):
-        model.train()
-        # aug.train()
-
-        lr = lr_scheduler.get(epoch)
-        for param_group in optimizer.param_groups:
-            param_group["lr"] = lr
-        mm = 1 - mm_scheduler.get(epoch)
-
-        optimizer.zero_grad()
-        x_1, edge_index_1, x_2, edge_index_2 = aug()
-        adj_t = spar.SparseTensor.from_edge_index(
-            edge_index_1, sparse_sizes=(aug.data.num_nodes, aug.data.num_nodes)
-        )
-        adj_t = adj_t.to_symmetric().coalesce()
-        A_hat_1 = adj_t.to_dense() + torch.eye(aug.data.x.shape[0]).to(aug.device)
-
-        adj_t = spar.SparseTensor.from_edge_index(
-            edge_index_2, sparse_sizes=(aug.data.num_nodes, aug.data.num_nodes)
-        )
-        adj_t = adj_t.to_symmetric().coalesce()
-        A_hat_2 = adj_t.to_dense() + torch.eye(aug.data.x.shape[0]).to(aug.device)
-
-        z1, y2 = model.train_forward((x_1, edge_index_1), (x_2, edge_index_2))
-        z2, y1 = model.train_forward((x_2, edge_index_2), (x_1, edge_index_1))
-
-        loss = model.loss(z1, z2, y1, y2, A_hat_1, A_hat_2)
-
-        loss.backward()
-        optimizer.step()
-        model.update_target_network(mm)
-        if epoch % 10 == 0:
-            loss_res.append(round(float(loss), 2))
-    #         with torch.no_grad():
-    #             model.eval()
-    #             val_inner_score = valid_hits50(model, aug.data, aug.split_edge, param)
-    #         val_inner_score = round(val_inner_score, 4)
-    #         if val_inner_score >= best_val:
-    #             patience = 100
-    #             best_val = val_inner_score
-    #             print(f"best model at ep {epoch} with val score {val_inner_score}, loss {loss}")
-    #             best_model = model.state_dict()
-    #         else:
-    #             patience -= 1
-    #         writer.add_scalars("a2bgrl", {'tr_loss':loss, 'val_inner_score': val_inner_score}, epoch)
-    #         if patience == 0:
-    #             break
-
-    # model.load_state_dict(best_model)
-    print("pretrain loss: ", loss_res, " s")
-    pre_time = time.time() - t1
-    print(f"pretrain time: {pre_time:.2f} s")
-    writer.flush()
-    return pre_time

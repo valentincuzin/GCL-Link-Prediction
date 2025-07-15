@@ -231,8 +231,7 @@ def to_graph_tool(data: Data) -> tuple[gt.Graph, gt.PropertyMap]:
     Returns:
         tuple[gt.Graph, gt.PropertyMap]: gt graph and block map
     """
-    ei = to_undirected(data.edge_index)
-    ei = ei[:, ei[0] < ei[1]]
+    ei = removerepeated(data.edge_index)
 
     G_gt = gt.Graph(directed=False)
 
