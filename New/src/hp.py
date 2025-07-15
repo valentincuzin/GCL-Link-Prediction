@@ -61,7 +61,7 @@ def hp_augmentation(augmentation, trial, hp):
         # hp["commu_detect"] = trial.suggest_categorical(
         #     "commu_detect", ["louvain", "leiden", "infomap"]
         # )
-        hp["commu_detect"] = "louvain"
+        hp["commu_detect"] = "leiden"
 
     if any(x in augmentation for x in ["rjc", "raa", "rra"]):
         hp["reconstruction_rate"] = trial.suggest_float(

@@ -202,7 +202,7 @@ def gen_sbm_fast(data):
     return new_data
 
 def gen_sbm_fast_2(data, state):
-    gtG = state.sample_graph(canonical=True, self_loops=False, multigraph=False)
+    gtG = state.sample_graph(self_loops=False, multigraph=False)
     edge_index = torch.from_numpy(gtG.get_edges().T)
     new_data = Data(edge_index=edge_index).to(data.edge_index.device)
     new_data.edge_index = to_undirected(new_data.edge_index)

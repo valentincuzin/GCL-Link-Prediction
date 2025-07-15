@@ -44,9 +44,10 @@ class Aug:
         self.split_edge = split_edge
         self.device = self.data.x.device
         self.param = param
-        global banks
-        if len(banks) > run:
-            self.bank = banks[run]
+        self.run = run
+        # global banks
+        # if len(banks) > run:
+        #     self.bank = banks[run]
         self.type = type
         self.data = self.data.to(self.device)
         self.train_mode = True
@@ -72,11 +73,11 @@ class Aug:
         elif type == "scom":
             feature_weights, drop_weights = self.commu_strength()
         elif "sbm" in type:
-            # cd_algo = None
-            # if self.param["commu_detect"]:
-            #     cd_algo = self.param["commu_detect"]
-            # print(cd_algo, "detection...")
-            data = commu_repartition(data).to(self.device)
+            cd_algo = None
+            if self.param["commu_detect"]:
+                cd_algo = self.param["commu_detect"]
+            print(cd_algo, "detection...")
+            data = commu_repartition(data, cd_algo).to(self.device)
             # self.bank = gen_sbm_bank(data, self.param['ct_epochs'])
             if "fast" in type:
                 gtG, block_map = to_graph_tool(data)
@@ -422,9 +423,14 @@ class Aug:
         self.data.probs = _perturb_matrix(self.data.probs, delta)
 
     def sbm(self):
-        data_1, data_2 = random.sample(self.bank, 2)
+        global banks
+        sizes, probs = self.data.sizes, self.data.probs
+        data_1 = gen_sbm(sizes, probs).to(self.device)
         data_1.x = self.data.x
         data_1.x = _drop_feature(data_1.x, self.param["drop_feature_rate_1"])
+        G = to_networkx(data_1, to_undirected=True)
+        G.draw(node_size=30, )
+        data_2 = self.data
         data_2.x = self.data.x
         data_2.x = _drop_feature(data_2.x, self.param["drop_feature_rate_2"])
         return data_1.x, data_1.edge_index, data_2.x, data_2.edge_index
@@ -754,12 +760,15 @@ def _drop_feature_weighted(x, w, p: float, threshold: float = 0.7):
     return x
 
 def gen_sbm_bank(data_split, runs):
-    global banks
-    for r in range(runs):
-        bank = []
-        data, _ = data_split.get(r)
-        data = commu_repartition(data).to(data.x.device)
-        sizes, probs = data.sizes, data.probs
-        for _ in tqdm(range(500), desc=f"sbm bank n{r+1}/{runs}"):
-            bank.append(gen_sbm(sizes, probs).to(data.x.device))
-        banks.append(bank)
+    pass
+    # global banks
+    # for r in range(runs):
+    #     bank = []
+    #     data, _ = data_split.get(r)
+    #     data = commu_repartition(data).to(data.x.device)
+    #     sizes, probs = data.sizes, data.probs
+    #     for _ in tqdm(range(500), desc=f"sbm bank n{r+1}/{runs}"):
+    #         data_new = gen_sbm(sizes, probs).to(data.x.device)
+    #         print(data_new.edge_index.shape)
+    #         bank.append(data_new)
+    #     banks.append(bank)

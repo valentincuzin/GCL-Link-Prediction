@@ -80,11 +80,11 @@ def pretrain(model_name, model, aug, param):
         #   "ândgrace":pretrain_and_grace,
         #   "âorgrace": pretrain_aor_grace,
         #   "extagrace": pretrain_extend_agrace,
-        "a2grace": pretrain_a2grace,
+        "agrace": pretrain_a2grace,
         #   "abgrl": pretrain_abgrl,
         #   "âorbgrl": pretrain_or_bgrl,
         #   "extabgrl": pretrain_extend_abgrl,
-        "a2bgrl": pretrain_a2bgrl,
+        "abgrl": pretrain_a2bgrl,
     }
     return switch[model_name](model, aug, param)
 
