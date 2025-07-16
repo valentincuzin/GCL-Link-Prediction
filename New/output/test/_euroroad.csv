@@ -1,8 +1,8 @@
-metrics;louvain_prob_pred_mean;louvain_prob_pred;grace,enc:gcn_grace,pred:mlp,sbm+random_mean;grace,enc:gcn_grace,pred:mlp,sbm+random;grace,enc:gcn_grace,pred:mlp,sbm_old+random_mean;grace,enc:gcn_grace,pred:mlp,sbm_old+random
-Hits@10;19.08$\pm$0.0;[0.19081272];54.42$\pm$0.0;[0.54416961];39.58$\pm$0.0;[0.39575972]
-Hits@20;28.62$\pm$0.0;[0.28621908];63.25$\pm$0.0;[0.63250883];46.64$\pm$0.0;[0.4664311]
-Hits@50;38.52$\pm$0.0;[0.38515901];73.14$\pm$0.0;[0.73144876];57.6$\pm$0.0;[0.57597173]
-Hits@100;53.0$\pm$0.0;[0.53003534];80.92$\pm$0.0;[0.80918728];74.56$\pm$0.0;[0.74558304]
-ROCAUC;63.17$\pm$0.0;[0.63174718];83.4$\pm$0.0;[0.83399718];76.94$\pm$0.0;[0.76940654]
-AP;65.79$\pm$0.0;[0.65791739];87.25$\pm$0.0;[0.87248192];78.98$\pm$0.0;[0.78977914]
-pretrain_time;nan$\pm$nan;[];3.1$\pm$0.0;[3.10191059];2.45$\pm$0.0;[2.44940376]
+metrics;louvain_prob_pred_mean;louvain_prob_pred;grace,enc:gcn_bgrl,pred:mlp,sbm+random_mean;grace,enc:gcn_bgrl,pred:mlp,sbm+random;grace,enc:gcn_bgrl,pred:mlp,sbm_fix+random_mean;grace,enc:gcn_bgrl,pred:mlp,sbm_fix+random
+Hits@10;19.08$\pm$0.0;[0.19081272];49.47$\pm$0.0;[0.49469965];22.26$\pm$0.0;[0.22261484]
+Hits@20;28.62$\pm$0.0;[0.28621908];63.6$\pm$0.0;[0.6360424];27.21$\pm$0.0;[0.27208481]
+Hits@50;38.52$\pm$0.0;[0.38515901];71.02$\pm$0.0;[0.71024735];39.22$\pm$0.0;[0.39222615]
+Hits@100;53.0$\pm$0.0;[0.53003534];78.45$\pm$0.0;[0.7844523];57.24$\pm$0.0;[0.57243816]
+ROCAUC;63.17$\pm$0.0;[0.63174718];81.14$\pm$0.0;[0.81135986];64.8$\pm$0.0;[0.64797912]
+AP;65.79$\pm$0.0;[0.65791739];85.67$\pm$0.0;[0.85669569];67.43$\pm$0.0;[0.67426016]
+pretrain_time;nan$\pm$nan;[];10.74$\pm$0.0;[10.73669171];9.65$\pm$0.0;[9.64929962]

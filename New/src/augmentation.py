@@ -20,6 +20,7 @@ from src.utils import (
     get_commu_strength,
     gen_sbm,
     gen_sbm_fast,
+    gen_sbm_fast_test,
     commu_distrib,
     commu_distrib_old,
     to_graph_tool,
@@ -82,7 +83,9 @@ class Aug:
                     data = commu_distrib_old(data, cd_algo).to(self.device)
                 else:
                     data = commu_distrib(data, cd_algo).to(self.device)
-            elif "fast" in type:
+                if "fix" in type:
+                    data.node_list = [j for sub in data.communities for j in sub]
+            if "fast" in type:
                 gtG, block_map = to_graph_tool(data)
                 data.state = BlockState(gtG, block_map, deg_corr=False)
         elif type in ["rjc", "raa", "rra"]:
@@ -97,10 +100,12 @@ class Aug:
             "evc": partial(self.gca, feature_weights, drop_weights),
             "scom": partial(self.csgcl, feature_weights, drop_weights),
             "sbm_bank": self.sbm_bank,
+            "sbm_fix": self.sbm_fix,
             "sbm": self.sbm,
             "sbm_old": self.sbm,
             "sbm2": self.sbm_2,
             "sbm_fast": self.sbm_fast,
+            "sbm_fast_test": self.sbm_fast_test,
             "sbm_fast2": self.sbm_fast_2,
         }
         return data, types[type]
@@ -402,6 +407,16 @@ class Aug:
         data_2 = self.data
         data_2.x = _drop_feature(data_2.x, self.param['drop_feature_rate_2'])
         return data_1.x, data_1.edge_index, data_2.x, data_2.edge_index
+
+    def sbm_fix(self):
+        sizes, probs = self.data.sizes, self.data.probs
+        node_list = self.data.node_list
+        data_1 = gen_sbm(sizes, probs, node_list).to(self.device)
+        data_1.x = self.data.x
+        data_1.x = _drop_feature(data_1.x, self.param['drop_feature_rate_1'])
+        data_2 = self.data
+        data_2.x = _drop_feature(data_2.x, self.param['drop_feature_rate_2'])
+        return data_1.x, data_1.edge_index, data_2.x, data_2.edge_index
     
     def sbm_bank(self):
         global sbm_bank
@@ -427,6 +442,14 @@ class Aug:
 
     def sbm_fast(self):
         data_1 = gen_sbm_fast(self.data, self.data.state).to(self.device)
+        data_1.x = self.data.x
+        data_1.x = _drop_feature(data_1.x, self.param["drop_feature_rate_1"])
+        data_2 = self.data
+        data_2.x = _drop_feature(data_2.x, self.param["drop_feature_rate_2"])
+        return data_1.x, data_1.edge_index, data_2.x, data_2.edge_index
+
+    def sbm_fast_test(self):
+        data_1 = gen_sbm_fast_test(self.data).to(self.device)
         data_1.x = self.data.x
         data_1.x = _drop_feature(data_1.x, self.param["drop_feature_rate_1"])
         data_2 = self.data

@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import networkx as nx
 import torch
+import copy
 from sklearn.manifold import TSNE
 from sklearn.metrics import average_precision_score
 import matplotlib.pyplot as plt
@@ -187,15 +188,18 @@ def gen_sbm(sizes: list, probs: np.ndarray, block: list = None) -> Data:
         G = stochastic_block_model(sizes, probs, block)
     else:
         G = stochastic_block_model(sizes, probs)
-    data = from_networkx(G)
-    data.edge_index = to_undirected(data.edge_index)
+    data = Data()# from_networkx(G)
+    edge_index = []
+    for edge in G.edges():
+        edge_index.append([edge[0], edge[1]])
+    edge_index = to_undirected(torch.tensor(edge_index).T)
+    data.edge_index = to_undirected(edge_index)
     data.num_nodes = sum(sizes)
     data.sizes = sizes
     data.probs = probs
     data.num_features = data.num_nodes
     data.x = F.one_hot(torch.arange(0, data.num_nodes)).float()
     return data
-
 
 def to_graph_tool(data: Data) -> tuple[gt.Graph, gt.PropertyMap]:
     """
@@ -235,6 +239,32 @@ def gen_sbm_fast(data: Data, state: gt.BlockState) -> Data:
     Returns:
         Data: new Data generated
     """
+    gtG = state.sample_graph(self_loops=False, multigraph=False)
+    edge_index = torch.from_numpy(gtG.get_edges().T)
+    new_data = Data(edge_index=edge_index).to(data.edge_index.device)
+    new_data.edge_index = to_undirected(new_data.edge_index)
+    new_data.num_nodes = data.num_nodes
+    new_data.sizes = data.sizes
+    new_data.probs = data.probs
+    new_data.num_features = data.num_nodes
+    return new_data
+
+def gen_sbm_fast_test(data: Data) -> Data:
+    """
+    Generate SBM graph with graph tool
+
+    Args:
+        data (Data): Data from pyG
+        state (gt.BlockState): BlockState of Data
+
+    Returns:
+        Data: new Data generated
+    """
+    cData = copy.deepcopy(data)
+    indexes = torch.randperm(data.block.shape[0])
+    cData.block = data.block[indexes]
+    G_gt, block_map = to_graph_tool(cData)
+    state = gt.BlockState(G_gt, block_map, deg_corr=False)
     gtG = state.sample_graph(self_loops=False, multigraph=False)
     edge_index = torch.from_numpy(gtG.get_edges().T)
     new_data = Data(edge_index=edge_index).to(data.edge_index.device)
