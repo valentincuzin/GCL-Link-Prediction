@@ -193,6 +193,7 @@ def train_test_run(
     Returns:
         pd.DataFrame: results
     """
+    print(data.edge_index.shape)
     if model_name != "baseline":
         aug = Aug(data, split_edge, param, augmentation_name, run)
         pre_time = pretrain(model_name, model, aug, param)

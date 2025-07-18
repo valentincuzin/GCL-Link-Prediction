@@ -20,10 +20,10 @@ from src.utils import (
     get_commu_strength,
     gen_sbm,
     gen_sbm_fast,
-    gen_sbm_fast_test,
     commu_distrib,
     commu_distrib_old,
     to_graph_tool,
+    to_graph_tool_bug
 )
 from graph_tool.inference import BlockState
 
@@ -85,7 +85,21 @@ class Aug:
                     data = commu_distrib(data, cd_algo).to(self.device)
                 if "fix" in type:
                     data.node_list = [j for sub in data.communities for j in sub]
-            if "fast" in type:
+            if "fast_bug" in type:
+                gtG, block_map = to_graph_tool_bug(data)
+                data.state = BlockState(gtG, block_map, deg_corr=False)
+            elif "fast_test" in type:
+                data.sizes = []
+                nb_grp = 0
+                comm_size = int(data.num_nodes/len(data.communities))
+                for i in range(0, data.num_nodes, comm_size):
+                    data.sizes.append(comm_size)
+                    nb_grp +=1
+                print("graph density", data.num_nodes/len(data.edge_index[0]))
+                print(data.sizes)
+                gtG, block_map = to_graph_tool_bug(data)
+                data.state = BlockState(gtG, block_map, deg_corr=False)
+            elif "fast" in type:
                 gtG, block_map = to_graph_tool(data)
                 data.state = BlockState(gtG, block_map, deg_corr=False)
         elif type in ["rjc", "raa", "rra"]:
@@ -105,7 +119,8 @@ class Aug:
             "sbm_old": self.sbm,
             "sbm2": self.sbm_2,
             "sbm_fast": self.sbm_fast,
-            "sbm_fast_test": self.sbm_fast_test,
+            "sbm_fast_bug": self.sbm_fast,
+            "sbm_fast_test": self.sbm_fast,
             "sbm_fast2": self.sbm_fast_2,
         }
         return data, types[type]
@@ -442,14 +457,6 @@ class Aug:
 
     def sbm_fast(self):
         data_1 = gen_sbm_fast(self.data, self.data.state).to(self.device)
-        data_1.x = self.data.x
-        data_1.x = _drop_feature(data_1.x, self.param["drop_feature_rate_1"])
-        data_2 = self.data
-        data_2.x = _drop_feature(data_2.x, self.param["drop_feature_rate_2"])
-        return data_1.x, data_1.edge_index, data_2.x, data_2.edge_index
-
-    def sbm_fast_test(self):
-        data_1 = gen_sbm_fast_test(self.data).to(self.device)
         data_1.x = self.data.x
         data_1.x = _drop_feature(data_1.x, self.param["drop_feature_rate_1"])
         data_2 = self.data

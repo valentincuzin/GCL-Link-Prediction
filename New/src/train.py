@@ -13,6 +13,7 @@ from src.utils import visu_tsne, commu_distrib
 
 @torch.no_grad()
 def test(encoder: nn.Module, predictor: nn.Module, data, split_edge: dict, hp: dict):
+    print(hp)
     if isinstance(encoder, nn.Module):
         encoder.eval()
     if isinstance(predictor, nn.Module):

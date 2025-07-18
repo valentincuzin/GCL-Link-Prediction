@@ -31,7 +31,7 @@ def randomsplit(data: Data, val_ratio: float = 0.10, test_ratio: float = 0.2):
     random split on edges in 3 sets train,val,test
 
     Args:
-        dataset (list[Data]):
+        data (Data):
         val_ratio (float, optional): . Defaults to 0.10.
         test_ratio (float, optional): . Defaults to 0.2.
     """
@@ -86,9 +86,6 @@ def loaddataset(
 
     if isinstance(name, list):  # already laoded, only need to format
         data = name[0]
-        data.edge_index = to_undirected(
-            removerepeated(data.edge_index)
-        )
         data.num_nodes = data.x.shape[0]
         split_edge = randomsplit(data)
 
@@ -109,9 +106,7 @@ def loaddataset(
         igG = ig.Graph.Read_GML(f"./small_gml/{name}.gml")  # read gml file
         G = igG.to_networkx()
         data = from_networkx(G)
-        data.edge_index = to_undirected(
-            removerepeated(data.edge_index)
-        )
+        data.edge_index = to_undirected(data.edge_index)
         data.x = F.one_hot(torch.arange(0, len(G.nodes))).float()
         data.num_nodes = data.x.shape[0]
         split_edge = randomsplit(data)
@@ -120,10 +115,8 @@ def loaddataset(
         data_dir = f"./small_mat/{name}.mat"
         net = sio.loadmat(data_dir)
         edge_index, _ = from_scipy_sparse_matrix(net["net"])
-        edge_index = to_undirected(
-            removerepeated(edge_index)
-        )
         data = Data(edge_index=edge_index, num_nodes=torch.max(edge_index).item() + 1)
+        data.edge_index = to_undirected(data.edge_index)
         data.x = F.one_hot(torch.arange(0, data.num_nodes)).float()
         split_edge = randomsplit(data)
 
@@ -159,16 +152,13 @@ def loaddataset(
         data.edge_index = torch.tensor([[], []], dtype=torch.long)
         data.edge_index = add_self_loops(data.edge_index, num_nodes=data.num_nodes)[0]
 
-    data.edge_weight = None
-    data.max_x = -1
     data.adj_t = SparseTensor.from_edge_index(
         data.edge_index, sparse_sizes=(data.num_nodes, data.num_nodes)
     )
     data.adj_t = data.adj_t.to_symmetric().coalesce()
 
-    val_edge_index = split_edge["valid"]["edge"].t()
+    val_edge_index = to_undirected(split_edge["valid"]["edge"].t())
     full_edge_index = torch.cat([data.edge_index, val_edge_index], dim=-1)
-
     data.full_adj_t = SparseTensor.from_edge_index(
         full_edge_index, sparse_sizes=(data.num_nodes, data.num_nodes)
     ).coalesce()
@@ -234,8 +224,11 @@ class DataSplit:
                 data.edge_index = to_undirected(data.edge_index)
                 G = to_networkx(data, to_undirected=True)
                 data.communities = nx.community.louvain_communities(G, resolution=0.5)
-                data.sizes, data.probs = _get_sizes_probs(data, G, data.communities)
-            data = gen_sbm(data.sizes, data.probs)
+                data.sizes, data.probs, data.block = _get_sizes_probs(data, G, data.communities)
+            node_list = [j for sub in data.communities for j in sub]
+            block = data.block
+            data = gen_sbm(data.sizes, data.probs, node_list)
+            data.block = block
             data.num_nodes = sum(data.sizes)
             data.x = F.one_hot(torch.arange(0, data.num_nodes)).float()
             dataset = [data]
@@ -248,7 +241,6 @@ class DataSplit:
             seed_everything(r)
             dataset_tmp = deepcopy(dataset)
             data, split_edge = loaddataset(dataset_tmp, reduce_feature, only_feature)
-            data = data.to(device)
             self.data_runs[r] = data, split_edge
         self.info_time = round(time.time() - t1, 2)
         self.info()
@@ -266,18 +258,17 @@ class DataSplit:
         data, split_edge = self.data_runs[r]
         return data.to(self.device), split_edge
 
-    def info(self) -> None:
+    def info(self, r: int = 0) -> None:
         """
         just print usefull info on the DataSplit
         """
         print("split time: ", self.info_time, " s")
-        data, split_edge = self.data_runs[0]
-        print("data 0: ", data)
-        print("split 0:")
+        data, split_edge = self.data_runs[r]
+        print(f"data {r}: ", data)
+        print(f"split {r}:")
         for key1 in split_edge:
             for key2 in split_edge[key1]:
                 print(key1, key2, split_edge[key1][key2].shape[0])
-
 
 def get_evaluator(dataset: str = "ogbl-ppa") -> Evaluator:
     """
@@ -372,10 +363,11 @@ def _LFR_gen(
     data = from_networkx(G)
     data.edge_index = to_undirected(data.edge_index)
     communities = {frozenset(G.nodes[v]["community"]) for v in G}
-    data.community = communities
-    sizes, probs = _get_sizes_probs(data, G, communities)
+    data.communities = communities
+    sizes, probs, block = _get_sizes_probs(data, G, communities)
     data.sizes = sizes
     data.probs = probs
+    data.block = block
     data.num_features = data.num_nodes
     data.x = F.one_hot(torch.arange(0, data.num_nodes)).float()
     return data
@@ -397,9 +389,11 @@ def _get_sizes_probs(
     """
     probs = np.zeros((len(communities), len(communities)))
     sizes = []
+    block = np.empty((len(G.nodes)))
     for idx, c in enumerate(communities):
         sizes.append(len(c))
         for n in c:
+            block[n] = idx
             G.nodes[n]["com"] = idx  # get com label
     for u, v in zip(
         data.edge_index[0], data.edge_index[1]
@@ -417,4 +411,4 @@ def _get_sizes_probs(
                     ((sizes[x] + sizes[y]) * (sizes[x] + sizes[y] - 1)) / 2
                 )
     probs /= 2  # undirected graph
-    return sizes, probs
+    return sizes, probs, block

@@ -193,10 +193,11 @@ def gen_sbm(sizes: list, probs: np.ndarray, block: list = None) -> Data:
     for edge in G.edges():
         edge_index.append([edge[0], edge[1]])
     edge_index = to_undirected(torch.tensor(edge_index).T)
-    data.edge_index = to_undirected(edge_index)
+    data.edge_index = edge_index
     data.num_nodes = sum(sizes)
     data.sizes = sizes
     data.probs = probs
+    data.block = block
     data.num_features = data.num_nodes
     data.x = F.one_hot(torch.arange(0, data.num_nodes)).float()
     return data
@@ -227,6 +228,32 @@ def to_graph_tool(data: Data) -> tuple[gt.Graph, gt.PropertyMap]:
 
     return G_gt, block_map
 
+def to_graph_tool_bug(data: Data) -> tuple[gt.Graph, gt.PropertyMap]:
+    """
+    transform graph from pyG to gt
+
+    Args:
+        data (Data): torch_geometric data
+
+    Returns:
+        tuple[gt.Graph, gt.PropertyMap]: gt graph and block map
+    """
+    ei = removerepeated(data.edge_index)
+    nodelist = []
+    for i, size in enumerate(data.sizes):
+        nodelist.extend([i] * size)
+    G_gt = gt.Graph(directed=False)
+    node_map = G_gt.new_vertex_property("int")
+    block_map = G_gt.new_vertex_property("int")
+    for i in range(data.num_nodes):
+        v = G_gt.add_vertex()
+        node_map[v] = i
+        block_map[v] = nodelist[i] # data.block[i]
+    for edge in ei.t().tolist():
+        G_gt.add_edge(G_gt.vertex(node_map[edge[0]]), G_gt.vertex(node_map[edge[1]]))
+
+    return G_gt, block_map
+
 
 def gen_sbm_fast(data: Data, state: gt.BlockState) -> Data:
     """
@@ -239,33 +266,7 @@ def gen_sbm_fast(data: Data, state: gt.BlockState) -> Data:
     Returns:
         Data: new Data generated
     """
-    gtG = state.sample_graph(self_loops=False, multigraph=False)
-    edge_index = torch.from_numpy(gtG.get_edges().T)
-    new_data = Data(edge_index=edge_index).to(data.edge_index.device)
-    new_data.edge_index = to_undirected(new_data.edge_index)
-    new_data.num_nodes = data.num_nodes
-    new_data.sizes = data.sizes
-    new_data.probs = data.probs
-    new_data.num_features = data.num_nodes
-    return new_data
-
-def gen_sbm_fast_test(data: Data) -> Data:
-    """
-    Generate SBM graph with graph tool
-
-    Args:
-        data (Data): Data from pyG
-        state (gt.BlockState): BlockState of Data
-
-    Returns:
-        Data: new Data generated
-    """
-    cData = copy.deepcopy(data)
-    indexes = torch.randperm(data.block.shape[0])
-    cData.block = data.block[indexes]
-    G_gt, block_map = to_graph_tool(cData)
-    state = gt.BlockState(G_gt, block_map, deg_corr=False)
-    gtG = state.sample_graph(self_loops=False, multigraph=False)
+    gtG = state.sample_graph(canonical=True, self_loops=False, multigraph=False)
     edge_index = torch.from_numpy(gtG.get_edges().T)
     new_data = Data(edge_index=edge_index).to(data.edge_index.device)
     new_data.edge_index = to_undirected(new_data.edge_index)

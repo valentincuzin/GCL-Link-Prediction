@@ -15,5 +15,35 @@
 	"weight_decay": 1e-5,
 	"freeze": true,
 	"batch_size": 1152,
-	"mask_input": true
+	"mask_input": true,
+    "commu_detect" : "louvain",
+    "ct_epochs": 50,
+    "use_valedges_as_input": false,
+    "epochs": 100,
+    "loss_func": "log_sig",
+    "layer_norm": false,
+    "res": true,
+    "conv_fn": "puregcn",
+    "jk": true,
+    "edrop": 0.55,
+    "xdropout": 0.66,
+    "taildropout": 0.41000000000000003,
+	"reconstruction_rate": 0.5,
+
+
+
+    "predp" : 0.1,
+    "preedp" : 0.1,
+    "lnnn": true,
+    "use_xlin": true,
+    "tailact": true,
+    "twolayerlin": false,
+
+	"activation": "identity",
+    "skip": false,
+
+	"layer_sizes": [512, 256],
+	"batch_layer_norm": true,
+	"batchnorm_mm": 0.9,
+	"weight_standardization" : false
 }
