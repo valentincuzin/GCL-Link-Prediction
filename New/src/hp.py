@@ -7,11 +7,11 @@ def hp_load(dataset: str, save_name: str):
     print(f"....{dataset}....")
     if "synthetic" in dataset:
         hp_files = "params/synthetic.json"
-    elif os.path.exists(
-        f"params/{dataset}/{save_name}.json"
-    ):
-        hp_files = f"params/{dataset}/{save_name}.json"
-        print('hp loaded !')
+    # elif os.path.exists(
+    #     f"params/{dataset}/{save_name}.json"
+    # ):
+    #     hp_files = f"params/{dataset}/{save_name}.json"
+    #     print('hp loaded !')
     else:
         hp_files = "params/default.json"
         print("no hp file, default setting load...")
