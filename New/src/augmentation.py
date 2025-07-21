@@ -1,4 +1,5 @@
 import copy
+import os
 
 import torch
 import numpy as np
@@ -13,6 +14,10 @@ from torch_geometric.utils import (
 )
 from torch_scatter import scatter
 from functools import partial
+
+from sklearn.cluster import KMeans
+from sklearn.manifold import TSNE
+from torch_geometric.nn import Node2Vec
 
 from tqdm import tqdm
 
@@ -102,6 +107,62 @@ class Aug:
             elif "fast" in type:
                 gtG, block_map = to_graph_tool(data)
                 data.state = BlockState(gtG, block_map, deg_corr=False)
+        elif "kmeans" in type:
+            if hasattr(data, "_pos"):
+                pos = []
+                for p in data._pos:
+                    x, y = p.split(", ")
+                    pos.append([float(x), float(y)])
+            else:
+                print("No Pos going to Node2Vec")
+                # G = to_networkx(data, to_undirected=True)
+                # pos = nx.spring_layout(G)
+                # pos = [list(p) for p in pos.values()]
+                model = Node2Vec(
+                    data.edge_index,
+                    embedding_dim=self.param['proj_hidden'],
+                    walk_length=20,
+                    context_size=10,
+                    walks_per_node=10,
+                    num_negative_samples=1,
+                    p=1.0,
+                    q=1.0,
+                    sparse=True,
+                ).to(self.device)
+
+                num_workers = os.cpu_count()
+                loader = model.loader(batch_size=128, shuffle=True, num_workers=num_workers)
+                optimizer = torch.optim.SparseAdam(list(model.parameters()), lr=0.01)
+
+                def train():
+                    model.train()
+                    total_loss = 0
+                    for pos_rw, neg_rw in loader:
+                        optimizer.zero_grad()
+                        loss = model.loss(pos_rw.to(self.device), neg_rw.to(self.device))
+                        loss.backward()
+                        optimizer.step()
+                        total_loss += loss.item()
+                    return total_loss / len(loader)
+
+
+
+                for epoch in tqdm(range(1, 51), desc="Node2Vec"):
+                    loss = train()
+                    print(f'Epoch: {epoch:03d}, Loss: {loss:.4f}')
+                pos = torch.tensor(model()).cpu()
+            
+            pos = np.array(pos)
+            kmeans = KMeans(n_clusters=300)
+            clusters = kmeans.fit_predict(pos)
+            print(clusters)
+            data.block = clusters
+            unique, counts = np.unique(clusters, return_counts=True)
+            data.sizes = np.sort(counts)[::-1]
+            print(data.sizes)
+
+            gtG, block_map = to_graph_tool(data)
+            data.state = BlockState(gtG, block_map, deg_corr=False)
         elif type in ["rjc", "raa", "rra"]:
             data = self.pred(data, type)
             type = "reconstruct"
@@ -122,6 +183,7 @@ class Aug:
             "sbm_fast_bug": self.sbm_fast,
             "sbm_fast_test": self.sbm_fast,
             "sbm_fast2": self.sbm_fast_2,
+            "kmeans": self.sbm_fast,
         }
         return data, types[type]
 
@@ -528,6 +590,6 @@ def gen_sbm_bank(data_split):
     data, _ = data_split.get(0)
     data = commu_distrib(data).to(data.x.device)
     sizes, probs = data.sizes, data.probs
-    for _ in tqdm(range(5000), desc="sbm bank hp"):
+    for _ in tqdm(range(100), desc="sbm bank hp"):
         data_new = gen_sbm(sizes, probs).to(data.x.device)
         sbm_bank.append(data_new)

@@ -70,7 +70,7 @@ def hp_augmentation(augmentation, trial, hp):
 
 
 def hp_train(predictor, trial, hp):
-    hp["ct_epochs"] = trial.suggest_categorical("ct_epochs", [50, 500, 2500, 5000])
+    hp["ct_epochs"] = 100 # trial.suggest_categorical("ct_epochs", [50, 500, 2500, 5000])
     hp["proj_hidden"] = trial.suggest_int("proj_hidden", 32, 512, 32)
 
     hp["gnn_lr"] = trial.suggest_float("gnn_lr", 0.0001, 0.01, log=True)

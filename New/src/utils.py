@@ -23,6 +23,13 @@ from torch_geometric.data import Data
 from networkx.generators.community import stochastic_block_model
 import graph_tool.all as gt
 
+def is_multigraph(edge_index):
+    edge_index_local = copy.deepcopy(edge_index)
+    edge_index_local = edge_index_local.cpu()
+    unique, counts = np.unique(edge_index_local.T, axis=0, return_counts=True)
+    for item, count in zip(unique, counts):
+        if count > 1:
+            print(f"edge: {item}, nb: {count}")
 
 def community_detection(name: str) -> algorithms:
     """
@@ -53,6 +60,7 @@ def commu_distrib(data: Data, cd_algo: str = None) -> Data:
     Returns:
         Data: same Data but with commu distrib
     """
+    is_multigraph(data.edge_index)
     if hasattr(data, "probs") and hasattr(data, "sizes") and cd_algo is None:
         print("already communities")
         return data
@@ -70,11 +78,11 @@ def commu_distrib(data: Data, cd_algo: str = None) -> Data:
         for n in c:
             block[n] = idx
             G.nodes[n]["com"] = idx  # get com label
-    for u, v in zip(
-        data.edge_index[0], data.edge_index[1]
-    ):  # count number of edge per com
-        u = float(u)
-        v = float(v)
+    for edge in data.edge_index.T:  # count number of edge per com
+        u = float(edge[0])
+        v = float(edge[1])
+        if u == v:
+            continue
         probs[G.nodes[u]["com"], G.nodes[v]["com"]] += 1
     for x in range(len(probs)):  # make the probs
         for y in range(len(probs)):
@@ -89,6 +97,12 @@ def commu_distrib(data: Data, cd_algo: str = None) -> Data:
     data.block = block
     data.communities = communities
     data.probs = probs
+     # Check for probability range
+    for idx, row in enumerate(probs):
+        for idy, prob in enumerate(row):
+            if prob < 0 or prob > 1:
+                print(idx, idy, prob, sizes[x])
+                raise nx.NetworkXException("Entries of 'p' not in [0,1].")
     data.sizes = sizes
     # print("probs, ", probs)
     # print("sizes, ", sizes)
@@ -272,7 +286,7 @@ def gen_sbm_fast(data: Data, state: gt.BlockState) -> Data:
     new_data.edge_index = to_undirected(new_data.edge_index)
     new_data.num_nodes = data.num_nodes
     new_data.sizes = data.sizes
-    new_data.probs = data.probs
+    # new_data.probs = data.probs
     new_data.num_features = data.num_nodes
     return new_data
 

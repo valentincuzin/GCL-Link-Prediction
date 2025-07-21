@@ -1,3 +1,4 @@
+import copy
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -11,7 +12,7 @@ from src.utils import DropAdj, DropEdge
 class BGRL_GCN(nn.Module):
     def __init__(self, in_channels: int, param):
         super().__init__()
-        layer_sizes = param["layer_sizes"]
+        layer_sizes = copy.deepcopy(param["layer_sizes"])
         batchnorm = param["batch_layer_norm"]
         batchnorm_mm = param["batchnorm_mm"]
         layernorm = not param["batch_layer_norm"]

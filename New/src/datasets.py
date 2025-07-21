@@ -155,7 +155,7 @@ def loaddataset(
                 0
             ]
 
-    elif name in ["collab"]:
+    elif name in ["collab", "vessel"]:
         dataset = PygLinkPropPredDataset(name=f"ogbl-{name}")
         split_edge = dataset.get_edge_split()
         data = dataset[0]
