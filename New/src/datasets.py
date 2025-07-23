@@ -36,12 +36,6 @@ def randomsplit(dataset: list[Data], val_ratio: float = 0.10, test_ratio: float 
         test_ratio (float, optional): . Defaults to 0.2.
     """
 
-    def removerepeated(ei):
-        ei = to_undirected(ei)
-
-        ei = ei[:, ei[0] < ei[1]]
-        return ei
-
     def split_pos_neg(data):
         pos_mask = (data.edge_label == 1).bool()
         neg_mask = (data.edge_label == 0).bool()
@@ -129,6 +123,10 @@ def loaddataset(
         igG = ig.Graph.Read_GML(f"./small_gml/{name}.gml")
         G = igG.to_networkx()
         data = from_networkx(G)
+        edge_index = []
+        for edge in G.edges():
+            edge_index.append([edge[0], edge[1]])
+        data.edge_index = to_undirected(torch.tensor(edge_index).T)
         data.x = F.one_hot(torch.arange(0, len(G.nodes))).float()
         data.edge_index = to_undirected(data.edge_index)
         split_edge = randomsplit([data])
@@ -414,6 +412,10 @@ def _LFR_gen(
     )
     G.remove_edges_from(nx.selfloop_edges(G))  # remove self loops
     data = from_networkx(G)
+    edge_index = []
+    for edge in G.edges():
+        edge_index.append([edge[0], edge[1]])
+    data.edge_index = to_undirected(torch.tensor(edge_index).T)
     data.edge_index = to_undirected(data.edge_index)
     communities = {frozenset(G.nodes[v]["community"]) for v in G}
     data.communities = communities

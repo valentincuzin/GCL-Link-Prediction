@@ -15,21 +15,11 @@ from cdlib import algorithms
 from cdlib.utils import convert_graph_formats
 from torch_geometric.utils import (
     to_networkx,
-    from_networkx,
     to_undirected,
-    remove_self_loops,
 )
 from torch_geometric.data import Data
 from networkx.generators.community import stochastic_block_model
 import graph_tool.all as gt
-
-def is_multigraph(edge_index):
-    edge_index_local = copy.deepcopy(edge_index)
-    edge_index_local = edge_index_local.cpu()
-    unique, counts = np.unique(edge_index_local.T, axis=0, return_counts=True)
-    for item, count in zip(unique, counts):
-        if count > 1:
-            print(f"edge: {item}, nb: {count}")
 
 def community_detection(name: str) -> algorithms:
     """
@@ -60,7 +50,6 @@ def commu_distrib(data: Data, cd_algo: str = None) -> Data:
     Returns:
         Data: same Data but with commu distrib
     """
-    is_multigraph(data.edge_index)
     if hasattr(data, "probs") and hasattr(data, "sizes") and cd_algo is None:
         print("already communities")
         return data
@@ -81,7 +70,7 @@ def commu_distrib(data: Data, cd_algo: str = None) -> Data:
     for edge in data.edge_index.T:  # count number of edge per com
         u = float(edge[0])
         v = float(edge[1])
-        if u == v:
+        if u == v: # skip self loops
             continue
         probs[G.nodes[u]["com"], G.nodes[v]["com"]] += 1
     for x in range(len(probs)):  # make the probs
@@ -107,43 +96,6 @@ def commu_distrib(data: Data, cd_algo: str = None) -> Data:
     # print("probs, ", probs)
     # print("sizes, ", sizes)
     return data
-
-
-def commu_distrib_old(data: Data, cd_algo: str = None) -> Data:
-    if hasattr(data, "probs") and hasattr(data, "sizes") and cd_algo is None:
-        print("already communities")
-        return data
-    if cd_algo == None:
-        cd_algo = 'louvain'
-    G = to_networkx(data, to_undirected=True)
-    communities = community_detection(cd_algo)(G).communities
-    probs = np.zeros((len(communities), len(communities)))
-    sizes = []
-    block = np.empty((len(G.nodes)))
-    for idx, c in enumerate(communities):
-        sizes.append(len(c))
-        for n in c:
-            block[n] = idx
-            G.nodes[n]["com"] = idx # get com label
-    for u, v in zip(data.edge_index[0], data.edge_index[1]): # count number of edge per com
-        u = float(u)
-        v = float(v)
-        probs[G.nodes[u]["com"], G.nodes[v]["com"]] += 1
-    for x in range(len(probs)): # make the probs
-        for y in range(len(probs)):
-            if x == y:
-                probs[x,x] = probs[x,x]/(sizes[x]*(sizes[x]-1))/2 if sizes[x] > 1 else probs[x,x]
-            else:
-                probs[x,y] /= ((sizes[x]+sizes[y])*(sizes[x]+sizes[y]-1))/2 #complete graph formula
-    probs /= 2 # undirected graph
-    data.block = block
-    data.communities = communities
-    data.probs = probs
-    # print("probs, ", probs)
-    data.sizes = sizes
-    # print("sizes, ", sizes)
-    return data
-
 
 def removerepeated(ei: torch.Tensor) -> torch.Tensor:
     """
@@ -202,7 +154,7 @@ def gen_sbm(sizes: list, probs: np.ndarray, block: list = None) -> Data:
         G = stochastic_block_model(sizes, probs, block)
     else:
         G = stochastic_block_model(sizes, probs)
-    data = Data()# from_networkx(G)
+    data = Data() # using from_networkx(G) is the source of the bug
     edge_index = []
     for edge in G.edges():
         edge_index.append([edge[0], edge[1]])
@@ -244,7 +196,7 @@ def to_graph_tool(data: Data) -> tuple[gt.Graph, gt.PropertyMap]:
 
 def to_graph_tool_bug(data: Data) -> tuple[gt.Graph, gt.PropertyMap]:
     """
-    transform graph from pyG to gt
+    transform graph from pyG to gt with the implemented bug
 
     Args:
         data (Data): torch_geometric data

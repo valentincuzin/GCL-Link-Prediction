@@ -58,9 +58,6 @@ def hp_augmentation(augmentation, trial, hp):
         "drop_feature_rate_2", 0.0, 0.9, step=0.1)
 
     if "sbm" in augmentation:
-        # hp["commu_detect"] = trial.suggest_categorical(
-        #     "commu_detect", ["louvain", "leiden", "infomap"]
-        # )
         hp["commu_detect"] = "louvain"
 
     if any(x in augmentation for x in ["rjc", "raa", "rra"]):
@@ -70,8 +67,8 @@ def hp_augmentation(augmentation, trial, hp):
 
 
 def hp_train(predictor, trial, hp):
-    hp["ct_epochs"] = 100 # trial.suggest_categorical("ct_epochs", [50, 500, 2500, 5000])
-    hp["proj_hidden"] = trial.suggest_int("proj_hidden", 32, 512, 32)
+    hp["ct_epochs"] = trial.suggest_categorical("ct_epochs", [50, 500, 2500, 5000])
+    hp["proj_hidden"] = trial.suggest_int("proj_hidden", 64, 512, 64)
 
     hp["gnn_lr"] = trial.suggest_float("gnn_lr", 0.0001, 0.01, log=True)
     hp["batch_size"] = trial.suggest_int("batch_size", 256, 6400, 64)
@@ -99,7 +96,7 @@ def hp_bgrl_gcn(trial, hp):
     hp["n_layers"] = trial.suggest_int("n_layers", 1, 4)
     hp["layer_sizes"] = []
     for i in range(1, hp["n_layers"]+1):
-        hp["layer_sizes"].append(trial.suggest_int(f"{i}_layer_size",  32, 512, 32))
+        hp["layer_sizes"].append(trial.suggest_int(f"{i}_layer_size",  64, 512, 64))
     print(hp["layer_sizes"])
     hp["hidden"] = hp["layer_sizes"][-1]
     hp["batch_layer_norm"] = trial.suggest_categorical(
@@ -118,7 +115,7 @@ def hp_bgrl_gcn(trial, hp):
 
 def hp_grace_gcn(trial, hp):
     hp["n_layers"] = trial.suggest_int("n_layers", 2, 4)
-    hp["hidden"] = trial.suggest_int("hidden", 32, 512, 32)
+    hp["hidden"] = trial.suggest_int("hidden", 64, 512, 64)
     hp["activation"] = trial.suggest_categorical(
         "activation", ["identity", "relu", "prelu"]
     )
@@ -129,7 +126,7 @@ def hp_grace_gcn(trial, hp):
 
 def hp_ncn_gcn(trial, hp):
     hp["n_layers"] = trial.suggest_int("n_layers", 1, 4)
-    hp["hidden"] = trial.suggest_int("hidden", 32, 512, 32)
+    hp["hidden"] = trial.suggest_int("hidden", 64, 512, 64)
     hp["gnn_dp"] = trial.suggest_float("gnn_dp", 0.00, 0.90, step=0.01)
     hp["layer_norm"] = trial.suggest_categorical("layer_norm", [True, False])
     hp["res"] = trial.suggest_categorical("res", [True, False])
