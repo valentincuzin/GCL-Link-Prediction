@@ -10,13 +10,11 @@ from torch_geometric.utils import (
     to_undirected,
     to_networkx,
     dropout_adj,
-    from_networkx,
 )
 from torch_scatter import scatter
 from functools import partial
 
 from sklearn.cluster import KMeans
-from sklearn.manifold import TSNE
 from torch_geometric.nn import Node2Vec
 
 from tqdm import tqdm
@@ -26,14 +24,10 @@ from src.utils import (
     gen_sbm,
     gen_sbm_fast,
     commu_distrib,
-    commu_distrib_old,
     to_graph_tool,
     to_graph_tool_bug
 )
 from graph_tool.inference import BlockState
-
-sbm_bank = []
-ct_epoch = 0
 
 class Aug:
     def __init__(
@@ -42,7 +36,6 @@ class Aug:
         split_edge: list,
         param: dict,
         type: str = "random",
-        run: int = 0,
     ) -> None:
         global ct_epoch
         ct_epoch = 0
@@ -50,9 +43,6 @@ class Aug:
         self.split_edge = split_edge
         self.device = data.x.device
         self.param = param
-        self.run = run
-        if run == 0:
-            self.bank = True
         self.type = type
         self.data = self.data.to(self.device)
         if "+" in type:
@@ -78,30 +68,12 @@ class Aug:
             feature_weights, drop_weights = self.commu_strength()
         elif "sbm" in type:
             cd_algo = None
-            global sbm_bank
-            if len(sbm_bank) != 0 and "fast" not in type and self.run == 0:
-                type = "sbm_bank"
-            elif self.param["commu_detect"]:
-                cd_algo = self.param["commu_detect"]
-                print(cd_algo, "detection...")
-                if type == "sbm_old":
-                    data = commu_distrib_old(data, cd_algo).to(self.device)
-                else:
-                    data = commu_distrib(data, cd_algo).to(self.device)
-                if "fix" in type:
-                    data.node_list = [j for sub in data.communities for j in sub]
+            cd_algo = self.param["commu_detect"]
+            print(cd_algo, "detection...")
+            data = commu_distrib(data, cd_algo).to(self.device)
+            if "fix" in type:
+                data.node_list = [j for sub in data.communities for j in sub]
             if "fast_bug" in type:
-                gtG, block_map = to_graph_tool_bug(data)
-                data.state = BlockState(gtG, block_map, deg_corr=False)
-            elif "fast_test" in type:
-                data.sizes = []
-                nb_grp = 0
-                comm_size = int(data.num_nodes/len(data.communities))
-                for i in range(0, data.num_nodes, comm_size):
-                    data.sizes.append(comm_size)
-                    nb_grp +=1
-                print("graph density", data.num_nodes/len(data.edge_index[0]))
-                print(data.sizes)
                 gtG, block_map = to_graph_tool_bug(data)
                 data.state = BlockState(gtG, block_map, deg_corr=False)
             elif "fast" in type:
@@ -114,75 +86,68 @@ class Aug:
                     x, y = p.split(", ")
                     pos.append([float(x), float(y)])
             else:
-                print("No Pos going to Node2Vec")
-                # G = to_networkx(data, to_undirected=True)
-                # pos = nx.spring_layout(G)
-                # pos = [list(p) for p in pos.values()]
-                model = Node2Vec(
-                    data.edge_index,
-                    embedding_dim=self.param['proj_hidden'],
-                    walk_length=20,
-                    context_size=10,
-                    walks_per_node=10,
-                    num_negative_samples=1,
-                    p=1.0,
-                    q=1.0,
-                    sparse=True,
-                ).to(self.device)
+                assert("No Kmeans without pos!!")
+            #     print("No Pos going to Node2Vec")
+            #     # G = to_networkx(data, to_undirected=True)
+            #     # pos = nx.spring_layout(G)
+            #     # pos = [list(p) for p in pos.values()]
+            #     model = Node2Vec(
+            #         data.edge_index,
+            #         embedding_dim=self.param['proj_hidden'],
+            #         walk_length=20,
+            #         context_size=10,
+            #         walks_per_node=10,
+            #         num_negative_samples=1,
+            #         p=1.0,
+            #         q=1.0,
+            #         sparse=True,
+            #     ).to(self.device)
 
-                num_workers = os.cpu_count()
-                loader = model.loader(batch_size=128, shuffle=True, num_workers=num_workers)
-                optimizer = torch.optim.SparseAdam(list(model.parameters()), lr=0.01)
+            #     num_workers = os.cpu_count()
+            #     loader = model.loader(batch_size=128, shuffle=True, num_workers=num_workers)
+            #     optimizer = torch.optim.SparseAdam(list(model.parameters()), lr=0.01)
 
-                def train():
-                    model.train()
-                    total_loss = 0
-                    for pos_rw, neg_rw in loader:
-                        optimizer.zero_grad()
-                        loss = model.loss(pos_rw.to(self.device), neg_rw.to(self.device))
-                        loss.backward()
-                        optimizer.step()
-                        total_loss += loss.item()
-                    return total_loss / len(loader)
+            #     def train():
+            #         model.train()
+            #         total_loss = 0
+            #         for pos_rw, neg_rw in loader:
+            #             optimizer.zero_grad()
+            #             loss = model.loss(pos_rw.to(self.device), neg_rw.to(self.device))
+            #             loss.backward()
+            #             optimizer.step()
+            #             total_loss += loss.item()
+            #         return total_loss / len(loader)
 
 
 
-                for epoch in tqdm(range(1, 51), desc="Node2Vec"):
-                    loss = train()
-                    print(f'Epoch: {epoch:03d}, Loss: {loss:.4f}')
-                pos = torch.tensor(model()).cpu()
+            #     for epoch in tqdm(range(1, 51), desc="Node2Vec"):
+            #         loss = train()
+            #         print(f'Epoch: {epoch:03d}, Loss: {loss:.4f}')
+            #     pos = torch.tensor(model()).cpu()
             
             pos = np.array(pos)
             kmeans = KMeans(n_clusters=300)
             clusters = kmeans.fit_predict(pos)
             print(clusters)
             data.block = clusters
-            unique, counts = np.unique(clusters, return_counts=True)
+            _, counts = np.unique(clusters, return_counts=True)
             data.sizes = np.sort(counts)[::-1]
             print(data.sizes)
 
             gtG, block_map = to_graph_tool(data)
             data.state = BlockState(gtG, block_map, deg_corr=False)
-        elif type in ["rjc", "raa", "rra"]:
-            data = self.pred(data, type)
-            type = "reconstruct"
         types = {
             "random": self.random,
-            "random2": self.random_2,
-            "reconstruct": self.reconstruct,
             "deg": partial(self.gca, feature_weights, drop_weights),
             "pr": partial(self.gca, feature_weights, drop_weights),
             "evc": partial(self.gca, feature_weights, drop_weights),
             "scom": partial(self.csgcl, feature_weights, drop_weights),
-            "sbm_bank": self.sbm_bank,
-            "sbm_fix": self.sbm_fix,
             "sbm": self.sbm,
-            "sbm_old": self.sbm,
             "sbm2": self.sbm_2,
+            "sbm_fix": self.sbm_fix,
             "sbm_fast": self.sbm_fast,
-            "sbm_fast_bug": self.sbm_fast,
-            "sbm_fast_test": self.sbm_fast,
             "sbm_fast2": self.sbm_fast_2,
+            "sbm_fast_bug": self.sbm_fast,
             "kmeans": self.sbm_fast,
         }
         return data, types[type]
@@ -200,28 +165,6 @@ class Aug:
         return x_1, edge_index_1, x_2, edge_index_2
 
     def random(self):
-        edge_attr = self.data.edge_attr if "edge_attr" in self.data else None
-        edge_index_1 = dropout_adj(
-            self.data.edge_index,
-            edge_attr,
-            p=self.param[f"drop_edge_rate_{1}"],
-            force_undirected=True,
-        )[0].to(self.device)
-        edge_index_2 = dropout_adj(
-            self.data.edge_index,
-            edge_attr,
-            p=self.param[f"drop_edge_rate_{2}"],
-            force_undirected=True,
-        )[0].to(self.device)
-        x_1 = _drop_feature(self.data.x, self.param["drop_feature_rate_1"]).to(
-            self.device
-        )
-        x_2 = _drop_feature(self.data.x, self.param["drop_feature_rate_2"]).to(
-            self.device
-        )
-        return x_1, edge_index_1, x_2, edge_index_2
-
-    def random_2(self):
         edge_attr = self.data.edge_attr if "edge_attr" in self.data else None
         edge_index_1 = dropout_adj(
             self.data.edge_index,
@@ -322,63 +265,6 @@ class Aug:
             self.device
         )
         return feature_weights, drop_weights
-
-    def pred(self, data_param, type):
-        data = copy.deepcopy(data_param)
-        G = to_networkx(data, to_undirected=True)
-        switch = {
-            "rjc": nx.jaccard_coefficient,
-            "raa": nx.adamic_adar_index,
-            "rra": nx.resource_allocation_index,
-        }
-        preds = switch[type](G)
-
-        nb_add = 0
-        values = []
-        values_norm = []
-        probs = []
-        min_p = float("inf")
-        max_p = float("-inf")
-        mean_p = []
-        for u, v, p in preds:
-            mean_p.append(p)
-            values.append((u, v, p))
-            if p < min_p:
-                min_p = p
-            if p > max_p:
-                max_p = p
-        mean_p = np.mean(mean_p)
-        for u, v, p in values:
-            if max_p != min_p:
-                p = float((p - min_p) / (max_p - min_p))
-            # p = float((max_p-p)/(max_p-mean_p))
-            probs.append(p)
-            values_norm.append((u, v, p))
-
-        print("mean pred: ", mean_p)
-
-        for u, v in G.edges():
-            G[u][v]["weight"] = 1.0  # not sure to put 1 if their is a link
-
-        to_reconstruct = int(
-            data.edge_index.shape[1] * self.param["reconstruction_rate"]
-        )
-        values_norm = sorted(values_norm, key=lambda x: x[2], reverse=True)
-        for u, v, p in values_norm:
-            if p >= mean_p:
-                G.add_edge(u, v, weight=p)
-                G.add_edge(v, u, weight=p)
-                nb_add += 1
-                if nb_add >= to_reconstruct:
-                    print("min prob added: ", p)
-                    break
-        print("add", nb_add, "edges")
-
-        tmp = from_networkx(G).to(self.device)
-        data.edge_index = tmp.edge_index
-        data.weight = tmp.weight
-        # print(tmp.weight)
-        return data
 
     def gca(self, feature_weights, drop_weights):
         edge_index_1 = _drop_edge_weighted(
@@ -495,18 +381,6 @@ class Aug:
         data_2.x = _drop_feature(data_2.x, self.param['drop_feature_rate_2'])
         return data_1.x, data_1.edge_index, data_2.x, data_2.edge_index
     
-    def sbm_bank(self):
-        global sbm_bank
-        global ct_epoch
-        data_1 = sbm_bank[ct_epoch].to(self.device)
-        data_1.x = self.data.x
-        data_1.x = _drop_feature(data_1.x, self.param['drop_feature_rate_1'])
-        data_2 = self.data
-        data_2.x = _drop_feature(data_2.x, self.param['drop_feature_rate_2'])
-        
-        ct_epoch += 1
-        return data_1.x, data_1.edge_index, data_2.x, data_2.edge_index
-
     def sbm_2(self):
         sizes, probs = self.data.sizes, self.data.probs
         data_1 = gen_sbm(sizes, probs).to(self.device)
@@ -532,21 +406,6 @@ class Aug:
         data_2 = gen_sbm_fast(self.data, self.data.state).to(self.device)
         data_2.x = _drop_feature(data_2.x, self.param["drop_feature_rate_2"])
         return data_1.x, data_1.edge_index, data_2.x, data_2.edge_index
-
-    def reconstruct(self):
-        edge_index_1 = _drop_edge_weighted(
-            self.data.edge_index, self.data.weight, self.param["drop_edge_rate_1"]
-        ).to(self.device)
-        edge_index_2 = _drop_edge_weighted(
-            self.data.edge_index, self.data.weight, self.param["drop_edge_rate_2"]
-        ).to(self.device)
-        x_1 = _drop_feature(self.data.x, self.param["drop_feature_rate_1"]).to(
-            self.device
-        )
-        x_2 = _drop_feature(self.data.x, self.param["drop_feature_rate_2"]).to(
-            self.device
-        )
-        return x_1, edge_index_1, x_2, edge_index_2
 
 def _drop_feature(x, drop_prob):
     drop_mask = (
@@ -583,13 +442,3 @@ def _drop_feature_weighted(x, w, p: float, threshold: float = 0.7):
     x = x.clone()
     x[:, drop_mask] = 0.0
     return x
-
-
-def gen_sbm_bank(data_split):
-    global sbm_bank
-    data, _ = data_split.get(0)
-    data = commu_distrib(data).to(data.x.device)
-    sizes, probs = data.sizes, data.probs
-    for _ in tqdm(range(100), desc="sbm bank hp"):
-        data_new = gen_sbm(sizes, probs).to(data.x.device)
-        sbm_bank.append(data_new)

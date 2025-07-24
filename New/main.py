@@ -8,7 +8,7 @@ from torch_geometric import seed_everything
 from ogb.linkproppred import Evaluator
 from torch_geometric.data import Data
 
-from src.augmentation import Aug, gen_sbm_bank
+from src.augmentation import Aug
 from src.model import get_model
 from src.datasets import DataSplit, get_evaluator, full_eval
 from src.predictor import get_predictor, ProbDecoder, InnerProd
@@ -134,7 +134,6 @@ def commu_prob_pred(data_split: DataSplit, evaluator: Evaluator, param: dict):
         pd.DataFrame: results
     """
     res_dict = {
-        "Hits@10": [],
         "Hits@20": [],
         "Hits@50": [],
         "Hits@100": [],
@@ -171,7 +170,6 @@ def train_test_run(
     evaluator: Evaluator,
     param: dict,
     res_dict: dict,
-    run: int = 0,
     valid: bool = False,
 ):
     """
@@ -187,7 +185,6 @@ def train_test_run(
         evaluator (Evaluator):
         param (dict):
         res_dict (dict):
-        run (int, optional): number of the current run. Defaults to 0.
         valid (bool, optional): return valid score if true. Defaults to False.
 
     Returns:
@@ -195,7 +192,7 @@ def train_test_run(
     """
     print(data.edge_index.shape)
     if model_name != "baseline":
-        aug = Aug(data, split_edge, param, augmentation_name, run)
+        aug = Aug(data, split_edge, param, augmentation_name)
         pre_time = pretrain(model_name, model, aug, param)
         res_dict["pretrain_time"].append(pre_time)
         if isinstance(predictor, nn.Module):
@@ -223,11 +220,6 @@ if __name__ == "__main__":
         )
         evaluator = get_evaluator(dataset)
         full_res = []
-        if (any(
-            ("sbm" in element and "fast" not in element)
-            for element in args.augmentation
-        ) and args.hp_search != 0):
-            gen_sbm_bank(data_split)
         for model_name in args.model:
             for encoder_name in args.encoder:
                 for predictor_name in args.predictor:
@@ -244,7 +236,6 @@ if __name__ == "__main__":
 
                             def _objective(trial):
                                 res_dict = {
-                                    "Hits@10": [],
                                     "Hits@20": [],
                                     "Hits@50": [],
                                     "Hits@100": [],
@@ -282,7 +273,6 @@ if __name__ == "__main__":
                                     evaluator,
                                     param,
                                     res_dict,
-                                    run=0,
                                     valid=True,
                                 )
                                 score = res_dict.pop(args.hp_metric)[0]
@@ -326,7 +316,6 @@ if __name__ == "__main__":
                                 evaluator,
                                 param,
                                 res_dict,
-                                run=r,
                             )
                         df_res, res_latex = compute_table(res_dict, save_name)
                         print(df_res)
