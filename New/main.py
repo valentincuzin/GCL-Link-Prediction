@@ -8,6 +8,7 @@ from torch_geometric import seed_everything
 from ogb.linkproppred import Evaluator
 from torch_geometric.data import Data
 
+from plotly.io import write_image
 from src.augmentation import Aug
 from src.model import get_model
 from src.datasets import DataSplit, get_evaluator, full_eval
@@ -18,6 +19,10 @@ from src.utils import store_res, compute_table, full_output, commu_distrib
 import src.hp as hp
 
 SMALL_DATASETS = [
+    # generated
+    "synthetic_1",
+    "synthetic_2",
+    "synthetic_3",
     # from https://networks.skewed.de/
     "facebook_friends",
     "wiki_science",
@@ -41,10 +46,7 @@ SMALL_DATASETS = [
     "Router",
     "Ecoli",
 ]
-DATASETS = [
-    "synthetic_1",
-    "synthetic_2",
-    "synthetic_3",
+ATTR_DATASET = [
     # from https://pytorch-geometric.readthedocs.io/en/latest/cheatsheet/data_cheatsheet.html
     "cora",
     "citeseer",
@@ -56,7 +58,8 @@ DATASETS = [
     # from https://ogb.stanford.edu/
     "collab",
     "ddi",
-] + SMALL_DATASETS
+]
+DATASETS = ATTR_DATASET + SMALL_DATASETS
 MODELS = ["baseline", "grace", "lgrace", "agrace", "csgcl", "bgrl", "lbgrl", "abgrl"]
 AUGMENTATIONS = [
     "random",
@@ -233,6 +236,7 @@ if __name__ == "__main__":
                             param = hp.hp_load(dataset, save_name)
                         else:
                             param = {}
+                        param['attr'] = True if dataset in ATTR_DATASET else False
                         if args.hp_search != 0:
 
                             def _objective(trial):
@@ -279,7 +283,7 @@ if __name__ == "__main__":
                                 score = res_dict.pop(args.hp_metric)[0]
                                 return score
 
-                            sampler = optuna.samplers.TPESampler(multivariate=True)
+                            sampler = optuna.samplers.TPESampler(multivariate=True, warn_independent_sampling=False)
                             study = optuna.create_study(
                                 sampler=sampler, direction="maximize"
                             )
@@ -287,9 +291,14 @@ if __name__ == "__main__":
                             param = hp.update_hp(
                                 study, param, f"params/{dataset}/{save_name}"
                             )
+                            fig_importance = optuna.visualization.plot_param_importances(study)
+                            fig_history = optuna.visualization.plot_optimization_history(study)
+                            fig_relation = optuna.visualization.plot_parallel_coordinate(study)
+                            write_image(fig_importance, f"params/{dataset}/{save_name}_hp_importances.png")
+                            write_image(fig_history, f"params/{dataset}/{save_name}_hp_history.png")
+                            write_image(fig_relation, f"params/{dataset}/{save_name}_hp_relation.png")
 
                         res_dict = {
-                            "Hits@10": [],
                             "Hits@20": [],
                             "Hits@50": [],
                             "Hits@100": [],

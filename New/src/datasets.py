@@ -363,7 +363,7 @@ def full_eval(
     """
     results = {}
     evaluator.eval_metric = "hits@k"
-    for K in [10, 20, 50, 100]:
+    for K in [20, 50, 100]:
         evaluator.K = K
         hits = evaluator.eval(
             {

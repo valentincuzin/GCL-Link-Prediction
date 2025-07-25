@@ -15,9 +15,6 @@ from torch_scatter import scatter
 from functools import partial
 
 from sklearn.cluster import KMeans
-from torch_geometric.nn import Node2Vec
-
-from tqdm import tqdm
 
 from src.utils import (
     get_commu_strength,
@@ -95,44 +92,7 @@ class Aug:
                     pos.append([float(x), float(y)])
             else:
                 assert("No Kmeans without pos!!")
-            #     print("No Pos going to Node2Vec")
-            #     # G = to_networkx(data, to_undirected=True)
-            #     # pos = nx.spring_layout(G)
-            #     # pos = [list(p) for p in pos.values()]
-            #     model = Node2Vec(
-            #         data.edge_index,
-            #         embedding_dim=self.param['proj_hidden'],
-            #         walk_length=20,
-            #         context_size=10,
-            #         walks_per_node=10,
-            #         num_negative_samples=1,
-            #         p=1.0,
-            #         q=1.0,
-            #         sparse=True,
-            #     ).to(self.device)
 
-            #     num_workers = os.cpu_count()
-            #     loader = model.loader(batch_size=128, shuffle=True, num_workers=num_workers)
-            #     optimizer = torch.optim.SparseAdam(list(model.parameters()), lr=0.01)
-
-            #     def train():
-            #         model.train()
-            #         total_loss = 0
-            #         for pos_rw, neg_rw in loader:
-            #             optimizer.zero_grad()
-            #             loss = model.loss(pos_rw.to(self.device), neg_rw.to(self.device))
-            #             loss.backward()
-            #             optimizer.step()
-            #             total_loss += loss.item()
-            #         return total_loss / len(loader)
-
-
-
-            #     for epoch in tqdm(range(1, 51), desc="Node2Vec"):
-            #         loss = train()
-            #         print(f'Epoch: {epoch:03d}, Loss: {loss:.4f}')
-            #     pos = torch.tensor(model()).cpu()
-            
             pos = np.array(pos)
             kmeans = KMeans(n_clusters=300)
             clusters = kmeans.fit_predict(pos)
@@ -401,17 +361,16 @@ class Aug:
 
     def sbm_fast(self):
         data_1 = gen_sbm_fast(self.data, self.data.state).to(self.device)
-        data_1.x = self.data.x
-        data_1.x = _drop_feature(data_1.x, self.param["drop_feature_rate_1"])
-        data_2 = self.data
-        data_2.x = _drop_feature(data_2.x, self.param["drop_feature_rate_2"])
-        return data_1.x, data_1.edge_index, data_2.x, data_2.edge_index
+        x_1 = _drop_feature(self.data.x, self.param["drop_feature_rate_1"])
+        x_2 = _drop_feature(self.data.x, self.param["drop_feature_rate_2"])
+        return x_1, data_1.edge_index, x_2, self.data.edge_index
 
     def sbm_fast_2(self):
         data_1 = gen_sbm_fast(self.data, self.data.state).to(self.device)
-        data_1.x = self.data.x
+        data_1.x = copy.copy(self.data.x)
         data_1.x = _drop_feature(data_1.x, self.param["drop_feature_rate_1"])
         data_2 = gen_sbm_fast(self.data, self.data.state).to(self.device)
+        data_2.x = copy.copy(self.data.x)
         data_2.x = _drop_feature(data_2.x, self.param["drop_feature_rate_2"])
         return data_1.x, data_1.edge_index, data_2.x, data_2.edge_index
 

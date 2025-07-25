@@ -3,7 +3,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch_geometric.nn import GCNConv, BatchNorm, LayerNorm, Sequential
-from torch_geometric.data import Data
 from torch_sparse import SparseTensor
 
 from src.utils import DropAdj, DropEdge
@@ -56,6 +55,36 @@ class BGRL_GCN(nn.Module):
                 var, mean = torch.var_mean(weight, dim=1, keepdim=True)
                 weight = (weight - mean) / (torch.sqrt(var + 1e-5))
                 m.lin.weight.data = weight
+
+
+class MLP_Head_BGRL(nn.Module):
+    r"""MLP used for predictor in BGRL. The MLP has one hidden layer.
+
+    Args:
+        input_size (int): Size of input features.
+        output_size (int): Size of output features.
+        hidden_size (int, optional): Size of hidden layer. (default: :obj:`4096`).
+    """
+
+    def __init__(self, input_size, output_size, hidden_size=512):
+        super().__init__()
+
+        self.net = nn.Sequential(
+            nn.Linear(input_size, hidden_size, bias=True),
+            nn.PReLU(1),
+            nn.Linear(hidden_size, output_size, bias=True),
+        )
+        self.reset_parameters()
+
+    def forward(self, x):
+        return self.net(x)
+
+    def reset_parameters(self):
+        # kaiming_uniform
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                m.reset_parameters()
+
 
 class GRACE_GCN(nn.Module):
     def __init__(self, in_channels: int, param):

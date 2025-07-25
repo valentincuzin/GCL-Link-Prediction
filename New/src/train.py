@@ -8,9 +8,6 @@ from torch_geometric.utils import negative_sampling
 from torch_sparse import SparseTensor
 import numpy as np
 
-from src.utils import visu_tsne, commu_distrib
-
-
 @torch.no_grad()
 def test(encoder: nn.Module, predictor: nn.Module, data, split_edge: dict, hp: dict):
     print(hp)
@@ -22,18 +19,13 @@ def test(encoder: nn.Module, predictor: nn.Module, data, split_edge: dict, hp: d
     adj_t = data.adj_t
     h = None if encoder is None else encoder(data.x, adj_t)
 
-    # data2 = commu_distrib(data, 'louvain')
-    # print(len(data2.sizes))
-    # visu_tsne(h, data2.communities, 'LBGRL raa euroroad')
     def test_split(split):
         # pred positive edges and negatives edges for nodes in the split
         pos_test_edge = split_edge[split]["edge"].to(device)
         neg_test_edge = split_edge[split]["edge_neg"].to(device)
         pos_test_preds = []
         for perm in DataLoader(range(pos_test_edge.size(0)), hp["batch_size"]):
-            # print('perm', perm)
             edge = pos_test_edge[perm].t()
-            # print('edge', edge)
             out = predictor.predict(h, edge[0], edge[1], adj_t)
             pos_test_preds += [out.squeeze().cpu()]
         pos_test_pred = torch.cat(pos_test_preds, dim=0)
@@ -50,8 +42,6 @@ def test(encoder: nn.Module, predictor: nn.Module, data, split_edge: dict, hp: d
         adj_t = data.full_adj_t
         h = None if encoder is None else encoder(data.x, adj_t)
     pos_test_pred, neg_test_pred = test_split("test")
-    # print("pos_test_pred", pos_test_pred)
-    # print("neg_test_pred", neg_test_pred)
     return pos_valid_pred, neg_valid_pred, pos_test_pred, neg_test_pred
 
 

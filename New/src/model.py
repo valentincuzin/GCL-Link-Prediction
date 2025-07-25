@@ -3,8 +3,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch_geometric.nn import GCNConv, BatchNorm, LayerNorm, Sequential
-from src.encoder import BGRL_GCN, GRACE_GCN, NCN_GCN
+from src.encoder import BGRL_GCN, MLP_Head_BGRL, GRACE_GCN, NCN_GCN
 
 
 def get_model(encoder_name: str, model_name: str, data, hp: dict):
@@ -15,7 +14,6 @@ def get_model(encoder_name: str, model_name: str, data, hp: dict):
         "gcn_ncn": NCN_GCN,
     }
     _encoder = switch[encoder_name](data.num_features, hp).to(device)
-    # _encoder = ENCODER_GRACE(data.num_features, hp['hidden'], nn.Identity()).to(device)
     if model_name == "baseline":
         return _encoder
     elif model_name == "grace":
@@ -37,12 +35,12 @@ def get_model(encoder_name: str, model_name: str, data, hp: dict):
         )
         model = LinkBGRL(_encoder, _predictor).to(device)
     elif model_name in "agrace":
-        model = A2GRACE(_encoder, hp["hidden"], hp["hidden"], hp["tau"]).to(device)
+        model = AGRACE(_encoder, hp["hidden"], hp["hidden"], hp["tau"]).to(device)
     elif model_name in "abgrl":
         _predictor = MLP_Head_BGRL(hp["hidden"], hp["hidden"], hp["proj_hidden"]).to(
             device
         )
-        model = A2BGRL(_encoder, _predictor).to(device)
+        model = ABGRL(_encoder, _predictor).to(device)
     return model
 
 
@@ -126,68 +124,6 @@ class GRACE(nn.Module):
         else:
             l1 = self.batched_semi_loss(h1, h2, batch_size)
             l2 = self.batched_semi_loss(h2, h1, batch_size)
-
-        ret = (l1 + l2) * 0.5
-        ret = ret.mean() if mean else ret.sum()
-
-        return ret
-
-
-class LinkGRACE(nn.Module):
-    def __init__(self, encoder, hidden: int, proj_hidden: int, tau: float = 0.5):
-        super(LinkGRACE, self).__init__()
-        self.encoder = encoder
-        self.tau: float = tau
-
-        self.fc1 = nn.Linear(hidden, proj_hidden)
-        self.fc2 = nn.Linear(proj_hidden, hidden)
-
-        self.hidden = hidden
-
-    def forward(self, x: torch.Tensor, edge_index: torch.Tensor) -> torch.Tensor:
-        return self.encoder(x, edge_index)
-
-    def projection(self, z: torch.Tensor) -> torch.Tensor:
-        z = F.elu(self.fc1(z))
-        return self.fc2(z)
-
-    def sim(self, z1: torch.Tensor, z2: torch.Tensor):
-        z1 = F.normalize(z1)
-        z2 = F.normalize(z2)
-        return torch.mm(z1, z2.t())
-
-    def semi_loss(self, z1_uv, neg_z1_uv, z2_uv, neg_z2_uv):
-        f = lambda x: torch.exp(x / self.tau)
-
-        pos_refl_sim = f(self.sim(z1_uv, z1_uv))
-        pos_between_sim = f(self.sim(z1_uv, z2_uv))
-
-        neg_refl_sim = f(self.sim(neg_z1_uv, neg_z1_uv))
-        neg_between_sim = f(self.sim(neg_z1_uv, neg_z2_uv))
-
-        loss = -torch.log(
-            (pos_between_sim.diag())
-            / (neg_refl_sim.sum(1) + neg_between_sim.sum(1) - neg_refl_sim.diag())
-        )
-        return loss
-
-    def loss(
-        self,
-        z1: torch.Tensor,
-        z2: torch.Tensor,
-        edge,
-        neg_edge,
-        mean: bool = True,
-        batch_size: int = None,
-    ):
-        z1_uv = self.projection(z1[edge[0]] * z1[edge[1]])
-        neg_z1_uv = self.projection(z1[neg_edge[0]] * z1[neg_edge[1]])
-        z2_uv = self.projection(z2[edge[0]] * z2[edge[1]])
-        neg_z2_uv = self.projection(z2[neg_edge[0]] * z2[neg_edge[1]])
-
-        if batch_size is None:
-            l1 = self.semi_loss(z1_uv, neg_z1_uv, z2_uv, neg_z2_uv)
-            l2 = self.semi_loss(z2_uv, neg_z2_uv, z1_uv, neg_z1_uv)
 
         ret = (l1 + l2) * 0.5
         ret = ret.mean() if mean else ret.sum()
@@ -366,88 +302,6 @@ class CSGCL(torch.nn.Module):
 ###############################################
 # Code from BGRL
 
-
-class ENCODER_BGRL(nn.Module):
-    def __init__(
-        self,
-        layer_sizes,
-        batchnorm=False,
-        batchnorm_mm=0.99,
-        layernorm=False,
-        weight_standardization=False,
-    ):
-        super(ENCODER_BGRL, self).__init__()
-
-        assert batchnorm != layernorm
-        assert len(layer_sizes) >= 2
-        self.input_size, self.representation_size = layer_sizes[0], layer_sizes[-1]
-        self.weight_standardization = weight_standardization
-
-        layers = []
-        for in_dim, out_dim in zip(layer_sizes[:-1], layer_sizes[1:]):
-            layers.append(
-                (GCNConv(in_dim, out_dim), "x, edge_index -> x"),
-            )
-
-            if batchnorm:
-                layers.append(BatchNorm(out_dim, momentum=batchnorm_mm))
-            else:
-                layers.append(LayerNorm(out_dim))
-
-            layers.append(nn.PReLU())
-
-        self.model = Sequential("x, edge_index", layers)
-
-    def forward(self, x, edge_index):
-        if self.weight_standardization:
-            self.standardize_weights()
-        return self.model(x, edge_index)
-
-    def reset_parameters(self):
-        self.model.reset_parameters()
-
-    def standardize_weights(self):
-        skipped_first_conv = False
-        for m in self.model.modules():
-            if isinstance(m, GCNConv):
-                if not skipped_first_conv:
-                    skipped_first_conv = True
-                    continue
-                weight = m.lin.weight.data
-                var, mean = torch.var_mean(weight, dim=1, keepdim=True)
-                weight = (weight - mean) / (torch.sqrt(var + 1e-5))
-                m.lin.weight.data = weight
-
-
-class MLP_Head_BGRL(nn.Module):
-    r"""MLP used for predictor in BGRL. The MLP has one hidden layer.
-
-    Args:
-        input_size (int): Size of input features.
-        output_size (int): Size of output features.
-        hidden_size (int, optional): Size of hidden layer. (default: :obj:`4096`).
-    """
-
-    def __init__(self, input_size, output_size, hidden_size=512):
-        super().__init__()
-
-        self.net = nn.Sequential(
-            nn.Linear(input_size, hidden_size, bias=True),
-            nn.PReLU(1),
-            nn.Linear(hidden_size, output_size, bias=True),
-        )
-        self.reset_parameters()
-
-    def forward(self, x):
-        return self.net(x)
-
-    def reset_parameters(self):
-        # kaiming_uniform
-        for m in self.modules():
-            if isinstance(m, nn.Linear):
-                m.reset_parameters()
-
-
 class BGRL(torch.nn.Module):
     r"""BGRL architecture for Graph representation learning.
 
@@ -522,6 +376,69 @@ class BGRL(torch.nn.Module):
         )
         return loss
 
+###############################################
+# Link loss model
+
+class LinkGRACE(nn.Module):
+    def __init__(self, encoder, hidden: int, proj_hidden: int, tau: float = 0.5):
+        super(LinkGRACE, self).__init__()
+        self.encoder = encoder
+        self.tau: float = tau
+
+        self.fc1 = nn.Linear(hidden, proj_hidden)
+        self.fc2 = nn.Linear(proj_hidden, hidden)
+
+        self.hidden = hidden
+
+    def forward(self, x: torch.Tensor, edge_index: torch.Tensor) -> torch.Tensor:
+        return self.encoder(x, edge_index)
+
+    def projection(self, z: torch.Tensor) -> torch.Tensor:
+        z = F.elu(self.fc1(z))
+        return self.fc2(z)
+
+    def sim(self, z1: torch.Tensor, z2: torch.Tensor):
+        z1 = F.normalize(z1)
+        z2 = F.normalize(z2)
+        return torch.mm(z1, z2.t())
+
+    def semi_loss(self, z1_uv, neg_z1_uv, z2_uv, neg_z2_uv):
+        f = lambda x: torch.exp(x / self.tau)
+
+        pos_refl_sim = f(self.sim(z1_uv, z1_uv))
+        pos_between_sim = f(self.sim(z1_uv, z2_uv))
+
+        neg_refl_sim = f(self.sim(neg_z1_uv, neg_z1_uv))
+        neg_between_sim = f(self.sim(neg_z1_uv, neg_z2_uv))
+
+        loss = -torch.log(
+            (pos_between_sim.diag())
+            / (neg_refl_sim.sum(1) + neg_between_sim.sum(1) - neg_refl_sim.diag())
+        )
+        return loss
+
+    def loss(
+        self,
+        z1: torch.Tensor,
+        z2: torch.Tensor,
+        edge,
+        neg_edge,
+        mean: bool = True,
+        batch_size: int = None,
+    ):
+        z1_uv = self.projection(z1[edge[0]] * z1[edge[1]])
+        neg_z1_uv = self.projection(z1[neg_edge[0]] * z1[neg_edge[1]])
+        z2_uv = self.projection(z2[edge[0]] * z2[edge[1]])
+        neg_z2_uv = self.projection(z2[neg_edge[0]] * z2[neg_edge[1]])
+
+        if batch_size is None:
+            l1 = self.semi_loss(z1_uv, neg_z1_uv, z2_uv, neg_z2_uv)
+            l2 = self.semi_loss(z2_uv, neg_z2_uv, z1_uv, neg_z1_uv)
+
+        ret = (l1 + l2) * 0.5
+        ret = ret.mean() if mean else ret.sum()
+
+        return ret
 
 class LinkBGRL(torch.nn.Module):
     def __init__(self, encoder, predictor):
@@ -586,11 +503,12 @@ class LinkBGRL(torch.nn.Module):
         )
         return loss
 
+###############################################
+# Adjency model
 
-
-class A2GRACE(nn.Module):
+class AGRACE(nn.Module):
     def __init__(self, encoder, hidden: int, proj_hidden: int, tau: float = 0.5):
-        super(A2GRACE, self).__init__()
+        super(AGRACE, self).__init__()
         self.encoder = encoder
         self.tau: float = tau
 
@@ -683,7 +601,7 @@ class A2GRACE(nn.Module):
         return ret
 
 
-class A2BGRL(torch.nn.Module):
+class ABGRL(torch.nn.Module):
     def __init__(self, encoder, predictor):
         super().__init__()
         # online network
@@ -743,130 +661,3 @@ class A2BGRL(torch.nn.Module):
             - F.cosine_similarity(z2, Ay2_mean.detach(), dim=-1).mean()
         )
         return loss
-
-
-""" ### Â loss
-class AGRACE(nn.Module):
-    def __init__(self, encoder: ENCODER_GRACE, hidden: int, proj_hidden: int, tau: float = 0.5):
-        super(AGRACE, self).__init__()
-        self.encoder: ENCODER_GRACE = encoder
-        self.tau: float = tau
-
-        self.fc1 = nn.Linear(hidden, proj_hidden)
-        self.fc2 = nn.Linear(proj_hidden, hidden)
-
-        self.hidden = hidden
-
-    def forward(self, x: torch.Tensor, edge_index: torch.Tensor) -> torch.Tensor:
-        return self.encoder(x, edge_index)
-
-    def projection(self, z: torch.Tensor) -> torch.Tensor:
-        z = F.elu(self.fc1(z))
-        return self.fc2(z)
-
-    def sim(self, z1: torch.Tensor, z2: torch.Tensor):
-        z1 = F.normalize(z1)
-        z2 = F.normalize(z2)
-        return torch.mm(z1, z2.t())
-
-    def semi_loss(self, z1: torch.Tensor, z2: torch.Tensor, adjacence: torch.Tensor):
-        f = lambda x: torch.exp(x / self.tau)
-        nb_neight = adjacence.to_dense().sum(1).unsqueeze(1)
-        Az1 = torch.mm(adjacence, z1)
-        Az1_mean = Az1 / nb_neight
-        Az2 = torch.mm(adjacence, z2)
-        Az2_mean = Az2 / nb_neight
-        refl_sim = f(self.sim(z1, Az1_mean))
-        between_sim = f(self.sim(z1, Az2_mean))
-
-        return -torch.log(between_sim.diag() / (refl_sim.sum(1) + between_sim.sum(1) - refl_sim.diag()))
-
-    def batched_semi_loss(self, z1: torch.Tensor, z2: torch.Tensor, batch_size: int):
-        # Space complexity: O(BN) (semi_loss: O(N^2))
-        device = z1.device
-        num_nodes = z1.size(0)
-        num_batches = (num_nodes - 1) // batch_size + 1
-        f = lambda x: torch.exp(x / self.tau)
-        indices = torch.arange(0, num_nodes).to(device)
-        losses = []
-
-        for i in range(num_batches):
-            mask = indices[i * batch_size:(i + 1) * batch_size]
-            refl_sim = f(self.sim(z1[mask], z1))  # [B, N]
-            between_sim = f(self.sim(z1[mask], z2))  # [B, N]
-
-            losses.append(-torch.log(between_sim[:, i * batch_size:(i + 1) * batch_size].diag()
-                                     / (refl_sim.sum(1) + between_sim.sum(1)
-                                        - refl_sim[:, i * batch_size:(i + 1) * batch_size].diag())))
-
-        return torch.cat(losses)
-
-    def loss(self, z1: torch.Tensor, z2: torch.Tensor, adjacence: torch.Tensor, mean: bool = True, batch_size: int = None):
-        h1 = self.projection(z1)
-        h2 = self.projection(z2)
-
-        if batch_size is None:
-            l1 = self.semi_loss(h1, h2, adjacence)
-            l2 = self.semi_loss(h2, h1, adjacence)
-        else:
-            l1 = self.batched_semi_loss(h1, h2, batch_size)
-            l2 = self.batched_semi_loss(h2, h1, batch_size)
-
-        ret = (l1 + l2) * 0.5
-        ret = ret.mean() if mean else ret.sum()
-
-        return ret
-
-
-class ABGRL(torch.nn.Module):
-    def __init__(self, encoder, predictor):
-        super().__init__()
-        # online network
-        self.online_encoder = encoder
-        self.predictor = predictor
-
-        # target network
-        self.target_encoder = copy.deepcopy(encoder)
-
-        # reinitialize weights
-        self.target_encoder.reset_parameters()
-        # stop gradient
-        for param in self.target_encoder.parameters():
-            param.requires_grad = False
-
-    def trainable_parameters(self):
-        return list(self.online_encoder.parameters()) + list(self.predictor.parameters())
-
-    @torch.no_grad()
-    def update_target_network(self, mm):
-        assert 0.0 <= mm <= 1.0, "Momentum needs to be between 0.0 and 1.0, got %.5f" % mm
-        for param_q, param_k in zip(self.online_encoder.parameters(), self.target_encoder.parameters()):
-            param_k.data.mul_(mm).add_(param_q.data, alpha=1. - mm)
-            # mm c'est le poids de la target ~= param_k.data[i] = param_k.data[i] * mm + param_q.data[i] * (1 - mm)
-
-    def train_forward(self, online_x, target_x):
-        # forward online network
-        online_y = self.online_encoder(online_x[0], online_x[1])
-
-        # prediction
-        online_q = self.predictor(online_y)
-
-        # forward target network
-        with torch.no_grad():
-            target_y = self.target_encoder(target_x[0], target_x[1]).detach()
-        return online_q, target_y
-
-    def forward(self, x: torch.Tensor, edge_index: torch.Tensor):
-        # forward online network
-        online_y = self.online_encoder(x, edge_index)
-        return online_y
-
-    def loss(self, z1, z2, y1, y2, adjacence):
-        nb_neight = adjacence.to_dense().sum(1).unsqueeze(1)
-        Ay1 = torch.mm(adjacence, y1)
-        Ay1_mean = Ay1 / nb_neight
-        Ay2 = torch.mm(adjacence, y2)
-        Ay2_mean = Ay2 / nb_neight
-        loss = 2 - F.cosine_similarity(z1, Ay1_mean.detach(), dim=-1).mean() - F.cosine_similarity(z2, Ay2_mean.detach(), dim=-1).mean()
-        return loss
-"""
