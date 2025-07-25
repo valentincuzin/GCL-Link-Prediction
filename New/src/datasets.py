@@ -72,6 +72,7 @@ def loaddataset(
     name: str | list,
     reduce_feature: int | None = None,
     only_feature: bool = False,
+    split: int = 70
 ) -> tuple[Data, dict]:
     """
     implement several way to load many dataset
@@ -84,9 +85,16 @@ def loaddataset(
     Returns:
         tuple[Data, dict]: return the Data loaded and is split associated
     """
+    if split == 70:
+        val_ratio = 0.1
+        test_ratio = 0.2
+    elif split == 85:
+        print('split 85% 5% 10%')
+        val_ratio = 0.05
+        test_ratio = 0.1
 
     if isinstance(name, list):
-        split_edge = randomsplit(name)
+        split_edge = randomsplit(name, val_ratio, test_ratio)
         data = name[0]
         if reduce_feature is not None:
             if reduce_feature == 0:
@@ -129,7 +137,7 @@ def loaddataset(
         data.edge_index = to_undirected(torch.tensor(edge_index).T)
         data.x = F.one_hot(torch.arange(0, len(G.nodes))).float()
         data.edge_index = to_undirected(data.edge_index)
-        split_edge = randomsplit([data])
+        split_edge = randomsplit([data], val_ratio, test_ratio)
         data.edge_index = to_undirected(split_edge["train"]["edge"].t())
         edge_index = data.edge_index
         data.num_nodes = data.x.shape[0]
@@ -144,7 +152,7 @@ def loaddataset(
         edge_index, _ = from_scipy_sparse_matrix(net["net"])
         data = Data(edge_index=edge_index, num_nodes=torch.max(edge_index).item() + 1)
         data.x = F.one_hot(torch.arange(0, data.num_nodes)).float()
-        split_edge = randomsplit([data])
+        split_edge = randomsplit([data], val_ratio, test_ratio)
         data.edge_index = to_undirected(split_edge["train"]["edge"].t())
         edge_index = data.edge_index
 
@@ -180,7 +188,7 @@ def loaddataset(
             dataset = Coauthor(root="dataset", name=name)
         elif name in ["computers", "photo"]:
             dataset = Amazon(root="dataset", name=name)
-        split_edge = randomsplit(dataset)
+        split_edge = randomsplit(dataset, val_ratio, test_ratio)
         data = dataset[0]
         if reduce_feature is not None:
             if reduce_feature == 0:
@@ -244,6 +252,7 @@ class DataSplit:
         runs: int,
         reduce_feature: int | None = None,
         only_feature: bool = False,
+        split: int = 70,
     ) -> None:
         """
         init DataSplit class
@@ -291,7 +300,7 @@ class DataSplit:
         for r in tqdm(range(runs)):
             seed_everything(r)
             dataset_tmp = deepcopy(dataset)
-            data, split_edge = loaddataset(dataset_tmp, reduce_feature, only_feature)
+            data, split_edge = loaddataset(dataset_tmp, reduce_feature, only_feature, split)
             self.data_runs[r] = data, split_edge
         self.info_time = round(time.time() - t1, 2)
         self.info()

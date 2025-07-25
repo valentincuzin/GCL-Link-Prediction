@@ -70,15 +70,23 @@ class Aug:
             cd_algo = None
             cd_algo = self.param["commu_detect"]
             print(cd_algo, "detection...")
-            data = commu_distrib(data, cd_algo).to(self.device)
-            if "fix" in type:
+            if "_cheat" in type:
+                full_split = to_undirected(torch.cat((self.split_edge['train']['edge'], 
+                                                     self.split_edge['valid']['edge'], 
+                                                     self.split_edge['test']['edge'])).T)
+                data = commu_distrib(data, cd_algo, full_split=full_split).to(self.device)
+                type = type.replace('_cheat', '')
+            else:
+                data = commu_distrib(data, cd_algo).to(self.device)
+            if "_fix" in type:
                 data.node_list = [j for sub in data.communities for j in sub]
-            if "fast_bug" in type:
+            if "_fast_bug" in type:
                 gtG, block_map = to_graph_tool_bug(data)
                 data.state = BlockState(gtG, block_map, deg_corr=False)
-            elif "fast" in type:
+            elif "_fast" in type:
                 gtG, block_map = to_graph_tool(data)
                 data.state = BlockState(gtG, block_map, deg_corr=False)
+
         elif "kmeans" in type:
             if hasattr(data, "_pos"):
                 pos = []

@@ -97,6 +97,7 @@ def arguments():
     parser.add_argument("--augmentation", type=str, default="random")
     parser.add_argument("--encoder", type=str, default="gcn_bgrl")
     parser.add_argument("--predictor", type=str, default="mlp")
+    parser.add_argument("--split", type=int, default=70, choices=[70, 85])
     parser.add_argument("--save", type=str, default="test/")
     parser.add_argument("--runs", type=int, default=10)
     parser.add_argument(
@@ -216,7 +217,7 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     for dataset in args.dataset:
         data_split = DataSplit(
-            dataset, device, args.runs, args.reduce_feature, args.only_feature
+            dataset, device, args.runs, args.reduce_feature, args.only_feature, args.split
         )
         evaluator = get_evaluator(dataset)
         full_res = []

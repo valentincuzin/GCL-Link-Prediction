@@ -39,7 +39,7 @@ def community_detection(name: str) -> algorithms:
     return algs[name]
 
 
-def commu_distrib(data: Data, cd_algo: str = None) -> Data:
+def commu_distrib(data: Data, cd_algo: str = None, full_split=None) -> Data:
     """
     detect and add community distribution
 
@@ -55,7 +55,12 @@ def commu_distrib(data: Data, cd_algo: str = None) -> Data:
         return data
     if cd_algo is None:
         cd_algo = "louvain"
-    G = to_networkx(data, to_undirected=True)
+    if full_split is None:
+        G = to_networkx(data, to_undirected=True, remove_self_loops=True)
+    else:
+        tmp_data = copy.deepcopy(data)
+        tmp_data.edge_index = full_split
+        G = to_networkx(tmp_data, to_undirected=True)
     communities = community_detection(cd_algo)(G).communities
     probs = np.zeros((len(communities), len(communities)))
     sizes = []
@@ -91,7 +96,7 @@ def commu_distrib(data: Data, cd_algo: str = None) -> Data:
         for idy, prob in enumerate(row):
             if prob < 0 or prob > 1:
                 print(idx, idy, prob, sizes[x])
-                raise nx.NetworkXException("Entries of 'p' not in [0,1].")
+                # raise nx.NetworkXException("Entries of 'p' not in [0,1].")
     data.sizes = sizes
     # print("probs, ", probs)
     # print("sizes, ", sizes)

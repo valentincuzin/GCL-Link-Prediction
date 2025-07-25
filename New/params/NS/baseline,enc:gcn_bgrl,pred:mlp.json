@@ -1,0 +1,23 @@
+{
+    "ct_epochs": 2500,
+    "proj_hidden": 384,
+    "gnn_lr": 0.00013481639093402257,
+    "batch_size": 2496,
+    "use_valedges_as_input": false,
+    "epochs": 100,
+    "loss_func": "log_sig",
+    "pre_lr": 0.0001420986870180365,
+    "mask_input": false,
+    "weight_decay": 9.095900871241062e-05,
+    "n_layers": 3,
+    "layer_sizes": [
+        320
+    ],
+    "hidden": 320,
+    "batch_layer_norm": false,
+    "batchnorm_mm": null,
+    "weight_standardization": true,
+    "1_layer_size": 64,
+    "2_layer_size": 384,
+    "3_layer_size": 192
+}
