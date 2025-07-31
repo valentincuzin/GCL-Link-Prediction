@@ -9,14 +9,16 @@ from src.utils import DropAdj, DropEdge
 
 
 class BGRL_GCN(nn.Module):
-    def __init__(self, in_channels: int, param):
+    """
+    Encoder from BGRL
+    """
+    def __init__(self, in_channels: int, param: dict):
         super().__init__()
         layer_sizes = copy.deepcopy(param["layer_sizes"])
         batchnorm = param["batch_layer_norm"]
         batchnorm_mm = param["batchnorm_mm"]
         layernorm = not param["batch_layer_norm"]
         weight_standardization = param["weight_standardization"]
-        # print(batchnorm, layernorm)
         assert batchnorm != layernorm
         assert len(layer_sizes) >= 1
         self.input_size, self.representation_size = in_channels, layer_sizes[-1]
@@ -33,7 +35,6 @@ class BGRL_GCN(nn.Module):
                 layers.append(LayerNorm(out_dim))
 
             layers.append(nn.PReLU())
-        print(layers)
         self.model = Sequential("x, edge_index", layers)
 
     def forward(self, x, edge_index):
@@ -58,7 +59,7 @@ class BGRL_GCN(nn.Module):
 
 
 class MLP_Head_BGRL(nn.Module):
-    r"""MLP used for predictor in BGRL. The MLP has one hidden layer.
+    r"""MLP used for projection head in BGRL. The MLP has one hidden layer.
 
     Args:
         input_size (int): Size of input features.
@@ -87,6 +88,9 @@ class MLP_Head_BGRL(nn.Module):
 
 
 class GRACE_GCN(nn.Module):
+    """
+    Encoder from GRACE
+    """
     def __init__(self, in_channels: int, param):
         super(GRACE_GCN, self).__init__()
         out_channels: int = param["hidden"]
@@ -143,6 +147,9 @@ class GRACE_GCN(nn.Module):
 
 
 class NCN_GCN(nn.Module):
+    """
+    Encoder from NCN
+    """
     def __init__(self, in_channels, param):
         super().__init__()
 

@@ -4,52 +4,14 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from src.encoder import BGRL_GCN, MLP_Head_BGRL, GRACE_GCN, NCN_GCN
-
-
-def get_model(encoder_name: str, model_name: str, data, hp: dict):
-    device = data.x.device
-    switch = {
-        "gcn_bgrl": BGRL_GCN,
-        "gcn_grace": GRACE_GCN,
-        "gcn_ncn": NCN_GCN,
-    }
-    _encoder = switch[encoder_name](data.num_features, hp).to(device)
-    if model_name == "baseline":
-        return _encoder
-    elif model_name == "grace":
-        model = GRACE(_encoder, hp["hidden"], hp["proj_hidden"], hp["tau"]).to(device)
-    elif model_name == "lgrace":
-        model = LinkGRACE(_encoder, hp["hidden"], hp["proj_hidden"], hp["tau"]).to(
-            device
-        )
-    elif model_name == "csgcl":
-        model = CSGCL(_encoder, hp["hidden"], hp["proj_hidden"], hp["tau"]).to(device)
-    elif model_name in "bgrl":
-        _predictor = MLP_Head_BGRL(hp["hidden"], hp["hidden"], hp["proj_hidden"]).to(
-            device
-        )
-        model = BGRL(_encoder, _predictor).to(device)
-    elif model_name in "lbgrl":
-        _predictor = MLP_Head_BGRL(hp["hidden"], hp["hidden"], hp["proj_hidden"]).to(
-            device
-        )
-        model = LinkBGRL(_encoder, _predictor).to(device)
-    elif model_name in "agrace":
-        model = AGRACE(_encoder, hp["hidden"], hp["hidden"], hp["tau"]).to(device)
-    elif model_name in "abgrl":
-        _predictor = MLP_Head_BGRL(hp["hidden"], hp["hidden"], hp["proj_hidden"]).to(
-            device
-        )
-        model = ABGRL(_encoder, _predictor).to(device)
-    return model
-
+from torch_geometric.data import Data
 
 ###############################################
 # Code from GRACE
 
 
 class GRACE(nn.Module):
-    def __init__(self, encoder, hidden: int, proj_hidden: int, tau: float = 0.5):
+    def __init__(self, encoder: nn.Module, hidden: int, proj_hidden: int, tau: float = 0.5):
         super(GRACE, self).__init__()
         self.encoder = encoder
         self.tau: float = tau
@@ -380,6 +342,9 @@ class BGRL(torch.nn.Module):
 # Link loss model
 
 class LinkGRACE(nn.Module):
+    """
+    grace based model that work on embedding of link (node pairs) instead of nodes
+    """
     def __init__(self, encoder, hidden: int, proj_hidden: int, tau: float = 0.5):
         super(LinkGRACE, self).__init__()
         self.encoder = encoder
@@ -441,6 +406,9 @@ class LinkGRACE(nn.Module):
         return ret
 
 class LinkBGRL(torch.nn.Module):
+    """
+    bgrl based model that work on embedding of link (node pairs) instead of nodes
+    """
     def __init__(self, encoder, predictor):
         super().__init__()
         # online network
@@ -507,6 +475,9 @@ class LinkBGRL(torch.nn.Module):
 # Adjency model
 
 class AGRACE(nn.Module):
+    """
+    grace based model that use adjacency matrix to move the embedding of node near to centroid of the neighboorhood
+    """
     def __init__(self, encoder, hidden: int, proj_hidden: int, tau: float = 0.5):
         super(AGRACE, self).__init__()
         self.encoder = encoder
@@ -602,6 +573,9 @@ class AGRACE(nn.Module):
 
 
 class ABGRL(torch.nn.Module):
+    """
+    bgrl based model that use adjacency matrix to move the embedding of node near to centroid of the neighboorhood
+    """
     def __init__(self, encoder, predictor):
         super().__init__()
         # online network
@@ -661,3 +635,52 @@ class ABGRL(torch.nn.Module):
             - F.cosine_similarity(z2, Ay2_mean.detach(), dim=-1).mean()
         )
         return loss
+
+def get_model(encoder_name: str, model_name: str, data: Data, hp: dict) -> GRACE | LinkGRACE | CSGCL | BGRL | LinkBGRL | AGRACE | ABGRL:
+    """
+    getter of the encoder and the model that going to train it
+
+    Args:
+        encoder_name (str): 
+        model_name (str): 
+        data (Data): 
+        hp (dict): 
+
+    Returns:
+        GRACE | LinkGRACE | CSGCL | BGRL | LinkBGRL | AGRACE | ABGRL: the encoder to train
+    """
+    device = data.x.device
+    switch = {
+        "gcn_bgrl": BGRL_GCN,
+        "gcn_grace": GRACE_GCN,
+        "gcn_ncn": NCN_GCN,
+    }
+    _encoder = switch[encoder_name](data.num_features, hp).to(device)
+    if model_name == "baseline":
+        return _encoder
+    elif model_name == "grace":
+        model = GRACE(_encoder, hp["hidden"], hp["proj_hidden"], hp["tau"]).to(device)
+    elif model_name == "lgrace":
+        model = LinkGRACE(_encoder, hp["hidden"], hp["proj_hidden"], hp["tau"]).to(
+            device
+        )
+    elif model_name == "csgcl":
+        model = CSGCL(_encoder, hp["hidden"], hp["proj_hidden"], hp["tau"]).to(device)
+    elif model_name in "bgrl":
+        _predictor = MLP_Head_BGRL(hp["hidden"], hp["hidden"], hp["proj_hidden"]).to(
+            device
+        )
+        model = BGRL(_encoder, _predictor).to(device)
+    elif model_name in "lbgrl":
+        _predictor = MLP_Head_BGRL(hp["hidden"], hp["hidden"], hp["proj_hidden"]).to(
+            device
+        )
+        model = LinkBGRL(_encoder, _predictor).to(device)
+    elif model_name in "agrace":
+        model = AGRACE(_encoder, hp["hidden"], hp["proj_hidden"], hp["tau"]).to(device)
+    elif model_name in "abgrl":
+        _predictor = MLP_Head_BGRL(hp["hidden"], hp["hidden"], hp["proj_hidden"]).to(
+            device
+        )
+        model = ABGRL(_encoder, _predictor).to(device)
+    return model

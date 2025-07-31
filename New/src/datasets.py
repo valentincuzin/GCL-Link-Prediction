@@ -26,7 +26,7 @@ from torch_geometric.transforms import RandomLinkSplit
 from src.utils import gen_sbm, average_precision, removerepeated
 
 
-def randomsplit(dataset: list[Data], val_ratio: float = 0.10, test_ratio: float = 0.2):
+def randomsplit(dataset: list[Data], val_ratio: float = 0.10, test_ratio: float = 0.2) -> dict[str, dict[str, torch.Tensor]]:
     """
     random split on edges in 3 sets train,val,test
 
@@ -81,6 +81,7 @@ def loaddataset(
         name (str | list): name of the graph
         reduce_feature (int | None, optional): use PCA. Defaults to None.
         only_feature (bool, optional): destroy structure of the graph. Defaults to False.
+        split (bool): proportion of train split edge. Defaults to 70.
 
     Returns:
         tuple[Data, dict]: return the Data loaded and is split associated
@@ -245,6 +246,7 @@ def reduce_node_features(data: Data, nb_features: int) -> Data:
 
 
 class DataSplit:
+
     def __init__(
         self,
         dataset: str | list,
@@ -263,6 +265,7 @@ class DataSplit:
             runs (int): number of runs
             reduce_feature (int | None, optional): PCA apply on matrix X to reduce feature. Defaults to None.
             only_feature (bool, optional): destroy structure of the graph to base prediction only on feature. Defaults to False.
+            split (bool): proportion of train split edge. Defaults to 70.
         """
         print(f"{runs} split from the dataset {dataset}")
         if dataset in ["synthetic_1", "synthetic_2", "synthetic_3"]:

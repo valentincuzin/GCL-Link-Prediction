@@ -1,9 +1,20 @@
 import json
 import os
 from optuna.trial import TrialState
+from optuna import Study, Trial
 
 
-def hp_load(dataset: str, save_name: str):
+def hp_load(dataset: str, save_name: str) -> dict:
+    """
+    load a hyper-parameters if it's was save, else use default.json
+
+    Args:
+        dataset (str):
+        save_name (str):
+
+    Returns:
+        dict:
+    """
     print(f"....{dataset}....")
     if "synthetic" in dataset:
         hp_files = "params/synthetic.json"
@@ -22,7 +33,18 @@ def hp_load(dataset: str, save_name: str):
     return hp
 
 
-def update_hp(study, hp, name):
+def update_hp(study: Study, hp: dict, name: str) -> dict:
+    """
+    load and save best parameters found during the search
+
+    Args:
+        study (Study): 
+        hp (dict): 
+        name (str): 
+
+    Returns:
+        dict:
+    """
     pruned_trials = study.get_trials(deepcopy=False, states=[TrialState.PRUNED])
     complete_trials = study.get_trials(deepcopy=False, states=[TrialState.COMPLETE])
 
@@ -45,7 +67,18 @@ def update_hp(study, hp, name):
         json.dump(hp, fichier, ensure_ascii=False, indent=4)
     return hp
 
-def hp_augmentation(augmentation, trial, hp):
+def hp_augmentation(augmentation: str, trial: Trial, hp: dict) -> dict:
+    """
+    suggest params for augmentation process
+
+    Args:
+        augmentation (str): 
+        trial (Trial): 
+        hp (dict): 
+
+    Returns:
+        dict: updated params
+    """
     if not('sbm' in augmentation and '+' not in augmentation):
         hp["drop_edge_rate_1"] = trial.suggest_float(
             "drop_edge_rate_1", 0.0, 0.9, step=0.1)
@@ -62,13 +95,21 @@ def hp_augmentation(augmentation, trial, hp):
     if "sbm" in augmentation:
         hp["commu_detect"] = trial.suggest_categorical("commu_detect", ["louvain", "leiden", "infomap"])
 
-    # if any(x in augmentation for x in ["rjc", "raa", "rra"]):
-    #     hp["reconstruction_rate"] = trial.suggest_float(
-    #         "reconstruction_rate", 0.1, 0.90, step=0.1)
     return hp
 
 
-def hp_train(predictor, trial, hp):
+def hp_train(predictor: str, trial: Trial, hp: dict) -> dict:
+    """
+    suggest params for classic train process
+
+    Args:
+        predictor (str): 
+        trial (Trial): 
+        hp (dict): 
+
+    Returns:
+        dict: updated params
+    """
     hp["ct_epochs"] = trial.suggest_categorical("ct_epochs", [100, 500, 1500, 3000])
     hp["proj_hidden"] = trial.suggest_int("proj_hidden", 64, 512, 64)
 
@@ -94,7 +135,17 @@ def hp_train(predictor, trial, hp):
 
 
 # encoder
-def hp_bgrl_gcn(trial, hp):
+def hp_bgrl_gcn(trial: Trial, hp: dict) -> dict:
+    """
+    suggest params for bgrl based encoder
+
+    Args:
+        trial (Trial): 
+        hp (dict): 
+
+    Returns:
+        dict: updated params
+    """
     hp["n_layers"] = trial.suggest_int("n_layers", 1, 4)
     layer_size = trial.suggest_int("layer_size",  64, 512, 64)
     hp["layer_sizes"] = []
@@ -117,7 +168,17 @@ def hp_bgrl_gcn(trial, hp):
     return hp
 
 
-def hp_grace_gcn(trial, hp):
+def hp_grace_gcn(trial: Trial, hp: dict) -> dict:
+    """
+    suggest params for grace based encoder
+
+    Args:
+        trial (Trial): 
+        hp (dict): 
+
+    Returns:
+        dict: updated params
+    """
     hp["n_layers"] = trial.suggest_int("n_layers", 2, 4)
     hp["hidden"] = trial.suggest_int("hidden", 64, 512, 64)
     hp["activation"] = trial.suggest_categorical(
@@ -128,7 +189,17 @@ def hp_grace_gcn(trial, hp):
     return hp
 
 
-def hp_ncn_gcn(trial, hp):
+def hp_ncn_gcn(trial: Trial, hp: dict) -> dict:
+    """
+    suggest params for ncn based encoder
+
+    Args:
+        trial (Trial): 
+        hp (dict): 
+
+    Returns:
+        dict: updated params
+    """
     hp["n_layers"] = trial.suggest_int("n_layers", 1, 4)
     hp["hidden"] = trial.suggest_int("hidden", 64, 512, 64)
     hp["gnn_dp"] = trial.suggest_float("gnn_dp", 0.00, 0.90, step=0.01)

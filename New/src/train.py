@@ -4,13 +4,26 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
+from torch_geometric.data import Data
 from torch_geometric.utils import negative_sampling
 from torch_sparse import SparseTensor
 import numpy as np
 
 @torch.no_grad()
-def test(encoder: nn.Module, predictor: nn.Module, data, split_edge: dict, hp: dict):
-    print(hp)
+def test(encoder: nn.Module, predictor: nn.Module, data: Data, split_edge: dict, hp: dict) -> tuple:
+    """
+    test a encoder+predictor on the valid and test split edge
+
+    Args:
+        encoder (nn.Module): 
+        predictor (nn.Module): 
+        data (Data): 
+        split_edge (dict): 
+        hp (dict): 
+
+    Returns:
+        tuple: pos_valid_pred, neg_valid_pred, pos_test_pred, neg_test_pred
+    """
     if isinstance(encoder, nn.Module):
         encoder.eval()
     if isinstance(predictor, nn.Module):
@@ -46,17 +59,37 @@ def test(encoder: nn.Module, predictor: nn.Module, data, split_edge: dict, hp: d
 
 
 def pred_train(
-    encoder: nn.Module, predictor: nn.Module, data, split_edge: dict, hp: dict
-):
+    encoder: nn.Module, predictor: nn.Module, data: Data, split_edge: dict, hp: dict
+) -> None:
+    """
+    function to train the predictor with a pretrained freezed encoder
+
+    Args:
+        encoder (nn.Module): 
+        predictor (nn.Module): 
+        data (Data): 
+        split_edge (dict): 
+        hp (dict): 
+    """
     optimizer = torch.optim.Adam(params=predictor.parameters(), lr=hp["pre_lr"])
     encoder.eval()
     predictor.train()
-    return _train(encoder, predictor, data, split_edge, optimizer, hp)
+    _train(encoder, predictor, data, split_edge, optimizer, hp)
 
 
 def baseline_train(
-    encoder: nn.Module, predictor: nn.Module, data, split_edge: dict, hp: dict
-):
+    encoder: nn.Module, predictor: nn.Module, data: Data, split_edge: dict, hp: dict
+) -> None:
+    """
+    function to train a GCN supervised link predictor
+
+    Args:
+        encoder (nn.Module): 
+        predictor (nn.Module): 
+        data (Data): 
+        split_edge (dict): 
+        hp (dict):
+    """
     if isinstance(predictor, nn.Module):
         predictor = predictor.to(data.x.device)
         optimizer = torch.optim.Adam(
@@ -77,10 +110,22 @@ def baseline_train(
             weight_decay=hp["weight_decay"],
         )
     encoder.train()
-    return _train(encoder, predictor, data, split_edge, optimizer, hp)
+    _train(encoder, predictor, data, split_edge, optimizer, hp)
 
 
-def _train(encoder, predictor, data, split_edge, optimizer, hp):
+def _train(encoder: nn.Module, predictor: nn.Module, data: Data, split_edge: dict, optimizer: torch.optim.Adam, hp: dict) -> None:
+    """
+    function to train a model throught an optimizer
+
+    Args:
+        encoder (nn.Module): 
+        predictor (nn.Module): 
+        data (Data): 
+        split_edge (dict): 
+        optimizer (torch.optim.Adam): 
+        hp (dict): 
+    """
+
     loss_res = []
     t1 = time.time()
     device = data.adj_t.device()
@@ -121,24 +166,54 @@ def _train(encoder, predictor, data, split_edge, optimizer, hp):
             loss_res.append(round(float(_loss), 2))
     print("train loss: ", loss_res)
     print(f"train time: {time.time() - t1:.2f} s")
-    return total_loss
 
 
-def get_loss(loss_name: str, pos_outs, neg_outs):
+def get_loss(loss_name: str, pos_outs: torch.Tensor, neg_outs: torch.Tensor) -> torch.Tensor:
+    """
+    getter to obtain bce loss or log sig loss
+
+    Args:
+        loss_name (str): 
+        pos_outs (torch.Tensor): 
+        neg_outs (torch.Tensor): 
+
+    Returns:
+        torch.Tensor: loss
+    """
     switch = {
-        "log_sig": log_sig_loss,
-        "bce": bce_loss,
+        "log_sig": _log_sig_loss,
+        "bce": _bce_loss,
     }
     return switch[loss_name](pos_outs, neg_outs)
 
 
-def log_sig_loss(pos_outs, neg_outs):
+def _log_sig_loss(pos_outs: torch.Tensor, neg_outs: torch.Tensor) -> torch.Tensor:
+    """
+    compute logsigmoid loss like NCN does
+
+    Args:
+        pos_outs (torch.Tensor): 
+        neg_outs (torch.Tensor): 
+
+    Returns:
+        torch.Tensor: loss
+    """
     pos_losss = -F.logsigmoid(pos_outs).mean()
     neg_losss = -F.logsigmoid(-neg_outs).mean()
     return neg_losss + pos_losss
 
 
-def bce_loss(pos_out, neg_out):
+def _bce_loss(pos_out: torch.Tensor, neg_out: torch.Tensor) -> torch.Tensor:
+    """
+    Compute bce loss like MPLP does
+
+    Args:
+        pos_out (torch.Tensor): 
+        neg_out (torch.Tensor): 
+
+    Returns:
+        torch.Tensor: loss
+    """
     out = torch.cat((pos_out, neg_out), dim=0).to(pos_out.device)
     label = torch.cat(
         (torch.ones(pos_out.size()), torch.zeros(neg_out.size())), dim=0

@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 import torch_sparse
+from torch import Tensor
 import torch.nn as nn
 import torch.nn.functional as F
 from cdlib import algorithms
@@ -53,6 +54,7 @@ def commu_distrib(data: Data, cd_algo: str = None, full_split=None) -> Data:
     if hasattr(data, "probs") and hasattr(data, "sizes") and cd_algo is None:
         print("already communities")
         return data
+    print(cd_algo, "detection...")
     if cd_algo is None:
         cd_algo = "louvain"
     if full_split is None:
@@ -102,15 +104,15 @@ def commu_distrib(data: Data, cd_algo: str = None, full_split=None) -> Data:
     # print("sizes, ", sizes)
     return data
 
-def removerepeated(ei: torch.Tensor) -> torch.Tensor:
+def removerepeated(ei: Tensor) -> Tensor:
     """
     remove bidirectional link
 
     Args:
-        ei (torch.Tensor): edge_index
+        ei (Tensor): edge_index
 
     Returns:
-        torch.Tensor: directional edge_index
+        Tensor: directional edge_index
     """
     ei = to_undirected(ei)
 
@@ -118,18 +120,18 @@ def removerepeated(ei: torch.Tensor) -> torch.Tensor:
     return ei
 
 
-def average_precision(y_pred_pos: torch.Tensor, y_pred_neg: torch.Tensor) -> float:
+def average_precision(y_pred_pos: Tensor, y_pred_neg: Tensor) -> float:
     """
     Compute Average Precision score with scikit-leanr
 
     Args:
-        y_pred_pos (torch.Tensor): True Links predictions
-        y_pred_neg (torch.Tensor): False Links predictions
+        y_pred_pos (Tensor): True Links predictions
+        y_pred_neg (Tensor): False Links predictions
 
     Returns:
         float: the score
     """
-    if isinstance(y_pred_pos, torch.Tensor):
+    if isinstance(y_pred_pos, Tensor):
         y_pred_pos_np = y_pred_pos.cpu().numpy()
         y_pred_neg_np = y_pred_neg.cpu().numpy()
     else:
@@ -143,7 +145,7 @@ def average_precision(y_pred_pos: torch.Tensor, y_pred_neg: torch.Tensor) -> flo
     return average_precision_score(y_true, y_pred)
 
 
-def gen_sbm(sizes: list, probs: np.ndarray, block: list = None) -> Data:
+def gen_sbm(sizes: list, probs: np.ndarray, block: list = None) -> Tensor:
     """
     Generate SBM augmentation with Networkx
 
@@ -153,25 +155,18 @@ def gen_sbm(sizes: list, probs: np.ndarray, block: list = None) -> Data:
         block (list, optional): list of nodes ordered by commu. Defaults to None.
 
     Returns:
-        Data: the generated Data
+        Tensor: the generated edge_index
     """
     if block is not None:
         G = stochastic_block_model(sizes, probs, block)
     else:
         G = stochastic_block_model(sizes, probs)
-    data = Data() # using from_networkx(G) is the source of the bug
+    # using from_networkx(G) is the source of the bug
     edge_index = []
     for edge in G.edges():
         edge_index.append([edge[0], edge[1]])
     edge_index = to_undirected(torch.tensor(edge_index).T)
-    data.edge_index = edge_index
-    data.num_nodes = sum(sizes)
-    data.sizes = sizes
-    data.probs = probs
-    data.block = block
-    data.num_features = data.num_nodes
-    data.x = F.one_hot(torch.arange(0, data.num_nodes)).float()
-    return data
+    return edge_index
 
 def to_graph_tool(data: Data) -> tuple[gt.Graph, gt.PropertyMap]:
     """
@@ -226,26 +221,19 @@ def to_graph_tool_bug(data: Data) -> tuple[gt.Graph, gt.PropertyMap]:
     return G_gt, block_map
 
 
-def gen_sbm_fast(data: Data, state: gt.BlockState) -> Data:
+def gen_sbm_fast(state: gt.BlockState) -> Tensor:
     """
     Generate SBM graph with graph tool
 
     Args:
-        data (Data): Data from pyG
         state (gt.BlockState): BlockState of Data
 
     Returns:
-        Data: new Data generated
+        Tensor: new edge_index generated
     """
     gtG = state.sample_graph(canonical=False, self_loops=False, multigraph=False)
     edge_index = torch.from_numpy(gtG.get_edges().T)
-    new_data = Data(edge_index=edge_index).to(data.edge_index.device)
-    new_data.edge_index = to_undirected(new_data.edge_index)
-    new_data.num_nodes = data.num_nodes
-    new_data.sizes = data.sizes
-    # new_data.probs = data.probs
-    new_data.num_features = data.num_nodes
-    return new_data
+    return edge_index
 
 
 def store_res(test_res: dict[float], res_dict: dict[list[float]]) -> dict:
@@ -317,12 +305,12 @@ def full_output(full_res: list) -> tuple[pd.DataFrame, str]:
     return full_res, full_latex
 
 
-def visu_tsne(h: torch.Tensor, partition=None, name=None) -> None:
+def visu_tsne(h: Tensor, partition=None, name=None) -> None:
     """
-    plot a t-sne visualisation of the embbedding h
+    plot a t-sne visualisation of the embedding h
 
     Args:
-        h (torch.Tensor): the embbedding
+        h (Tensor): the embedding
         partition (_type_, optional): community partition. Defaults to None.
         name (_type_, optional): name of the plot to save it. Defaults to None.
     """
@@ -379,18 +367,15 @@ def community_strength(
     links = graph.size(weight="weight")
     assert links > 0, "A graph without link has no communities."
     for node in graph:
-        try:
-            com = coms[node]
-            deg[com] = deg.get(com, 0.0) + graph.degree(node, weight="weight")
-            for neighbor, dt in graph[node].items():
-                weight = dt.get("weight", 1)
-                if coms[neighbor] == com:
-                    if neighbor == node:
-                        inc[com] = inc.get(com, 0.0) + float(weight)
-                    else:
-                        inc[com] = inc.get(com, 0.0) + float(weight) / 2.0
-        except:
-            pass
+        com = coms[node]
+        deg[com] = deg.get(com, 0.0) + graph.degree(node, weight="weight")
+        for neighbor, dt in graph[node].items():
+            weight = dt.get("weight", 1)
+            if coms[neighbor] == com:
+                if neighbor == node:
+                    inc[com] = inc.get(com, 0.0) + float(weight)
+                else:
+                    inc[com] = inc.get(com, 0.0) + float(weight) / 2.0
     com_cs = []
     for idx, com in enumerate(set(coms.values())):
         com_cs.append(

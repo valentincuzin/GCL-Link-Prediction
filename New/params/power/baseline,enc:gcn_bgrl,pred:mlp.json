@@ -1,27 +1,24 @@
 {
-    "ct_epochs": 5000,
+    "attr": false,
+    "ct_epochs": 3000,
     "proj_hidden": 512,
-    "gnn_lr": 0.004643893555549217,
-    "batch_size": 832,
+    "gnn_lr": 0.0002277300106524515,
+    "batch_size": 384,
     "use_valedges_as_input": false,
     "epochs": 100,
-    "loss_func": "log_sig",
-    "pre_lr": 0.0010478257371083928,
+    "loss_func": "bce",
+    "pre_lr": 0.002877378562524419,
     "mask_input": true,
-    "weight_decay": 8.409219273754613e-05,
+    "weight_decay": 9.888238322750301e-05,
     "n_layers": 4,
     "layer_sizes": [
-        384,
-        384,
-        128,
-        512
+        256,
+        256,
+        128
     ],
-    "hidden": 512,
-    "batch_layer_norm": true,
-    "batchnorm_mm": 0.8400000000000001,
+    "hidden": 128,
+    "batch_layer_norm": false,
+    "batchnorm_mm": null,
     "weight_standardization": true,
-    "1_layer_size": 256,
-    "2_layer_size": 448,
-    "3_layer_size": 256,
-    "4_layer_size": 512
+    "layer_size": 384
 }

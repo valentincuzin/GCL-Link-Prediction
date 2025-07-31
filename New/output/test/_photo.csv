@@ -1,0 +1,7 @@
+metrics;csgcl,enc:gcn_bgrl,pred:inner,scom_mean;csgcl,enc:gcn_bgrl,pred:inner,scom
+Hits@20;1.9$\pm$0.0;[0.01897884]
+Hits@50;2.96$\pm$0.0;[0.02960195]
+Hits@100;4.64$\pm$0.0;[0.04639738]
+ROCAUC;88.53$\pm$0.0;[0.88529098]
+AP;85.94$\pm$0.0;[0.85944851]
+pretrain_time;1.14$\pm$0.0;[1.13973331]

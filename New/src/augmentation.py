@@ -1,6 +1,4 @@
 import copy
-import os
-
 import torch
 import numpy as np
 import networkx as nx
@@ -34,14 +32,20 @@ class Aug:
         param: dict,
         type: str = "random",
     ) -> None:
-        global ct_epoch
-        ct_epoch = 0
-        self.data = copy.deepcopy(data)
+        """
+        init the Aug class
+
+        Args:
+            data (Data): 
+            split_edge (list): 
+            param (dict): 
+            type (str, optional): type of augmentation, can be combined augmentation (eg. random+deg). Defaults to "random".
+        """
         self.split_edge = split_edge
         self.device = data.x.device
+        self.data = copy.deepcopy(data).to(self.device)
         self.param = param
         self.type = type
-        self.data = self.data.to(self.device)
         if "+" in type:
             type1, type2 = type.split("+")
             self.data1, aug_fct1 = self.precompute(self.data, type1)
@@ -51,7 +55,17 @@ class Aug:
             self.data, aug_fct = self.precompute(self.data, type)
             self.get = aug_fct
 
-    def precompute(self, data: Data, type: str):
+    def precompute(self, data: Data, type: str) -> tuple:
+        """
+        pre compute usfull thing one time for augmentations
+
+        Args:
+            data (Data): 
+            type (str): name of augmentation
+
+        Returns:
+            tuple: data and an augmentation function
+        """
         feature_weights = None
         drop_weights = None
         if type in ["deg", "pr", "evc"]:
@@ -66,7 +80,6 @@ class Aug:
         elif "sbm" in type:
             cd_algo = None
             cd_algo = self.param["commu_detect"]
-            print(cd_algo, "detection...")
             if "_cheat" in type:
                 full_split = to_undirected(torch.cat((self.split_edge['train']['edge'], 
                                                      self.split_edge['valid']['edge'], 
@@ -75,9 +88,10 @@ class Aug:
                 type = type.replace('_cheat', '')
             else:
                 data = commu_distrib(data, cd_algo).to(self.device)
+            
             if "_fix" in type:
                 data.node_list = [j for sub in data.communities for j in sub]
-            if "_fast_bug" in type:
+            elif "_fast_bug" in type:
                 gtG, block_map = to_graph_tool_bug(data)
                 data.state = BlockState(gtG, block_map, deg_corr=False)
             elif "_fast" in type:
@@ -94,7 +108,7 @@ class Aug:
                 assert("No Kmeans without pos!!")
 
             pos = np.array(pos)
-            kmeans = KMeans(n_clusters=300)
+            kmeans = KMeans(n_clusters=300) # TODO méthode du coude pour trouver le K 
             clusters = kmeans.fit_predict(pos)
             print(clusters)
             data.block = clusters
@@ -120,10 +134,26 @@ class Aug:
         }
         return data, types[type]
 
-    def __call__(self):
+    def __call__(self) -> tuple:
+        """
+        wrapper to get the augmentation
+
+        Returns:
+            tuple: x_1, edge_index_1, x_2, edge_index_2
+        """
         return self.get()
 
-    def mix(self, aug_fct1, aug_fct2):
+    def mix(self, aug_fct1, aug_fct2) -> tuple:
+        """
+        mix 2 function of augmentation
+
+        Args:
+            aug_fct1 (func): augmentation function 1
+            aug_fct2 (func): augmentationt function 2
+
+        Returns:
+            tuple: x_1, edge_index_1, x_2, edge_index_2
+        """
         tmp = copy.deepcopy(self.data)
         self.data = self.data1
         x_1, edge_index_1, _, _ = aug_fct1()
@@ -132,7 +162,13 @@ class Aug:
         self.data = tmp
         return x_1, edge_index_1, x_2, edge_index_2
 
-    def random(self):
+    def random(self) -> tuple:
+        """
+        random drop edge and attributs in X
+
+        Returns:
+            tuple: x_1, edge_index_1, x_2, edge_index_2
+        """
         edge_attr = self.data.edge_attr if "edge_attr" in self.data else None
         edge_index_1 = dropout_adj(
             self.data.edge_index,
@@ -154,17 +190,19 @@ class Aug:
         )
         return x_1, edge_index_1, x_2, edge_index_2
 
-    def degree(self):
+    def degree(self) -> tuple:
+        """
+        compute feature and edge drop weights based on degree of nodes
+
+        Returns:
+            tuple: feature_weights, drop_weights
+        """
         def degree_drop_weights(edge_index):
             edge_index_ = to_undirected(edge_index)
             deg = degree(edge_index_[1])
-            # print('deg', deg)
             deg_col = deg[edge_index[1]].to(torch.float32)
-            # print('deg_col', deg_col)
             s_col = torch.log(deg_col)
-            # print('s_col', s_col)
             weights = (s_col.max() - s_col) / (s_col.max() - s_col.mean())
-            # print('weights', weights)
             return weights
 
         drop_weights = degree_drop_weights(self.data.edge_index).to(self.device)
@@ -175,7 +213,13 @@ class Aug:
         )
         return feature_weights, drop_weights
 
-    def page_rank(self):
+    def page_rank(self) -> tuple:
+        """
+        compute feature and edge drop weights based on page rank of nodes
+
+        Returns:
+            tuple: feature_weights, drop_weights
+        """
         def compute_pr(data, damp: float = 0.85, k: int = 10):
             num_nodes = data.edge_index.max().item() + 1
             deg_out = degree(data.edge_index[0], num_nodes=num_nodes)
@@ -210,7 +254,13 @@ class Aug:
         )
         return feature_weights, drop_weights
 
-    def eigenvector(self):
+    def eigenvector(self) -> tuple:
+        """
+        compute feature and edge drop weights based on eigenvector of nodes
+
+        Returns:
+            tuple: feature_weights, drop_weights
+        """
         def eigenvector_centrality(data):
             graph = to_networkx(data, to_undirected=True)
             x = nx.eigenvector_centrality(graph, max_iter=1000)
@@ -234,7 +284,17 @@ class Aug:
         )
         return feature_weights, drop_weights
 
-    def gca(self, feature_weights, drop_weights):
+    def gca(self, feature_weights: torch.Tensor, drop_weights: torch.Tensor) -> tuple:
+        """
+        adaptative augmentation depending of the centrality mesure (deg, pr, evc) choosed.
+
+        Args:
+            feature_weights (torch.Tensor):
+            drop_weights (torch.Tensor):
+
+        Returns:
+            tuple: x_1, edge_index_1, x_2, edge_index_2
+        """
         edge_index_1 = _drop_edge_weighted(
             self.data.edge_index,
             drop_weights,
@@ -255,7 +315,13 @@ class Aug:
         ).to(self.device)
         return x_1, edge_index_1, x_2, edge_index_2
 
-    def commu_strength(self):
+    def commu_strength(self) -> tuple:
+        """
+        compute node and edge weight based on communities strength using leiden algo
+
+        Returns:
+            tuple: node_cs, edge_weight
+        """
         def transition(communities, num_nodes: int) -> np.ndarray:
             classes = np.full(num_nodes, -1)
             for i, node_list in enumerate(communities):
@@ -282,7 +348,17 @@ class Aug:
         edge_weight = get_edge_weight(self.data.edge_index, com, com_cs)
         return node_cs, edge_weight
 
-    def csgcl(self, feature_weights, node_cs):
+    def csgcl(self, feature_weights, node_cs) -> tuple:
+        """
+        augmentation based on communities strength (cav, ced)
+
+        Args:
+            feature_weights (torch.Tensor):
+            node_cs (np.ndarray):
+
+        Returns:
+            tuple: x_1, edge_index_1, x_2, edge_index_2
+        """
         def ced(
             edge_index: torch.Tensor,
             edge_weight: torch.Tensor,
@@ -330,49 +406,87 @@ class Aug:
         x_2 = cav(self.data.x, feature_weights, self.param["drop_feature_rate_2"])
         return x_1, edge_index_1, x_2, edge_index_2
 
-    def sbm(self):
+    def sbm(self) -> tuple:
+        """
+        networkx sbm augmentation without fix
+
+        Returns:
+            tuple: x_1, edge_index_1, x_2, edge_index_2
+        """
         sizes, probs = self.data.sizes, self.data.probs
         data_1 = gen_sbm(sizes, probs).to(self.device)
-        data_1.x = self.data.x
-        data_1.x = _drop_feature(data_1.x, self.param['drop_feature_rate_1'])
         data_2 = self.data
-        data_2.x = _drop_feature(data_2.x, self.param['drop_feature_rate_2'])
-        return data_1.x, data_1.edge_index, data_2.x, data_2.edge_index
+        x_1 = _drop_feature(self.data.x, self.param["drop_feature_rate_1"]).to(self.device)
+        x_2 = _drop_feature(self.data.x, self.param["drop_feature_rate_2"]).to(self.device)
+        return x_1, data_1.edge_index, x_2, data_2.edge_index
 
-    def sbm_fix(self):
+    def sbm_2(self) -> tuple:
+        """
+        double networkx sbm augmentation without fix
+
+        Returns:
+            tuple: x_1, edge_index_1, x_2, edge_index_2
+        """
+        sizes, probs = self.data.sizes, self.data.probs
+        data_1 = gen_sbm(sizes, probs).to(self.device)
+        data_2 = gen_sbm(sizes, probs).to(self.device)
+        x_1 = _drop_feature(self.data.x, self.param["drop_feature_rate_1"]).to(self.device)
+        x_2 = _drop_feature(self.data.x, self.param["drop_feature_rate_2"]).to(self.device)
+        return x_1, data_1.edge_index, x_2, data_2.edge_index
+    
+    def sbm_fix(self) -> tuple:
+        """
+        networkx sbm augmentation with fix
+
+        Returns:
+            tuple: x_1, edge_index_1, x_2, edge_index_2
+        """
         sizes, probs = self.data.sizes, self.data.probs
         node_list = self.data.node_list
-        data_1 = gen_sbm(sizes, probs, node_list).to(self.device)
-        data_1.x = self.data.x
-        data_1.x = _drop_feature(data_1.x, self.param['drop_feature_rate_1'])
-        data_2 = self.data
-        data_2.x = _drop_feature(data_2.x, self.param['drop_feature_rate_2'])
-        return data_1.x, data_1.edge_index, data_2.x, data_2.edge_index
-    
-    def sbm_2(self):
+        edge_index_1 = gen_sbm(sizes, probs, node_list).to(self.device)
+        x_1 = _drop_feature(self.data.x, self.param["drop_feature_rate_1"]).to(self.device)
+        x_2 = _drop_feature(self.data.x, self.param["drop_feature_rate_2"]).to(self.device)
+        return x_1, edge_index_1, x_2, self.data.edge_index
+
+    def sbm_fix_2(self) -> tuple:
+        """
+        double networkx sbm augmentation with fix
+
+        Returns:
+            tuple: x_1, edge_index_1, x_2, edge_index_2
+        """
         sizes, probs = self.data.sizes, self.data.probs
-        data_1 = gen_sbm(sizes, probs).to(self.device)
-        data_1.x = self.data.x
-        data_1.x = _drop_feature(data_1.x, self.param["drop_feature_rate_1"])
-        data_2 = gen_sbm(sizes, probs).to(self.device)
-        data_2.x = self.data.x
-        data_2.x = _drop_feature(data_2.x, self.param["drop_feature_rate_2"])
-        return data_1.x, data_1.edge_index, data_2.x, data_2.edge_index
+        node_list = self.data.node_list
+        edge_index_1 = gen_sbm(sizes, probs, node_list).to(self.device)
+        edge_index_2 = gen_sbm(sizes, probs, node_list).to(self.device)
+        x_1 = _drop_feature(self.data.x, self.param["drop_feature_rate_1"]).to(self.device)
+        x_2 = _drop_feature(self.data.x, self.param["drop_feature_rate_2"]).to(self.device)
+        return x_1, edge_index_1, x_2, edge_index_2
 
-    def sbm_fast(self):
-        data_1 = gen_sbm_fast(self.data, self.data.state).to(self.device)
-        x_1 = _drop_feature(self.data.x, self.param["drop_feature_rate_1"])
-        x_2 = _drop_feature(self.data.x, self.param["drop_feature_rate_2"])
-        return x_1, data_1.edge_index, x_2, self.data.edge_index
+    def sbm_fast(self) -> tuple:
+        """
+        graph-tools sbm augmentation
 
-    def sbm_fast_2(self):
-        data_1 = gen_sbm_fast(self.data, self.data.state).to(self.device)
-        data_1.x = copy.copy(self.data.x)
-        data_1.x = _drop_feature(data_1.x, self.param["drop_feature_rate_1"])
-        data_2 = gen_sbm_fast(self.data, self.data.state).to(self.device)
-        data_2.x = copy.copy(self.data.x)
-        data_2.x = _drop_feature(data_2.x, self.param["drop_feature_rate_2"])
-        return data_1.x, data_1.edge_index, data_2.x, data_2.edge_index
+        Returns:
+            tuple: x_1, edge_index_1, x_2, edge_index_2
+        """
+        edge_index_1 = gen_sbm_fast(self.data.state).to(self.device)
+        x_1 = _drop_feature(self.data.x, self.param["drop_feature_rate_1"]).to(self.device)
+        x_2 = _drop_feature(self.data.x, self.param["drop_feature_rate_2"]).to(self.device)
+        return x_1, edge_index_1, x_2, self.data.edge_index
+
+    def sbm_fast_2(self) -> tuple:
+        """
+        double graph-tools sbm augmentation
+
+        Returns:
+            tuple: x_1, edge_index_1, x_2, edge_index_2
+        """
+        edge_index_1 = gen_sbm_fast(self.data.state).to(self.device)
+        edge_index_2 = gen_sbm_fast(self.data.state).to(self.device)
+        x_1 = _drop_feature(self.data.x, self.param["drop_feature_rate_1"]).to(self.device)
+        x_2 = _drop_feature(self.data.x, self.param["drop_feature_rate_2"]).to(self.device)
+        return x_1, edge_index_1, x_2, edge_index_2
 
 def _drop_feature(x, drop_prob):
     drop_mask = (
@@ -397,7 +511,6 @@ def _drop_edge_weighted(edge_index, edge_weights, p: float, threshold: float = 1
     edge_weights = edge_weights.where(
         edge_weights < threshold, torch.ones_like(edge_weights) * threshold
     )
-    # print(edge_weights)
     sel_mask = torch.bernoulli(1.0 - edge_weights).to(torch.bool)
     return edge_index[:, sel_mask]
 

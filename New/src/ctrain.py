@@ -1,10 +1,11 @@
 import time
 from tqdm import tqdm
 import torch
+import torch.nn as nn
 from torch_geometric.utils import negative_sampling
-from torch_geometric.data import DataLoader
+from torch_geometric.data import Data
+from torch.utils.data import DataLoader
 import torch_sparse as spar
-from torch.utils.tensorboard import SummaryWriter
 import numpy as np
 
 from src.predictor import InnerProd
@@ -13,12 +14,23 @@ from src.utils import (
     get_commu_strength,
 )
 from src.datasets import get_evaluator
+from src.augmentation import Aug
 
-writer = SummaryWriter()
+def valid_hits50(model: nn.Module, data: Data, split_edge: dict, param: dict, split="valid") -> tuple[float, float]:
+    """
+    validation with Inner predictor, return Hit@50 score for valid and test
 
+    Args:
+        model (nn.Module): 
+        data (Data): 
+        split_edge (dict): 
+        param (dict): 
+        split (str, optional):. Defaults to "valid".
 
-def valid_hits50(model, data, split_edge, param, split="valid"):
-    if isinstance(model, torch.nn.Module):
+    Returns:
+        tuple[float, float]: valid and test Hit@50 scores
+    """
+    if isinstance(model, nn.Module):
         model.eval()
     device = data.adj_t.device()
     adj_t = data.adj_t
@@ -65,7 +77,19 @@ def valid_hits50(model, data, split_edge, param, split="valid"):
 ### CONTRASTIVE FRAMEWORK ###
 
 
-def pretrain(model_name, model, aug, param):
+def pretrain(model_name: str, model: nn.Module, aug: Aug, param: dict) -> float:
+    """
+    pretrain the model
+
+    Args:
+        model_name (str): _description_
+        model (nn.Module): _description_
+        aug (Aug): _description_
+        param (dict): _description_
+
+    Returns:
+        float: the pretrain time
+    """
     switch = {
         "grace": pretrain_grace,
         "lgrace": pretrain_lgrace,
@@ -78,7 +102,7 @@ def pretrain(model_name, model, aug, param):
     return switch[model_name](model, aug, param)
 
 
-def pretrain_grace(model, aug, param):
+def pretrain_grace(model: nn.Module, aug: Aug, param: dict)-> float:
     optimizer = torch.optim.Adam(
         model.parameters(),
         lr=param["gnn_lr"],
@@ -94,17 +118,16 @@ def pretrain_grace(model, aug, param):
         loss = model.loss(z1, z2)
         loss.backward()
         optimizer.step()
-        if epoch % 10 == 0:
+        if epoch % 50 == 0:
             loss_res.append(round(float(loss), 2))
 
     print("pretrain loss: ", loss_res)
     pre_time = time.time() - t1
     print(f"pretrain time: {pre_time:.2f} s")
-    writer.flush()
     return pre_time
 
 
-def pretrain_csgcl(model, aug, param):
+def pretrain_csgcl(model: nn.Module, aug: Aug, param: dict)-> float:
     optimizer = torch.optim.Adam(
         model.parameters(),
         lr=param["gnn_lr"],
@@ -121,16 +144,16 @@ def pretrain_csgcl(model, aug, param):
         loss = model.team_up_loss(z1, z2, cs=node_cs, current_ep=epoch)
         loss.backward()
         optimizer.step()
-        if epoch % 10 == 0:
+        if epoch % 50 == 0:
             loss_res.append(round(float(loss), 2))
 
-    print("pretrain loss: ", loss_res, " s")
+    print("pretrain loss: ", loss_res)
     pre_time = time.time() - t1
     print(f"pretrain time: {pre_time:.2f} s")
     return pre_time
 
 
-def pretrain_bgrl(model, aug, param):
+def pretrain_bgrl(model: nn.Module, aug: Aug, param: dict)-> float:
     # optimizer
     optimizer = torch.optim.AdamW(
         model.trainable_parameters(),
@@ -167,14 +190,13 @@ def pretrain_bgrl(model, aug, param):
         if epoch % 50 == 0:
             loss_res.append(round(float(loss), 2))
 
-    print("pretrain loss: ", loss_res, " s")
+    print("pretrain loss: ", loss_res)
     pre_time = time.time() - t1
     print(f"pretrain time: {pre_time:.2f} s")
-    writer.flush()
     return pre_time
 
 
-def pretrain_lgrace(model, aug, param):
+def pretrain_lgrace(model: nn.Module, aug: Aug, param: dict)-> float:
     optimizer = torch.optim.Adam(
         model.parameters(),
         lr=param["gnn_lr"],
@@ -204,7 +226,7 @@ def pretrain_lgrace(model, aug, param):
         loss.backward()
         optimizer.step()
         total_loss.append(loss)
-        if epoch % 10 == 0:
+        if epoch % 50 == 0:
             _loss = np.average([_.item() for _ in total_loss])
             loss_res.append(round(float(_loss), 2))
 
@@ -212,12 +234,11 @@ def pretrain_lgrace(model, aug, param):
     print("pretrain loss: ", loss_res)
     pre_time = time.time() - t1
     print(f"pretrain time: {pre_time:.2f} s")
-    writer.flush()
     return pre_time
 
 
 
-def pretrain_lbgrl(model, aug, param):
+def pretrain_lbgrl(model: nn.Module, aug: Aug, param: dict)-> float:
     # optimizer
     optimizer = torch.optim.AdamW(
         model.trainable_parameters(),
@@ -236,6 +257,8 @@ def pretrain_lbgrl(model, aug, param):
     nb_jump = 0
 
     for epoch in tqdm(range(1, param["ct_epochs"] + 1)):
+        model.train()
+
         lr = lr_scheduler.get(epoch)
         for param_group in optimizer.param_groups:
             param_group["lr"] = lr
@@ -266,15 +289,14 @@ def pretrain_lbgrl(model, aug, param):
             loss_res.append(round(float(loss), 2))
 
     print("real epochs: ", param["ct_epochs"] - nb_jump)
-    print("pretrain loss: ", loss_res, " s")
+    print("pretrain loss: ", loss_res)
     pre_time = time.time() - t1
     print(f"pretrain time: {pre_time:.2f} s")
-    writer.flush()
     return pre_time
 
 
 
-def pretrain_agrace(model, aug, param):
+def pretrain_agrace(model: nn.Module, aug: Aug, param: dict)-> float:
     optimizer = torch.optim.Adam(
         model.parameters(),
         lr=param["gnn_lr"],
@@ -314,7 +336,7 @@ def pretrain_agrace(model, aug, param):
     return pre_time
 
 
-def pretrain_abgrl(model, aug, param):
+def pretrain_abgrl(model: nn.Module, aug: Aug, param: dict)-> float:
     # optimizer
     optimizer = torch.optim.AdamW(
         model.trainable_parameters(),
@@ -333,7 +355,6 @@ def pretrain_abgrl(model, aug, param):
 
     for epoch in tqdm(range(1, param["ct_epochs"] + 1)):
         model.train()
-        # aug.train()
 
         lr = lr_scheduler.get(epoch)
         for param_group in optimizer.param_groups:
@@ -365,8 +386,7 @@ def pretrain_abgrl(model, aug, param):
         if epoch % 10 == 0:
             loss_res.append(round(float(loss), 2))
 
-    print("pretrain loss: ", loss_res, " s")
+    print("pretrain loss: ", loss_res)
     pre_time = time.time() - t1
     print(f"pretrain time: {pre_time:.2f} s")
-    writer.flush()
     return pre_time

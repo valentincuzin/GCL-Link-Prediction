@@ -1,8 +1,7 @@
-metrics;grace,enc:gcn_bgrl,pred:mlp,random_mean;grace,enc:gcn_bgrl,pred:mlp,random
-Hits@10;25.76$\pm$0.0;[0.2576]
-Hits@20;29.92$\pm$0.0;[0.2992]
-Hits@50;38.08$\pm$0.0;[0.3808]
-Hits@100;45.44$\pm$0.0;[0.4544]
-ROCAUC;64.17$\pm$0.0;[0.64166144]
-AP;72.49$\pm$0.0;[0.72492013]
-pretrain_time;1.22$\pm$0.0;[1.21520376]
+metrics;csgcl,enc:gcn_bgrl,pred:inner,scom_mean;csgcl,enc:gcn_bgrl,pred:inner,scom
+Hits@20;5.36$\pm$0.0;[0.05355715]
+Hits@50;12.71$\pm$0.0;[0.12709832]
+Hits@100;19.34$\pm$0.0;[0.19344524]
+ROCAUC;56.23$\pm$0.0;[0.56232616]
+AP;59.83$\pm$0.0;[0.5982857]
+pretrain_time;0.24$\pm$0.0;[0.23516083]

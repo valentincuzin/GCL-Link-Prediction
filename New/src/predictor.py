@@ -5,26 +5,10 @@ from torch_sparse.matmul import spmm_add
 from torch_sparse import SparseTensor
 
 
-def get_predictor(predictor_name: str, hp):
-    if predictor_name == "inner":
-        predictor = InnerProd()
-    elif predictor_name == "mlp":
-        predictor = MlpProdDecoder(hp["hidden"], hp["hidden"])
-    elif predictor_name == "ncn":
-        predictor = CNLinkPredictor(
-            hp["hidden"],
-            hp["hidden"],
-            hp["predp"],
-            hp["preedp"],
-            hp["lnnn"],
-            hp["use_xlin"],
-            hp["tailact"],
-            hp["twolayerlin"],
-        )
-    return predictor
-
-
 class InnerProd:
+    """
+    Classic Inner Product Predictor
+    """
     def __call__(self, h, u, v, adj=None):
         h_u = h[u]
         h_v = h[v]
@@ -58,6 +42,9 @@ class MlpProdDecoder(nn.Module):
 
 
 class ProbDecoder:
+    """
+    Prob predictor (it use a probs matrix between community)
+    """
     def __init__(self, probs, block):
         self.probs = probs
         self.block = block
@@ -79,8 +66,10 @@ class ProbDecoder:
         return self.__call__(u, v)
 
 
-# NCN predictor
 class CNLinkPredictor(nn.Module):
+    """
+    NCN predictor
+    """
     def __init__(
         self,
         in_channels,
@@ -201,3 +190,31 @@ class CNLinkPredictor(nn.Module):
 
     def predict(self, h, u, v, adj=None):
         return self.forward(h, u, v, adj)
+
+def get_predictor(predictor_name: str, hp: dict) -> InnerProd | MlpProdDecoder | CNLinkPredictor:
+    """
+    getter of the predictor
+
+    Args:
+        predictor_name (str): inner, mlp or ncn predictor
+        hp (dict): params
+
+    Returns:
+        InnerProd | MlpProdDecoder | CNLinkPredictor: predictor
+    """
+    if predictor_name == "inner":
+        predictor = InnerProd()
+    elif predictor_name == "mlp":
+        predictor = MlpProdDecoder(hp["hidden"], hp["hidden"])
+    elif predictor_name == "ncn":
+        predictor = CNLinkPredictor(
+            hp["hidden"],
+            hp["hidden"],
+            hp["predp"],
+            hp["preedp"],
+            hp["lnnn"],
+            hp["use_xlin"],
+            hp["tailact"],
+            hp["twolayerlin"],
+        )
+    return predictor
