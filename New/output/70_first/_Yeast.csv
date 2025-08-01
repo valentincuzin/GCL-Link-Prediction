@@ -1,4 +1,4 @@
-metrics;baseline,enc:gcn_bgrl,pred:mlp_mean;baseline,enc:gcn_bgrl,pred:mlp;bgrl,enc:gcn_bgrl,pred:mlp,random_mean;bgrl,enc:gcn_bgrl,pred:mlp,random;bgrl,enc:gcn_bgrl,pred:mlp,deg_mean;bgrl,enc:gcn_bgrl,pred:mlp,deg;bgrl,enc:gcn_bgrl,pred:mlp,evc_mean;bgrl,enc:gcn_bgrl,pred:mlp,evc;bgrl,enc:gcn_bgrl,pred:mlp,pr_mean;bgrl,enc:gcn_bgrl,pred:mlp,pr;bgrl,enc:gcn_bgrl,pred:mlp,scom_mean;bgrl,enc:gcn_bgrl,pred:mlp,scom;infomap_prob_pred_mean;infomap_prob_pred;bgrl,enc:gcn_bgrl,pred:mlp,sbm_fast+random_mean;bgrl,enc:gcn_bgrl,pred:mlp,sbm_fast+random;leiden_prob_pred_mean;leiden_prob_pred;bgrl,enc:gcn_bgrl,pred:mlp,sbm_fast_cheat+random_mean;bgrl,enc:gcn_bgrl,pred:mlp,sbm_fast_cheat+random;grace,enc:gcn_bgrl,pred:mlp,random_mean;grace,enc:gcn_bgrl,pred:mlp,random;grace,enc:gcn_bgrl,pred:mlp,deg_mean;grace,enc:gcn_bgrl,pred:mlp,deg;grace,enc:gcn_bgrl,pred:mlp,evc_mean;grace,enc:gcn_bgrl,pred:mlp,evc;grace,enc:gcn_bgrl,pred:mlp,pr_mean;grace,enc:gcn_bgrl,pred:mlp,pr;grace,enc:gcn_bgrl,pred:mlp,scom_mean;grace,enc:gcn_bgrl,pred:mlp,scom;grace,enc:gcn_bgrl,pred:mlp,sbm_fast+random_mean;grace,enc:gcn_bgrl,pred:mlp,sbm_fast+random;grace,enc:gcn_bgrl,pred:mlp,sbm_fast_cheat+random_mean;grace,enc:gcn_bgrl,pred:mlp,sbm_fast_cheat+random;lbgrl,enc:gcn_bgrl,pred:mlp,random_mean;lbgrl,enc:gcn_bgrl,pred:mlp,random;lbgrl,enc:gcn_bgrl,pred:mlp,deg_mean;lbgrl,enc:gcn_bgrl,pred:mlp,deg;lbgrl,enc:gcn_bgrl,pred:mlp,evc_mean;lbgrl,enc:gcn_bgrl,pred:mlp,evc;lbgrl,enc:gcn_bgrl,pred:mlp,pr_mean;lbgrl,enc:gcn_bgrl,pred:mlp,pr;lbgrl,enc:gcn_bgrl,pred:mlp,scom_mean;lbgrl,enc:gcn_bgrl,pred:mlp,scom;lbgrl,enc:gcn_bgrl,pred:mlp,sbm_fast+random_mean;lbgrl,enc:gcn_bgrl,pred:mlp,sbm_fast+random;louvain_prob_pred_mean;louvain_prob_pred;lbgrl,enc:gcn_bgrl,pred:mlp,sbm_fast_cheat+random_mean;lbgrl,enc:gcn_bgrl,pred:mlp,sbm_fast_cheat+random;lgrace,enc:gcn_bgrl,pred:mlp,random_mean;lgrace,enc:gcn_bgrl,pred:mlp,random;lgrace,enc:gcn_bgrl,pred:mlp,deg_mean;lgrace,enc:gcn_bgrl,pred:mlp,deg;lgrace,enc:gcn_bgrl,pred:mlp,evc_mean;lgrace,enc:gcn_bgrl,pred:mlp,evc;lgrace,enc:gcn_bgrl,pred:mlp,pr_mean;lgrace,enc:gcn_bgrl,pred:mlp,pr;lgrace,enc:gcn_bgrl,pred:mlp,scom_mean;lgrace,enc:gcn_bgrl,pred:mlp,scom;lgrace,enc:gcn_bgrl,pred:mlp,sbm_fast+random_mean;lgrace,enc:gcn_bgrl,pred:mlp,sbm_fast+random
+metrics;baseline,enc:gcn_bgrl,pred:mlp_mean;baseline,enc:gcn_bgrl,pred:mlp;bgrl,enc:gcn_bgrl,pred:mlp,random_mean;bgrl,enc:gcn_bgrl,pred:mlp,random;bgrl,enc:gcn_bgrl,pred:mlp,deg_mean;bgrl,enc:gcn_bgrl,pred:mlp,deg;bgrl,enc:gcn_bgrl,pred:mlp,evc_mean;bgrl,enc:gcn_bgrl,pred:mlp,evc;bgrl,enc:gcn_bgrl,pred:mlp,pr_mean;bgrl,enc:gcn_bgrl,pred:mlp,pr;bgrl,enc:gcn_bgrl,pred:mlp,scom_mean;bgrl,enc:gcn_bgrl,pred:mlp,scom;infomap_prob_pred_mean;infomap_prob_pred;bgrl,enc:gcn_bgrl,pred:mlp,sbm_fast+random_mean;bgrl,enc:gcn_bgrl,pred:mlp,sbm_fast+random;leiden_prob_pred_mean;leiden_prob_pred;bgrl,enc:gcn_bgrl,pred:mlp,sbm_fast_cheat+random_mean;bgrl,enc:gcn_bgrl,pred:mlp,sbm_fast_cheat+random;grace,enc:gcn_bgrl,pred:mlp,random_mean;grace,enc:gcn_bgrl,pred:mlp,random;grace,enc:gcn_bgrl,pred:mlp,deg_mean;grace,enc:gcn_bgrl,pred:mlp,deg;grace,enc:gcn_bgrl,pred:mlp,evc_mean;grace,enc:gcn_bgrl,pred:mlp,evc;grace,enc:gcn_bgrl,pred:mlp,pr_mean;grace,enc:gcn_bgrl,pred:mlp,pr;grace,enc:gcn_bgrl,pred:mlp,scom_mean;grace,enc:gcn_bgrl,pred:mlp,scom;grace,enc:gcn_bgrl,pred:mlp,sbm_fast+random_mean;grace,enc:gcn_bgrl,pred:mlp,sbm_fast+random;grace,enc:gcn_bgrl,pred:mlp,sbm_fast_cheat+random_mean;grace,enc:gcn_bgrl,pred:mlp,sbm_fast_cheat+random;lbgrl,enc:gcn_bgrl,pred:mlp,random_mean;lbgrl,enc:gcn_bgrl,pred:mlp,random;lbgrl,enc:gcn_bgrl,pred:mlp,deg_mean;lbgrl,enc:gcn_bgrl,pred:mlp,deg;lbgrl,enc:gcn_bgrl,pred:mlp,evc_mean;lbgrl,enc:gcn_bgrl,pred:mlp,evc;lbgrl,enc:gcn_bgrl,pred:mlp,pr_mean;lbgrl,enc:gcn_bgrl,pred:mlp,pr;lbgrl,enc:gcn_bgrl,pred:mlp,scom_mean;lbgrl,enc:gcn_bgrl,pred:mlp,scom;lbgrl,enc:gcn_bgrl,pred:mlp,sbm_fast+random_mean;lbgrl,enc:gcn_bgrl,pred:mlp,sbm_fast+random;louvain_prob_pred_mean;louvain_prob_pred;lbgrl,enc:gcn_bgrl,pred:mlp,sbm_fast_cheat+random_mean;lbgrl,enc:gcn_bgrl,pred:mlp,sbm_fast_cheat+random;lgrace,enc:gcn_bgrl,pred:mlp,random_mean;lgrace,enc:gcn_bgrl,pred:mlp,random;lgrace,enc:gcn_bgrl,pred:mlp,deg_mean;lgrace,enc:gcn_bgrl,pred:mlp,deg;lgrace,enc:gcn_bgrl,pred:mlp,evc_mean;lgrace,enc:gcn_bgrl,pred:mlp,evc;lgrace,enc:gcn_bgrl,pred:mlp,pr_mean;lgrace,enc:gcn_bgrl,pred:mlp,pr;lgrace,enc:gcn_bgrl,pred:mlp,scom_mean;lgrace,enc:gcn_bgrl,pred:mlp,scom;lgrace,enc:gcn_bgrl,pred:mlp,sbm_fast+random_mean;lgrace,enc:gcn_bgrl,pred:mlp,sbm_fast+random;lgrace,enc:gcn_bgrl,pred:mlp,sbm_fast_cheat+random_mean;lgrace,enc:gcn_bgrl,pred:mlp,sbm_fast_cheat+random
 Hits@20;79.22$\pm$2.01;"[0.79555175 0.77844311 0.76903336 0.80410607 0.79469632 0.81479897
  0.74764756 0.80710009 0.79811805 0.81266039]";75.19$\pm$2.59;"[0.74893071 0.73909324 0.70444825 0.73738238 0.77844311 0.79255774
  0.76176219 0.77715997 0.72155689 0.75791275]";74.4$\pm$3.35;"[0.77715997 0.68349016 0.74679213 0.76261762 0.71770744 0.74721985
@@ -30,7 +30,8 @@ Hits@20;79.22$\pm$2.01;"[0.79555175 0.77844311 0.76903336 0.80410607 0.79469632 
  0.76047904 0.77972626 0.77117194 0.80282293]";78.76$\pm$1.9;"[0.77245509 0.78357571 0.74465355 0.79555175 0.78314799 0.79512404
  0.80966638 0.79127459 0.78314799 0.81693755]";52.04$\pm$28.36;"[0.65440547 0.47005988 0.         0.75748503 0.58340462 0.77715997
  0.45252352 0.72155689 0.78699743 0.        ]";73.26$\pm$2.14;"[0.71214713 0.71471343 0.69289991 0.76390077 0.72754491 0.72754491
- 0.73182207 0.75577417 0.74294269 0.75705731]"
+ 0.73182207 0.75577417 0.74294269 0.75705731]";74.84$\pm$2.48;"[0.74165954 0.74508127 0.74208725 0.79341317 0.7754491  0.76646707
+ 0.73353293 0.69846022 0.73310522 0.75491873]"
 Hits@50;84.19$\pm$0.94;"[0.83704021 0.83618477 0.83575706 0.8502994  0.84644996 0.84644996
  0.81993157 0.84858854 0.84473909 0.85372113]";82.72$\pm$1.01;"[0.8314799  0.80581694 0.82121471 0.82591959 0.82720274 0.84858854
  0.83233533 0.82378101 0.82591959 0.83019675]";80.99$\pm$1.49;"[0.82549187 0.78272027 0.80966638 0.82805817 0.79512404 0.81736527
@@ -62,7 +63,8 @@ Hits@50;84.19$\pm$0.94;"[0.83704021 0.83618477 0.83575706 0.8502994  0.84644996 
  0.8502994  0.84302823 0.8314799  0.85372113]";84.38$\pm$0.68;"[0.83917879 0.83875107 0.82976903 0.84003422 0.84431138 0.85158255
  0.84644996 0.84858854 0.84559453 0.85414885]";79.85$\pm$7.51;"[0.83019675 0.84088965 0.61291702 0.80282293 0.84088965 0.85928144
  0.80325064 0.84602224 0.84602224 0.70273738]";80.1$\pm$1.08;"[0.79341317 0.78443114 0.79341317 0.81693755 0.78956373 0.80923867
- 0.7994012  0.80410607 0.80111206 0.81864842]"
+ 0.7994012  0.80410607 0.80111206 0.81864842]";84.62$\pm$1.7;"[0.85115483 0.82934132 0.84730539 0.87681779 0.83704021 0.85329341
+ 0.83190761 0.81565441 0.86313088 0.85585971]"
 Hits@100;86.24$\pm$0.7;"[0.85585971 0.8609923  0.85885372 0.86398631 0.86013687 0.87810094
  0.8502994  0.86398631 0.86398631 0.86783576]";85.53$\pm$0.6;"[0.85628743 0.84687767 0.8528657  0.85500428 0.84816082 0.86698033
  0.86398631 0.85158255 0.85543199 0.85628743]";84.0$\pm$0.65;"[0.84088965 0.82976903 0.83532934 0.84901625 0.83319076 0.8502994
@@ -94,7 +96,8 @@ Hits@100;86.24$\pm$0.7;"[0.85585971 0.8609923  0.85885372 0.86398631 0.86013687 
  0.86441403 0.85628743 0.85671514 0.86526946]";86.24$\pm$0.53;"[0.85799829 0.85885372 0.85372113 0.86313088 0.8609923  0.86698033
  0.87211292 0.8609923  0.85970915 0.86911891]";85.65$\pm$1.76;"[0.85970915 0.86313088 0.82035928 0.82549187 0.85928144 0.86997434
  0.87296835 0.86954662 0.86869119 0.85585971]";82.65$\pm$0.87;"[0.82591959 0.81479897 0.82634731 0.83875107 0.80795552 0.83319076
- 0.82720274 0.82506416 0.83233533 0.83319076]"
+ 0.82720274 0.82506416 0.83233533 0.83319076]";88.38$\pm$1.11;"[0.89777588 0.87254063 0.87724551 0.9011976  0.87467921 0.88879384
+ 0.87254063 0.86997434 0.88879384 0.89435415]"
 ROCAUC;93.01$\pm$0.39;"[0.93287804 0.92976713 0.92648574 0.92558318 0.92697801 0.93793563
  0.9258253  0.92949016 0.93212387 0.93442225]";91.23$\pm$0.35;"[0.91280631 0.91256464 0.91087896 0.91143763 0.90423296 0.91722762
  0.91756808 0.91229224 0.91315536 0.91094726]";91.29$\pm$0.47;"[0.91796296 0.90590486 0.91323204 0.92001711 0.90369685 0.91384468
@@ -126,7 +129,8 @@ ROCAUC;93.01$\pm$0.39;"[0.93287804 0.92976713 0.92648574 0.92558318 0.92697801 0
  0.92354915 0.919378   0.92043202 0.92522434]";92.53$\pm$0.4;"[0.92093209 0.92629381 0.92294908 0.92104304 0.92248974 0.93024278
  0.93401447 0.92265969 0.9251175  0.92739219]";92.48$\pm$0.59;"[0.92411261 0.92330245 0.91543312 0.91847775 0.92043842 0.93374097
  0.92870562 0.9273213  0.93433242 0.92216941]";90.16$\pm$0.59;"[0.90088532 0.89201351 0.90278521 0.90826242 0.88996942 0.90657955
- 0.90722917 0.90423644 0.90420625 0.89975749]"
+ 0.90722917 0.90423644 0.90420625 0.89975749]";95.15$\pm$0.54;"[0.95657859 0.9455189  0.9538463  0.95977521 0.94396335 0.95035092
+ 0.94823008 0.94472274 0.95520526 0.95698792]"
 AP;95.37$\pm$0.23;"[0.95423121 0.9529458  0.95126548 0.95176637 0.95207792 0.95882629
  0.95077103 0.95446896 0.95470555 0.95560679]";94.59$\pm$0.22;"[0.94556029 0.94527781 0.94415412 0.94520323 0.94169386 0.94955881
  0.94932754 0.94678817 0.94630545 0.94538372]";94.49$\pm$0.28;"[0.94616928 0.94099478 0.94428991 0.94887631 0.93882732 0.94716932
@@ -158,7 +162,8 @@ AP;95.37$\pm$0.23;"[0.95423121 0.9529458  0.95126548 0.95176637 0.95207792 0.958
  0.95195396 0.94830129 0.94886921 0.95203103]";95.19$\pm$0.24;"[0.94878463 0.95114521 0.94992854 0.95029899 0.95031083 0.95509514
  0.95697704 0.9511541  0.95169762 0.95333158]";94.24$\pm$0.87;"[0.94201711 0.94112642 0.92411705 0.94381638 0.94103699 0.95307144
  0.94266561 0.94714837 0.95615076 0.93300167]";93.67$\pm$0.45;"[0.93243988 0.92899246 0.93663491 0.94293355 0.93007952 0.94085953
- 0.93951334 0.93926912 0.93944723 0.93649696]"
+ 0.93951334 0.93926912 0.93944723 0.93649696]";96.57$\pm$0.39;"[0.96882275 0.9587405  0.96693802 0.97161354 0.9612427  0.96620749
+ 0.96400137 0.96176211 0.96879297 0.96896074]"
 pretrain_time;nan$\pm$nan;[];46.72$\pm$2.22;"[44.88733315 45.09494019 45.32907701 45.11326313 49.80201006 50.72860789
  44.93971181 45.02860117 49.36292243 46.94459605]";39.69$\pm$0.65;"[40.2122848  40.15724111 40.21700096 40.3041296  39.67616773 39.26941299
  38.59925342 39.81944942 38.47582412 40.19166088]";43.09$\pm$0.2;"[42.84104323 42.94483304 42.86195827 43.24611592 42.94419169 43.32632089
@@ -186,4 +191,5 @@ pretrain_time;nan$\pm$nan;[];46.72$\pm$2.22;"[44.88733315 45.09494019 45.3290770
  242.6040287  244.17732286 242.77793455 305.09360003 305.22333169]";162.57$\pm$11.54;"[176.12498713 151.44122672 172.70186639 171.26525283 148.05950022
  153.40687728 152.33720899 150.79039526 176.73048258 172.88463402]";114.04$\pm$5.74;"[118.42338419 106.7358582  117.91474581 118.66113329 106.52496934
  111.93850183 110.48162746 107.35978389 121.59059715 120.81462193]";15.2$\pm$0.32;"[15.47227812 15.04037523 15.04285121 15.23659706 16.03198791 14.97156978
- 15.24488306 15.00588346 14.86069775 15.13205838]"
+ 15.24488306 15.00588346 14.86069775 15.13205838]";17.01$\pm$0.47;"[17.4073     16.48519492 17.63885593 17.01173759 16.42855501 16.30481243
+ 16.83418751 17.63202095 17.33000922 17.01928759]"
