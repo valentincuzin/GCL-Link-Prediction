@@ -288,7 +288,7 @@ if __name__ == "__main__":
                             )
                             study.optimize(_objective, n_trials=args.hp_search)
                             param = hp.update_hp(
-                                study, param, f"params/{dataset}/{save_name}"
+                                study, param, f"params/{dataset}_{args.split}/{save_name}"
                             )
                             fig_importance = optuna.visualization.plot_param_importances(study)
                             fig_history = optuna.visualization.plot_optimization_history(study)

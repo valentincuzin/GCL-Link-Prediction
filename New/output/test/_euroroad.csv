@@ -1,8 +1,7 @@
-metrics;grace,enc:gcn_bgrl,pred:mlp,random_mean;grace,enc:gcn_bgrl,pred:mlp,random;grace,enc:gcn_bgrl,pred:mlp,kmeans+random_mean;grace,enc:gcn_bgrl,pred:mlp,kmeans+random
-Hits@10;13.78$\pm$0.0;[0.13780919];75.27$\pm$0.0;[0.75265018]
-Hits@20;17.67$\pm$0.0;[0.17667845];78.45$\pm$0.0;[0.7844523]
-Hits@50;31.1$\pm$0.0;[0.31095406];83.04$\pm$0.0;[0.83038869]
-Hits@100;47.7$\pm$0.0;[0.4770318];86.57$\pm$0.0;[0.86572438]
-ROCAUC;56.7$\pm$0.0;[0.56703168];88.77$\pm$0.0;[0.88772491]
-AP;60.48$\pm$0.0;[0.60475723];91.89$\pm$0.0;[0.91893278]
-pretrain_time;0.25$\pm$0.0;[0.24625516];2.17$\pm$0.0;[2.16660523]
+metrics;baseline,enc:gcn_bgrl,pred:mlp_mean;baseline,enc:gcn_bgrl,pred:mlp;grace,enc:gcn_bgrl,pred:mlp,random_mean;grace,enc:gcn_bgrl,pred:mlp,random;grace,enc:gcn_bgrl,pred:mlp,kmeans_mean;grace,enc:gcn_bgrl,pred:mlp,kmeans
+Hits@20;91.87$\pm$0.0;[0.91872792];86.22$\pm$0.0;[0.86219081];80.57$\pm$0.0;[0.80565371]
+Hits@50;100.0$\pm$0.0;[1.];97.17$\pm$0.0;[0.97173145];99.29$\pm$0.0;[0.99293286]
+Hits@100;100.0$\pm$0.0;[1.];100.0$\pm$0.0;[1.];100.0$\pm$0.0;[1.]
+ROCAUC;97.0$\pm$0.0;[0.96997091];96.19$\pm$0.0;[0.96190488];96.52$\pm$0.0;[0.96516376]
+AP;95.73$\pm$0.0;[0.95733325];95.21$\pm$0.0;[0.95214512];95.27$\pm$0.0;[0.95271074]
+pretrain_time;nan$\pm$nan;[];2.39$\pm$0.0;[2.39331532];4.6$\pm$0.0;[4.59691191]

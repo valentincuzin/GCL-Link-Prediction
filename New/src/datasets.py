@@ -136,12 +136,20 @@ def loaddataset(
         for edge in G.edges():
             edge_index.append([edge[0], edge[1]])
         data.edge_index = to_undirected(torch.tensor(edge_index).T)
-        data.x = F.one_hot(torch.arange(0, len(G.nodes))).float()
+        if hasattr(data, "_pos"):
+            pos = []
+            for p in data._pos:
+                x, y = p.split(", ")
+                pos.append([float(x), float(y)])
+            data.x = torch.tensor(pos)
+        else:
+            data.x = F.one_hot(torch.arange(0, len(G.nodes))).float()
         data.edge_index = to_undirected(data.edge_index)
         split_edge = randomsplit([data], val_ratio, test_ratio)
         data.edge_index = to_undirected(split_edge["train"]["edge"].t())
         edge_index = data.edge_index
         data.num_nodes = data.x.shape[0]
+        data.name = name
 
         if data.edge_index.max().item() + 1 < data.num_nodes:
             data.edge_index = add_self_loops(data.edge_index, num_nodes=data.num_nodes)[

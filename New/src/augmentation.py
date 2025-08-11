@@ -13,6 +13,7 @@ from torch_scatter import scatter
 from functools import partial
 
 from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score
 
 from src.utils import (
     get_commu_strength,
@@ -108,7 +109,17 @@ class Aug:
                 assert("No Kmeans without pos!!")
 
             pos = np.array(pos)
-            kmeans = KMeans(n_clusters=300) # TODO méthode du coude pour trouver le K 
+            
+            switch = {
+                'crime': 49,
+                'euroroad': 46,
+                'netscience': 57,
+                'power': 169,
+                'wiki_science': 21,
+                'yeast': 48,
+            } # find with KMEANS.ipynb
+            n_clusters = switch[self.data.name]
+            kmeans = KMeans(n_clusters=n_clusters)
             clusters = kmeans.fit_predict(pos)
             print(clusters)
             data.block = clusters
@@ -131,6 +142,7 @@ class Aug:
             "sbm_fast2": self.sbm_fast_2,
             "sbm_fast_bug": self.sbm_fast,
             "kmeans": self.sbm_fast,
+            "kmeans2": self.sbm_fast_2
         }
         return data, types[type]
 

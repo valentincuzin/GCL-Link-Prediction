@@ -46,7 +46,9 @@ def test(encoder: nn.Module, predictor: nn.Module, data: Data, split_edge: dict,
         for perm in DataLoader(range(neg_test_edge.size(0)), hp["batch_size"]):
             edge = neg_test_edge[perm].t()
             out = predictor.predict(h, edge[0], edge[1], adj_t)
-            neg_test_preds += [out.squeeze().cpu()]
+            if out.shape[0] != 1:
+                out = out.squeeze()
+            neg_test_preds += [out.cpu()]
         neg_test_pred = torch.cat(neg_test_preds, dim=0)
         return pos_test_pred, neg_test_pred
 
