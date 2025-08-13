@@ -260,7 +260,7 @@ if __name__ == "__main__":
                                     "gcn_ncn": hp.hp_ncn_gcn,
                                 }
                                 param = switch[encoder_name](trial, param)
-                                if "grace" in model_name:
+                                if "grace" in model_name or "csgcl" in model_name:
                                     param["tau"] = trial.suggest_float(
                                         "tau", 0.1, 0.9, step=0.1
                                     )
