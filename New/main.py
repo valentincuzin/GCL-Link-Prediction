@@ -100,7 +100,7 @@ def arguments():
     parser.add_argument("--augmentation", type=str, default="random")
     parser.add_argument("--encoder", type=str, default="gcn_bgrl")
     parser.add_argument("--predictor", type=str, default="mlp")
-    parser.add_argument("--split", type=int, default=70, choices=[70, 85])
+    parser.add_argument("--split", type=int, default=70, choices=[70, 85, 95])
     parser.add_argument("--save", type=str, default="test/")
     parser.add_argument("--runs", type=int, default=10)
     parser.add_argument(
@@ -290,12 +290,12 @@ if __name__ == "__main__":
                             param = hp.update_hp(
                                 study, param, f"params/{dataset}_{args.split}/{save_name}"
                             )
-                            fig_importance = optuna.visualization.plot_param_importances(study)
-                            fig_history = optuna.visualization.plot_optimization_history(study)
-                            fig_relation = optuna.visualization.plot_parallel_coordinate(study)
-                            write_image(fig_importance, f"params/{dataset}/{save_name}_hp_importances.png")
-                            write_image(fig_history, f"params/{dataset}/{save_name}_hp_history.png")
-                            write_image(fig_relation, f"params/{dataset}/{save_name}_hp_relation.png")
+                            # fig_importance = optuna.visualization.plot_param_importances(study)
+                            # fig_history = optuna.visualization.plot_optimization_history(study)
+                            # fig_relation = optuna.visualization.plot_parallel_coordinate(study)
+                            # write_image(fig_importance, f"params/{dataset}/{save_name}_hp_importances.png")
+                            # write_image(fig_history, f"params/{dataset}/{save_name}_hp_history.png")
+                            # write_image(fig_relation, f"params/{dataset}/{save_name}_hp_relation.png")
 
                         res_dict = {
                             "Hits@20": [],

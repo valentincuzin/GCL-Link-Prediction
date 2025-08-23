@@ -93,6 +93,10 @@ def loaddataset(
         print('split 85% 5% 10%')
         val_ratio = 0.05
         test_ratio = 0.1
+    elif split == 95:
+        print('split 95')
+        val_ratio = 0.02
+        test_ratio = 0.03
 
     if isinstance(name, list):
         split_edge = randomsplit(name, val_ratio, test_ratio)
