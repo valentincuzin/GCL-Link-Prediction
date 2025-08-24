@@ -4,22 +4,22 @@
     "drop_feature_rate_2": 0.0,
     "commu_detect": "louvain",
     "ct_epochs": 500,
-    "proj_hidden": 384,
-    "gnn_lr": 0.004185415170953298,
-    "batch_size": 3776,
+    "proj_hidden": 64,
+    "gnn_lr": 0.005532445496785611,
+    "batch_size": 4160,
     "use_valedges_as_input": false,
     "epochs": 100,
-    "loss_func": "log_sig",
-    "pre_lr": 0.00594307442174213,
-    "mask_input": true,
-    "weight_decay": 8.475489297432228e-06,
+    "loss_func": "bce",
+    "pre_lr": 0.0015093794364443014,
+    "mask_input": false,
+    "weight_decay": 6.856405913789349e-06,
     "n_layers": 1,
     "layer_sizes": [
-        256
+        224
     ],
-    "hidden": 256,
+    "hidden": 224,
     "batch_layer_norm": false,
     "batchnorm_mm": null,
-    "weight_standardization": true,
-    "layer_size": 320
+    "weight_standardization": false,
+    "layer_size": 384
 }
