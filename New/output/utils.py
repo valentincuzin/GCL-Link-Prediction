@@ -11,11 +11,14 @@ def res_load(csv_name: str):
     data.drop(index="metrics", inplace=True)
     if 'Hits@10' in data.columns:
         data.drop(columns="Hits@10", inplace=True)
-    
+    data = data.fillna(0)
     for idx in data.index:
         if data.loc[idx].dtype == 'object' and '_mean' not in idx:
             try:
-                data.loc[idx] = data.loc[idx].map(lambda x: np.array(list(map(float, x.strip('[]').split()))))
+                def func(x):
+                    if type(x) == str:
+                        return np.array(list(map(float, x.strip('[]').split())))
+                data.loc[idx] = data.loc[idx].map(func)
             except ValueError as e:
                 print(e)
     data = data.fillna(0)
@@ -191,7 +194,7 @@ def compute_significantly_top_methods(df, metric: str = "ROCAUC"):
     #print("check",len(df),sorted_methods,all_scores_by_algorithm)
     # print("scores",all_scores_by_algorithm)
     try:
-        f_value,p_value, rankings, pivots = friedman_test(*all_scores_by_algorithm)
+        f_value, p_value, rankings, pivots = friedman_test(*all_scores_by_algorithm)
     except:
         print("problem with the samples")
         print("methods",unique_methods)
